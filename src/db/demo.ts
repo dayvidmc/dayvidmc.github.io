@@ -23,6 +23,9 @@ import { addMinutes, formatDate, formatTime, toWallClock } from '@/domain/time';
  *   dropdb tokessy && createdb tokessy && npm run migrate && npm run demo
  */
 
+/** A diamond volunteer's number — not a coach's, so the queue shows both routes. */
+const DIAMOND_VOLUNTEER_PHONE = '+16135554417';
+
 const DIAMONDS: [string, string][] = [
   ['Tokessy', 'Tokessy'],
   ['Deevy Pines 1', 'Deevy Pines'],
@@ -208,16 +211,14 @@ async function main() {
     (
       await query<{ id: string }>('SELECT id FROM game WHERE external_game_id = $1', [externalGameId])
     )[0]!.id;
-  const teamId = async (name: string) =>
-    (await query<{ id: string }>('SELECT id FROM team WHERE name = $1', [name]))[0]!.id;
 
   // Coach numbers, so team notifications have somewhere to go and the unmatched
   // screen can tell HQ whose number an orphan text belongs to.
-  await query(
-    `UPDATE team SET coach_phone = '+1613555' || lpad((row_number)::text, 4, '0')
-       FROM (SELECT id, row_number() OVER (ORDER BY name) FROM team) AS numbered
-      WHERE team.id = numbered.id`,
-  );
+  const teams = await query<{ id: string; name: string }>('SELECT id, name FROM team ORDER BY name');
+  const used = new Set<string>();
+  for (const t of teams) {
+    await query('UPDATE team SET coach_phone = $2 WHERE id = $1', [t.id, fakePhone(t.name, used)]);
+  }
 
   // --- Yesterday: every game approved --------------------------------------
 
@@ -266,7 +267,7 @@ async function main() {
         tournamentId,
         gameId: id,
         source: 'diamond_volunteer',
-        reportedBy: '+16135550118',
+        reportedBy: DIAMOND_VOLUNTEER_PHONE,
         rawText: game.text!,
         homeRuns: game.score![0],
         awayRuns: game.score![1],
@@ -281,7 +282,8 @@ async function main() {
         tournamentId,
         gameId: id,
         source: 'coach_sms',
-        reportedBy: '+16135550143',
+        // A real coach's number, so the queue shows a name a director recognises.
+        reportedBy: await coachPhone('Nepean Minor'),
         rawText: game.text!,
         homeRuns: 5,
         awayRuns: 2,
@@ -327,6 +329,30 @@ async function main() {
   console.log('                            a three-way tie broken on runs allowed');
   console.log(`  /team/${team!.access_token}`);
   console.log("                            what a coach's link looks like\n");
+}
+
+/**
+ * A believable-looking but unmistakably fictional number.
+ *
+ * The 555 exchange is reserved for fiction, which is the point — a demo shown
+ * around a committee table must not contain a number that rings a real phone.
+ * Derived from the team name rather than a counter so the list does not read as
+ * 0001, 0002, 0003 and give the whole thing away as machine output, and so the
+ * same team keeps the same number between runs.
+ */
+function fakePhone(seed: string, used: Set<string>): string {
+  let hash = 0;
+  for (const char of seed) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const line = String((hash + attempt * 137) % 10000).padStart(4, '0');
+    const phone = `+1613555${line}`;
+    if (!used.has(phone)) {
+      used.add(phone);
+      return phone;
+    }
+  }
+  throw new Error(`could not allocate a demo number for ${seed}`);
 }
 
 async function coachPhone(teamName: string): Promise<string> {

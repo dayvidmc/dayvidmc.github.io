@@ -2,6 +2,7 @@ import { Fragment } from 'react';
 import { notFound } from 'next/navigation';
 import { queryOne } from '@/db/client';
 import { standingsForDivision } from '@/server/repo';
+import { distinctReasoning } from '@/domain/tiebreak';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,7 +66,7 @@ export default async function StandingsPage({
               </tr>
             </thead>
             <tbody>
-              {pool.rows.map((row) => (
+              {distinctReasoning(pool.rows).map(({ row, reasoning }) => (
                 // A shorthand fragment cannot carry a key, and each team needs
                 // two sibling rows: the standing and its reasoning.
                 <Fragment key={row.record.teamId}>
@@ -91,10 +92,10 @@ export default async function StandingsPage({
                       {row.record.runDifferentialCapped}
                     </td>
                   </tr>
-                  {row.tiebreak.length > 0 && (
+                  {reasoning.length > 0 && (
                     <tr>
                       <td colSpan={10} className="reasoning">
-                        {row.tiebreak.map((step, index) => (
+                        {reasoning.map((step, index) => (
                           <span key={index}>{step.reasoning}</span>
                         ))}
                       </td>

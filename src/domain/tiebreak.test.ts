@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildRecords, cappedMargin, completedGameCounts } from './records';
-import { computeStandings, coinFlipKey } from './tiebreak';
+import { computeStandings, coinFlipKey, distinctReasoning } from './tiebreak';
 import type { GameResult } from './types';
 
 const NAMES: Record<string, string> = {
@@ -301,6 +301,54 @@ describe('coin flip (§5.5)', () => {
     expect(tied.map((r) => r.record.teamId)).toEqual(['B', 'A']);
     expect(tied.every((r) => r.awaitingCoinFlip)).toBe(false);
     expect(tied[0]!.tiebreak[0]!.reasoning).toContain('Coin flip recorded by the director');
+  });
+});
+
+describe('distinctReasoning — what the standings screen actually prints', () => {
+  it('says each sentence once, on the first row it applies to', () => {
+    // The circular three-way tie, which finishes C, A, B. Runs allowed isolated
+    // B, then head-to-head split C from A — so C's placement needed both steps
+    // and the top row carries the whole chain. Every sentence names all the
+    // teams it separated, so the rows below add nothing a reader needs.
+    const games = [g('A', 'B', 3, 2), g('C', 'A', 4, 1), g('B', 'C', 5, 4)];
+    const rows = standings(['A', 'B', 'C'], games);
+
+    expect(order(rows)).toEqual(['C', 'A', 'B']);
+    // Without deduplication this would print five lines across three rows.
+    expect(rows.reduce((n, r) => n + r.tiebreak.length, 0)).toBe(5);
+
+    expect(distinctReasoning(rows).map((s) => s.reasoning.map((step) => step.rule))).toEqual([
+      ['runs_allowed', 'head_to_head'],
+      [],
+      [],
+    ]);
+  });
+
+  it('never drops a sentence entirely', () => {
+    const games = [g('A', 'B', 3, 2), g('C', 'A', 4, 1), g('B', 'C', 5, 4)];
+    const rows = standings(['A', 'B', 'C'], games);
+
+    const everySentence = new Set(rows.flatMap((r) => r.tiebreak.map((s) => s.reasoning)));
+    const printed = new Set(
+      distinctReasoning(rows).flatMap((s) => s.reasoning.map((step) => step.reasoning)),
+    );
+    expect(printed).toEqual(everySentence);
+  });
+
+  it('leaves the full per-team chain intact for exports and the audit trail', () => {
+    const games = [g('A', 'B', 3, 2), g('C', 'A', 4, 1), g('B', 'C', 5, 4)];
+    const rows = standings(['A', 'B', 'C'], games);
+    const before = rows.map((r) => r.tiebreak.length);
+
+    distinctReasoning(rows);
+
+    expect(rows.map((r) => r.tiebreak.length)).toEqual(before);
+  });
+
+  it('prints nothing when nobody was tied', () => {
+    const games = [g('A', 'B', 5, 3), g('A', 'C', 4, 2), g('B', 'C', 6, 1)];
+    const shown = distinctReasoning(standings(['A', 'B', 'C'], games));
+    expect(shown.every((s) => s.reasoning.length === 0)).toBe(true);
   });
 });
 

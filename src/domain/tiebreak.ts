@@ -31,6 +31,29 @@ export interface StandingsRow {
   awaitingCoinFlip: boolean;
 }
 
+/**
+ * Pair each row with only the tiebreak sentences not already shown above it.
+ *
+ * A sentence names every team it separated — "Runs allowed (fewest first):
+ * Nepean 6; Kanata 7; Orleans 8" — so it explains the whole group at once.
+ * Repeating it under each tied team puts three identical lines on the screen a
+ * coach is most likely to be arguing from.
+ *
+ * Anything that needs the full per-team chain — an export, an API response, the
+ * audit trail — should read `row.tiebreak` directly. This only decides what is
+ * worth saying twice.
+ */
+export function distinctReasoning(
+  rows: readonly StandingsRow[],
+): { row: StandingsRow; reasoning: TiebreakStep[] }[] {
+  const seen = new Set<string>();
+  return rows.map((row) => {
+    const reasoning = row.tiebreak.filter((step) => !seen.has(step.reasoning));
+    for (const step of reasoning) seen.add(step.reasoning);
+    return { row, reasoning };
+  });
+}
+
 export interface TiebreakContext {
   records: Map<string, TeamRecord>;
   /** All round robin results in scope (one pool, normally). */
