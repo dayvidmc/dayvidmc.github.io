@@ -25,11 +25,14 @@ intake paths that feed it.
 | Score intake — 3 paths, one queue | §5.2 | Built, tested |
 | HQ screen for texts nobody could place | §5.2 | Built |
 | HQ board with overdue clock | §5.3 | Built, tested |
-| Division rules config | §5.4 | Schema + validation; no editor UI yet |
+| Division rules config | §5.4 | Built — auto-saving editor with a live overdue-clock preview |
 | Standings and tiebreakers | §5.5 | Built, tested — the core deliverable |
 | Game count tracking (financial) | §5.8 | Built, tested |
 | Team links, no login | §5.7 | Built |
 | Tile + PIN staff access | §10 | Built |
+| Game detail: correct, dispute, reschedule, history | §5.3 | Built |
+| Team contacts and per-team links | §5.7 | Built — auto-saving |
+| Settings and pre-weekend readiness checklist | — | Built |
 | Append-only audit trail | §9 | Built, enforced by the database |
 
 ## What is deliberately not here
@@ -39,8 +42,12 @@ cannot supply:
 
 - **Brackets (§5.6)** — playoff format comes from the published schedule, and
   §13 Q4 (how the director actually builds it) is unanswered.
-- **SMS broadcast and the rain button (§5.7)** — the outbound `notification`
-  table and queueing exist; no sender is wired up.
+- **Sending any text at all.** Approving a score and moving a game both write
+  rows to `notification`, and **nothing drains that queue** — there is no
+  Twilio sender. Inbound works; outbound does not. The settings screen says so
+  in as many words, because a queue growing silently on Saturday while ninety
+  coaches wait for a text is the worst possible way to discover this.
+- **SMS broadcast and the rain button (§5.7)** — same reason.
 - **Registration and payments (Module E)**, **volunteers (Module B)**,
   **auction (Module C)**, **concessions (Module D)**.
 - **Charitable receipting and raffles** — §7.4 and §8A.4 are legal and
@@ -83,7 +90,7 @@ It is meant for the Phase 0 debrief — it is much easier to ask a director "is
 this the board you want?" than to describe one.
 
 ```bash
-npm test          # 64 unit tests, no database needed
+npm test          # 68 unit tests, no database needed
 npm run typecheck
 npm run build
 ```

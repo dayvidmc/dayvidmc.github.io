@@ -121,8 +121,20 @@ export default async function HqBoardPage({
         <a className="btn" href="/hq/unmatched" style={{ flex: '1 1 45%' }}>
           Unmatched ({unmatchedCount})
         </a>
-        <a className="btn" href="/hq/import" style={{ flex: '1 1 100%' }}>
-          Import schedule
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+        <a className="btn" href="/hq/rules" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
+          Rules
+        </a>
+        <a className="btn" href="/hq/teams" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
+          Teams
+        </a>
+        <a className="btn" href="/hq/import" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
+          Schedule
+        </a>
+        <a className="btn" href="/hq/settings" style={{ flex: '1 1 100%', minHeight: 44, fontSize: 15 }}>
+          Settings and readiness
         </a>
       </div>
 
@@ -132,7 +144,13 @@ export default async function HqBoardPage({
         </div>
       ) : (
         entries.map((entry) => (
-          <div key={entry.game.gameId} className={`card game ${entry.status}`}>
+          // Tapping a row opens the game: correct a score, flag a dispute,
+          // move it, or read its history.
+          <a
+            key={entry.game.gameId}
+            href={`/hq/game/${entry.game.gameId}`}
+            className={`card game ${entry.status}`}
+          >
             <div className="top">
               <div>
                 <div className="teams">
@@ -150,7 +168,7 @@ export default async function HqBoardPage({
                 )}
               </div>
             </div>
-          </div>
+          </a>
         ))
       )}
     </>

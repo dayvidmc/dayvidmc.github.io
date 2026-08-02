@@ -799,6 +799,79 @@ async function unknownNumberFallback(tournamentId: string, windowStart: string, 
   );
 }
 
+export interface GameDetail {
+  id: string;
+  external_game_id: string;
+  division_id: string;
+  division_name: string;
+  game_type: 'round_robin' | 'playoff';
+  scheduled_start: Date;
+  diamond_id: string;
+  diamond_name: string;
+  home_team_id: string;
+  home_team_name: string;
+  away_team_id: string;
+  away_team_name: string;
+  is_disputed: boolean;
+  dispute_note: string | null;
+  cancelled_at: Date | null;
+  home_runs: number | null;
+  away_runs: number | null;
+  result_kind: 'played' | 'forfeit' | null;
+  approved_by: string | null;
+  approved_at: Date | null;
+}
+
+/** Everything about one game, for the screen where it gets fixed. */
+export async function gameDetail(tournamentId: string, gameId: string): Promise<GameDetail | null> {
+  return queryOne<GameDetail>(
+    `SELECT g.id, g.external_game_id, g.division_id, d.name AS division_name, g.game_type,
+            g.scheduled_start, g.diamond_id, dm.name AS diamond_name,
+            g.home_team_id, ht.name AS home_team_name,
+            g.away_team_id, aw.name AS away_team_name,
+            g.is_disputed, g.dispute_note, g.cancelled_at,
+            a.home_runs, a.away_runs, a.result_kind, a.approved_by, a.approved_at
+       FROM game g
+       JOIN division d ON d.id = g.division_id
+       JOIN diamond dm ON dm.id = g.diamond_id
+       JOIN team ht    ON ht.id = g.home_team_id
+       JOIN team aw    ON aw.id = g.away_team_id
+       LEFT JOIN approved_score a ON a.game_id = g.id
+      WHERE g.id = $1 AND g.tournament_id = $2`,
+    [gameId, tournamentId],
+  );
+}
+
+export async function listDiamonds(tournamentId: string) {
+  return query<{ id: string; name: string }>(
+    'SELECT id, name FROM diamond WHERE tournament_id = $1 ORDER BY name',
+    [tournamentId],
+  );
+}
+
+/** Teams with their contact details, for the screen where those get filled in. */
+export async function teamsWithContacts(tournamentId: string) {
+  return query<{
+    id: string;
+    name: string;
+    division_name: string;
+    association: string | null;
+    coach_name: string | null;
+    coach_phone: string | null;
+    coach_email: string | null;
+    alternate_contact: string | null;
+    access_token: string;
+  }>(
+    `SELECT t.id, t.name, d.name AS division_name, t.association,
+            t.coach_name, t.coach_phone, t.coach_email, t.alternate_contact, t.access_token
+       FROM team t
+       JOIN division d ON d.id = t.division_id
+      WHERE t.tournament_id = $1
+      ORDER BY d.sort_order, d.name, t.name`,
+    [tournamentId],
+  );
+}
+
 /** Games a team is playing, for its magic-link page (§5.7). */
 export async function gamesForTeam(teamId: string) {
   return query<{

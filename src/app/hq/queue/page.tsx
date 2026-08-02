@@ -38,7 +38,7 @@ export default async function QueuePage() {
       <p className="sub">
         {reports.length === 0
           ? 'Nothing waiting.'
-          : `${reports.length} score${reports.length === 1 ? '' : 's'} to approve. Approving updates standings and texts both teams.`}
+          : `${reports.length} score${reports.length === 1 ? '' : 's'} to approve. Approving updates standings immediately and queues a text to both teams.`}
       </p>
 
       <a className="btn" href="/hq" style={{ marginBottom: 16 }}>

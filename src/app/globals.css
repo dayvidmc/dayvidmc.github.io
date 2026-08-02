@@ -145,6 +145,19 @@ a:hover {
   border-left: 5px solid var(--border);
 }
 
+/* Board rows are links to the game. Keep them looking like rows, not links. */
+a.game,
+a.card {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.game:hover,
+a.card:hover {
+  text-decoration: none;
+  border-color: var(--blue);
+}
+
 .game.reported { border-left-color: var(--green); }
 .game.pending { border-left-color: var(--amber); background: var(--amber-bg); }
 .game.overdue { border-left-color: var(--red); background: var(--red-bg); }
@@ -370,6 +383,192 @@ td.team {
   text-align: center;
   color: var(--muted);
   padding: 40px 20px;
+}
+
+/* --- Editable fields ---------------------------------------------------- */
+
+.field {
+  margin-bottom: 18px;
+}
+
+.field label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 6px;
+}
+
+.field-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.field-input input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.field .suffix {
+  color: var(--muted);
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.field .hint {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 6px 0 0;
+}
+
+label.toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--tap);
+  cursor: pointer;
+}
+
+label.toggle input[type='checkbox'] {
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  flex: 0 0 26px;
+  accent-color: var(--green);
+}
+
+label.toggle span {
+  font-weight: 600;
+}
+
+/* The save indicator. Quiet when things are fine, loud only when they aren't. */
+.save-chip {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.save-chip.saved {
+  color: var(--green);
+  background: var(--green-bg);
+}
+
+.save-chip.saving,
+.save-chip.dirty {
+  color: var(--muted);
+  background: var(--bg);
+}
+
+.save-chip.error {
+  color: var(--red);
+  background: var(--red-bg);
+  white-space: normal;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0 0 0 4px;
+  min-height: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  display: inline;
+}
+
+fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin: 0 0 16px;
+  background: var(--surface);
+}
+
+legend {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 0 6px;
+}
+
+/* A worked example of what the numbers above mean, in plain words. */
+.preview {
+  background: var(--blue-bg);
+  border-left: 4px solid var(--blue);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: 4px 0 16px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.preview strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.rows .row-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.rows .row-item:last-child {
+  border-bottom: none;
+}
+
+.copyable {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.copyable input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+}
+
+.pill {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.pill.warn {
+  color: var(--amber);
+  background: var(--amber-bg);
+}
+
+.pill.ok {
+  color: var(--green);
+  background: var(--green-bg);
+}
+
+.trail {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.trail li {
+  margin-bottom: 8px;
+}
+
+.trail time {
+  font-variant-numeric: tabular-nums;
 }
 
 .tiles {
