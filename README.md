@@ -196,6 +196,8 @@ from winning a tiebreaker, so a director confirms it.
 - Load-test the Saturday-evening peak specifically (§11). The profile is dead
   for 51 weeks, then every diamond finishing at once.
 - Read [DECISIONS.md](DECISIONS.md) and get the open questions answered.
+- Read [docs/IDEAS.md](docs/IDEAS.md) — what is missing, ordered by whether it
+  would hurt to skip. The messaging spine is first for a reason.
 
 > The 2027 parallel run is non-negotiable (spec §12). This tournament has run 29
 > years and raised over $536,000 for CHEO Cardiology. It cannot have a bad year
