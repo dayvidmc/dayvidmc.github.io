@@ -14,7 +14,14 @@ import {
   verifyPin,
   type StaffRole,
 } from '@/server/auth';
-import { approveScore, currentTournament, recordProposal, setDispute } from '@/server/repo';
+import {
+  approveScore,
+  assignUnmatchedMessage,
+  currentTournament,
+  dismissUnmatchedMessage,
+  recordProposal,
+  setDispute,
+} from '@/server/repo';
 import { recordEvent } from '@/server/events';
 import { importSchedule } from '@/domain/schedule/import';
 import { applySchedule } from '@/server/scheduleStore';
@@ -139,6 +146,58 @@ export async function enterScoreByPhone(formData: FormData): Promise<void> {
   });
 
   revalidatePath('/hq/queue');
+  revalidatePath('/hq');
+}
+
+// --- Texts nobody could place (§5.2, fallback chain) ------------------------
+
+/**
+ * Attach a stray text to a game. This creates a proposal in the normal queue
+ * rather than approving anything — a score becomes real in exactly one place.
+ */
+export async function assignUnmatched(formData: FormData): Promise<void> {
+  const staff = await requireHq();
+
+  const messageId = String(formData.get('messageId') ?? '');
+  const gameId = String(formData.get('gameId') ?? '');
+  const homeRuns = Number(formData.get('homeRuns'));
+  const awayRuns = Number(formData.get('awayRuns'));
+
+  if (!messageId || !gameId) return;
+  if (!Number.isInteger(homeRuns) || !Number.isInteger(awayRuns)) return;
+  if (homeRuns < 0 || awayRuns < 0 || homeRuns > 99 || awayRuns > 99) return;
+
+  await assignUnmatchedMessage({
+    tournamentId: staff.tournamentId,
+    messageId,
+    gameId,
+    homeRuns,
+    awayRuns,
+    assignedBy: staff.name,
+    assignerRole: staff.role,
+  });
+
+  revalidatePath('/hq/unmatched');
+  revalidatePath('/hq/queue');
+  revalidatePath('/hq');
+}
+
+export async function dismissUnmatched(formData: FormData): Promise<void> {
+  const staff = await requireHq();
+
+  const messageId = String(formData.get('messageId') ?? '');
+  const reason = String(formData.get('reason') ?? '').trim() || null;
+  if (!messageId) return;
+
+  await dismissUnmatchedMessage({
+    tournamentId: staff.tournamentId,
+    messageId,
+    reason,
+    dismissedBy: staff.name,
+    dismisserRole: staff.role,
+  });
+
+  revalidatePath('/hq/unmatched');
   revalidatePath('/hq');
 }
 

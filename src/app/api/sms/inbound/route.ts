@@ -1,7 +1,12 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { query } from '@/db/client';
-import { candidateGamesForPhone, currentTournament, recordProposal } from '@/server/repo';
+import {
+  candidateGamesForPhone,
+  currentTournament,
+  parkUnmatchedMessage,
+  recordProposal,
+} from '@/server/repo';
 import { parseScoreMessage } from '@/server/scoreParser';
 import { AUTO_FILL_CONFIDENCE } from '@/domain/scoreParsing';
 import { toWallClock } from '@/domain/time';
@@ -42,21 +47,33 @@ export async function POST(request: Request) {
   if (candidates.length === 0) {
     // Nothing to attach it to. Do not drop it — a human at HQ is the last link
     // in every fallback chain (§4).
-    await parkForHq(tournament.id, from, text);
+    await parkForHq(tournament.id, from, text, mediaUrl, 'no_candidate_games');
     return twiml("Thanks — we couldn't match that to a game, so HQ will take a look.");
   }
 
   const parsed = await parseScoreMessage(text, candidates, now);
 
   if (!parsed) {
-    await parkForHq(tournament.id, from, text);
+    await parkForHq(tournament.id, from, text, mediaUrl, 'unreadable');
     return twiml("Thanks — we couldn't read a score in that, so HQ will take a look.");
   }
 
   const game = candidates.find((c) => c.gameId === parsed.gameId);
   if (!game) {
-    await parkForHq(tournament.id, from, text);
+    await parkForHq(tournament.id, from, text, mediaUrl, 'no_game_matched');
     return twiml('Thanks — HQ will take a look.');
+  }
+
+  // A message with no runs in it is not a score report, whatever game it was
+  // nearest to. "Game is running long sorry" and a bare photo of the signed
+  // sheet both land here. Sending them to the approval queue would put things
+  // in front of the director that cannot be approved; they belong on the
+  // unmatched screen, where a human decides what they are.
+  //
+  // Forfeits are exempt: a forfeit is a result even with no runs attached.
+  if (parsed.resultKind === 'played' && (parsed.homeRuns === null || parsed.awayRuns === null)) {
+    await parkForHq(tournament.id, from, text, mediaUrl, 'unreadable');
+    return twiml("Thanks — we couldn't read a score in that, so HQ will take a look.");
   }
 
   await recordProposal({
@@ -92,15 +109,25 @@ export async function POST(request: Request) {
 }
 
 /**
- * A message we cannot attach to a game still becomes a visible row for HQ,
- * rather than a line in a log nobody reads.
+ * A message we cannot attach to a game becomes a row on the HQ unmatched
+ * screen, not a line in a log nobody reads. Any photo comes with it — a picture
+ * of the signed sheet is often the most useful part of a message we could not
+ * otherwise place.
  */
-async function parkForHq(tournamentId: string, from: string, text: string): Promise<void> {
-  await query(
-    `INSERT INTO event (tournament_id, actor, actor_role, kind, subject_type, payload)
-     VALUES ($1, $2, 'inbound_sms', 'score.proposed', 'unmatched_sms', $3::jsonb)`,
-    [tournamentId, from, JSON.stringify({ rawText: text })],
-  );
+async function parkForHq(
+  tournamentId: string,
+  from: string,
+  text: string,
+  mediaUrl: string | null,
+  reason: 'no_candidate_games' | 'unreadable' | 'no_game_matched',
+): Promise<void> {
+  await parkUnmatchedMessage({
+    tournamentId,
+    fromPhone: from,
+    body: text === '' ? null : text,
+    photoKey: mediaUrl,
+    reason,
+  });
 }
 
 async function isDiamondVolunteer(tournamentId: string, phone: string): Promise<boolean> {

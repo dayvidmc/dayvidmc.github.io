@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff } from '@/server/auth';
-import { boardForDate, currentTournament } from '@/server/repo';
+import { boardForDate, currentTournament, openUnmatchedCount } from '@/server/repo';
 import { STATUS_LABEL, STATUS_MARKER, type BoardEntry } from '@/domain/gameStatus';
 import { formatDate, formatDateFriendly, formatTimeFriendly, toWallClock } from '@/domain/time';
 import { signOut } from './actions';
@@ -35,9 +35,10 @@ export default async function HqBoardPage({
   const now = toWallClock(new Date(), tournament.time_zone);
   const date = params.date ?? clampToTournament(formatDate(now), tournament.starts_on, tournament.ends_on);
 
-  const entries = (await boardForDate(tournament.id, date, now)) as (BoardEntry & {
-    externalGameId: string;
-  })[];
+  const [entries, unmatchedCount] = await Promise.all([
+    boardForDate(tournament.id, date, now) as Promise<(BoardEntry & { externalGameId: string })[]>,
+    openUnmatchedCount(tournament.id),
+  ]);
 
   const counts = entries.reduce<Record<string, number>>((acc, entry) => {
     acc[entry.status] = (acc[entry.status] ?? 0) + 1;
@@ -96,13 +97,31 @@ export default async function HqBoardPage({
         <span>
           {STATUS_MARKER.reported} <strong>{counts.reported ?? 0}</strong> in
         </span>
+        {unmatchedCount > 0 && (
+          <span>
+            📨 <strong>{unmatchedCount}</strong> unmatched
+          </span>
+        )}
       </div>
 
-      <div style={{ display: 'flex', gap: 10, margin: '12px 0' }}>
-        <a className="btn primary" href="/hq/queue" style={{ flex: 1 }}>
+      {/* Unmatched texts are not tied to the selected day — a message that
+          arrived on Friday is still waiting on Sunday. Surface it wherever the
+          director happens to be looking. */}
+      {unmatchedCount > 0 && (
+        <a className="notice warn" href="/hq/unmatched" style={{ display: 'block' }}>
+          {unmatchedCount} text{unmatchedCount === 1 ? '' : 's'} we couldn&apos;t attach to a game.
+          Someone should read {unmatchedCount === 1 ? 'it' : 'them'}. →
+        </a>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, margin: '12px 0', flexWrap: 'wrap' }}>
+        <a className="btn primary" href="/hq/queue" style={{ flex: '1 1 45%' }}>
           Score queue ({counts.pending ?? 0})
         </a>
-        <a className="btn" href="/hq/import" style={{ flex: 1 }}>
+        <a className="btn" href="/hq/unmatched" style={{ flex: '1 1 45%' }}>
+          Unmatched ({unmatchedCount})
+        </a>
+        <a className="btn" href="/hq/import" style={{ flex: '1 1 100%' }}>
           Import schedule
         </a>
       </div>

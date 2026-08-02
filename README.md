@@ -23,6 +23,7 @@ intake paths that feed it.
 |---|---|---|
 | Schedule import + conflict validation | §5.1 | Built, tested |
 | Score intake — 3 paths, one queue | §5.2 | Built, tested |
+| HQ screen for texts nobody could place | §5.2 | Built |
 | HQ board with overdue clock | §5.3 | Built, tested |
 | Division rules config | §5.4 | Schema + validation; no editor UI yet |
 | Standings and tiebreakers | §5.5 | Built, tested — the core deliverable |
@@ -147,7 +148,13 @@ Inbound text is read by a deterministic parser first. Most replies —
 score intake working when the API is slow and keeps donation dollars out of
 token spend. Anything it is not confident about goes to the model with that
 diamond's scheduled games as context; anything the model can't read lands in the
-queue with the raw text showing for a human to read. Nothing is ever dropped.
+queue with the raw text showing for a human to read.
+
+Nothing is ever dropped. A text that cannot be attached to a game at all — an
+unknown number, no games running nearby, or no score in the message — lands on
+`/hq/unmatched`, with any photo attached, for someone to read and either file
+against a game or dismiss with a reason. That screen is the last link in the
+fallback chain, and the board carries a badge whenever anything is waiting on it.
 
 Forfeits are never auto-filled regardless of confidence — a forfeit bars a team
 from winning a tiebreaker, so a director confirms it.

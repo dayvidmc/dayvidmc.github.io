@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic';
 const SOURCE_LABEL: Record<string, string> = {
   diamond_volunteer: 'Diamond volunteer',
   coach_sms: 'Coach (text)',
+  unknown_sms: 'Text, matched by HQ',
   hq_phone: 'Phoned in to HQ',
   director: 'Director',
   import: 'Import',

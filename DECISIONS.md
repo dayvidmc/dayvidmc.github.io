@@ -167,19 +167,66 @@ CHEO.
 A model `game_id` that is not in the candidate list supplied to it is discarded
 rather than trusted, so a hallucination cannot attach a score to the wrong game.
 
-### 2.8 An unmatched text is parked as an event, not dropped
+### 2.8 An unmatched text lands on an HQ screen, not in a log
 
-**Decision.** A message that cannot be matched to a game writes an
-`unmatched_sms` event and gets a reply saying HQ will look at it.
+**Decision.** A message that cannot be attached to a game becomes a row in
+`unmatched_message`, shown at `/hq/unmatched`, and the sender is told HQ will
+look at it. HQ attaches it to a game or dismisses it with a reason.
 
 **Why.** "Nothing depends on one person" — every input has a fallback chain
 ending in a human at HQ. Silence would leave a volunteer wondering whether to
 phone.
 
-**Gap:** there is no HQ screen listing these yet. It should exist before the
-weekend.
+It is a table rather than more rows in `event` because the message has a
+lifecycle — open, then assigned or dismissed. Modelling state in an append-only
+log means an anti-join on every page load. Both the arrival and the resolution
+are still written to `event`, so the trail is complete.
 
-### 2.9 Only the director changes the schedule
+### 2.9 A message with no runs in it goes to the unmatched screen, not the queue
+
+**Decision.** If a text matches a game but contains no readable runs, it is
+parked as unmatched rather than filed as a proposal. Forfeits are exempt — a
+forfeit is a result even with no runs attached.
+
+**Why.** Found during live verification: without this, *"game is running long
+sorry"* and a bare photo of the signed sheet both arrived in the approval queue
+as things for the director to approve, which they are not. The approval queue is
+for scores awaiting a yes; anything else in it is noise at the exact moment
+noise is most expensive.
+
+The photo travels with the message, so a picture of the signed sheet with no
+covering text reaches HQ intact — it is usually the most useful part.
+
+### 2.10 Attaching a stray message creates a proposal, never an approved score
+
+**Decision.** `/hq/unmatched` files the message into the normal approval queue.
+It does not approve anything.
+
+**Why.** A score becomes real in exactly one place. It also means a mis-picked
+game is caught one tap later, because the queue shows the actual team names next
+to the numbers — which matters, since the game picker cannot label its inputs
+with team names without JavaScript.
+
+The row is claimed with a conditional `UPDATE ... WHERE status = 'open'` before
+the proposal is written, so two HQ volunteers working the same list cannot file
+two proposals for one text. Verified.
+
+### 2.11 Known gap: a game number outside the candidate window is not matched
+
+**Not fixed.** If a volunteer texts `MA-03 was 9-2 for Kanata` but MA-03 is
+outside the ±4h/+2h candidate window, the message is matched against the games
+that *are* in the window, and the digits in `MA-03` can be read as runs. Only
+candidate game numbers are masked before the run totals are extracted.
+
+**Why it is survivable:** the extra numbers drop confidence below the auto-fill
+threshold, so the queue shows the raw text with "read this one yourself". No
+wrong score can be approved without a human seeing the original message.
+
+**Worth fixing** when someone next touches the parser: an explicit game number is
+the strongest signal in a message and should widen the candidate set rather than
+be ignored.
+
+### 2.12 Only the director changes the schedule
 
 **Decision.** HQ staff approve scores and read the board; schedule import is
 director-only.

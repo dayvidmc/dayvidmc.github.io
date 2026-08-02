@@ -264,6 +264,233 @@ export async function recordProposal(input: ProposalInput): Promise<string> {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Texts that could not be attached to a game (§5.2, fallback chain)
+// ---------------------------------------------------------------------------
+
+export interface UnmatchedMessage {
+  id: string;
+  from_phone: string;
+  body: string | null;
+  photo_key: string | null;
+  reason: 'no_candidate_games' | 'unreadable' | 'no_game_matched';
+  received_at: Date;
+  /** Team names this number belongs to, when it is a coach we know. */
+  known_as: string | null;
+}
+
+/**
+ * Park a text nobody could place, so a human at HQ sees it.
+ *
+ * Returns the new row's id. Writes the audit event in the same transaction —
+ * the message arriving is part of the trail whether or not it becomes a score.
+ */
+export async function parkUnmatchedMessage(input: {
+  tournamentId: string;
+  fromPhone: string;
+  body: string | null;
+  photoKey: string | null;
+  reason: UnmatchedMessage['reason'];
+}): Promise<string> {
+  return transaction(async (client) => {
+    const inserted = await client.query<{ id: string }>(
+      `INSERT INTO unmatched_message (tournament_id, from_phone, body, photo_key, reason)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [input.tournamentId, input.fromPhone, input.body, input.photoKey, input.reason],
+    );
+
+    const id = inserted.rows[0]!.id;
+    await recordEventIn(client, {
+      tournamentId: input.tournamentId,
+      actor: input.fromPhone,
+      actorRole: 'inbound_sms',
+      kind: 'sms.unmatched',
+      subjectType: 'unmatched_message',
+      subjectId: id,
+      payload: { reason: input.reason, body: input.body, photoKey: input.photoKey },
+    });
+
+    return id;
+  });
+}
+
+export async function openUnmatchedMessages(tournamentId: string): Promise<UnmatchedMessage[]> {
+  return query<UnmatchedMessage>(
+    `SELECT m.id, m.from_phone, m.body, m.photo_key, m.reason, m.received_at,
+            -- If we know this number from a team record, say whose it is: it is
+            -- usually the fastest route to the right game.
+            (SELECT string_agg(t.name, ', ' ORDER BY t.name)
+               FROM team t
+              WHERE t.tournament_id = m.tournament_id AND t.coach_phone = m.from_phone
+            ) AS known_as
+       FROM unmatched_message m
+      WHERE m.tournament_id = $1 AND m.status = 'open'
+      ORDER BY m.received_at DESC`,
+    [tournamentId],
+  );
+}
+
+export async function openUnmatchedCount(tournamentId: string): Promise<number> {
+  const row = await queryOne<{ count: string }>(
+    `SELECT count(*)::text AS count FROM unmatched_message
+      WHERE tournament_id = $1 AND status = 'open'`,
+    [tournamentId],
+  );
+  return Number(row?.count ?? 0);
+}
+
+export interface GamePickerOption {
+  id: string;
+  external_game_id: string;
+  scheduled_start: Date;
+  diamond_name: string;
+  division_name: string;
+  home_team_name: string;
+  away_team_name: string;
+  has_approved: boolean;
+}
+
+/**
+ * Games HQ can attach a stray message to.
+ *
+ * Games that already have an approved score are included but flagged, because
+ * a late text about a game that was already reported is a correction, and
+ * hiding it would send the volunteer back to the phone.
+ */
+export async function gamesForPicker(tournamentId: string): Promise<GamePickerOption[]> {
+  return query<GamePickerOption>(
+    `SELECT g.id, g.external_game_id, g.scheduled_start,
+            dm.name AS diamond_name, d.name AS division_name,
+            ht.name AS home_team_name, aw.name AS away_team_name,
+            (a.game_id IS NOT NULL) AS has_approved
+       FROM game g
+       JOIN division d ON d.id = g.division_id
+       JOIN diamond dm ON dm.id = g.diamond_id
+       JOIN team ht    ON ht.id = g.home_team_id
+       JOIN team aw    ON aw.id = g.away_team_id
+       LEFT JOIN approved_score a ON a.game_id = g.id
+      WHERE g.tournament_id = $1 AND g.cancelled_at IS NULL
+      ORDER BY g.scheduled_start, g.external_game_id`,
+    [tournamentId],
+  );
+}
+
+/**
+ * Turn a stray message into a proposal in the normal approval queue.
+ *
+ * Deliberately does not approve anything: it joins the same one-tap queue every
+ * other score goes through, so there is exactly one place a score becomes real.
+ */
+export async function assignUnmatchedMessage(input: {
+  tournamentId: string;
+  messageId: string;
+  gameId: string;
+  homeRuns: number;
+  awayRuns: number;
+  assignedBy: string;
+  assignerRole: string;
+}): Promise<void> {
+  await transaction(async (client) => {
+    // Claim the row first. Two HQ volunteers working the same list would
+    // otherwise both file a proposal for the same text.
+    const claimed = await client.query<{ from_phone: string; body: string | null; photo_key: string | null }>(
+      `UPDATE unmatched_message
+          SET status = 'assigned', resolved_by = $2, resolved_at = now()
+        WHERE id = $1 AND status = 'open'
+        RETURNING from_phone, body, photo_key`,
+      [input.messageId, input.assignedBy],
+    );
+    if (claimed.rowCount === 0) return; // someone else got there first
+
+    const message = claimed.rows[0]!;
+
+    const report = await client.query<{ id: string }>(
+      `INSERT INTO score_report
+         (tournament_id, game_id, source, reported_by, raw_text, home_runs, away_runs,
+          confidence, photo_key)
+       VALUES ($1, $2, 'unknown_sms', $3, $4, $5, $6, 1, $7)
+       RETURNING id`,
+      [
+        input.tournamentId,
+        input.gameId,
+        message.from_phone,
+        message.body,
+        input.homeRuns,
+        input.awayRuns,
+        message.photo_key,
+      ],
+    );
+
+    const scoreReportId = report.rows[0]!.id;
+    await client.query('UPDATE unmatched_message SET score_report_id = $2 WHERE id = $1', [
+      input.messageId,
+      scoreReportId,
+    ]);
+
+    await recordEventIn(client, {
+      tournamentId: input.tournamentId,
+      actor: input.assignedBy,
+      actorRole: input.assignerRole,
+      kind: 'sms.unmatched_assigned',
+      subjectType: 'unmatched_message',
+      subjectId: input.messageId,
+      payload: {
+        gameId: input.gameId,
+        scoreReportId,
+        fromPhone: message.from_phone,
+        homeRuns: input.homeRuns,
+        awayRuns: input.awayRuns,
+      },
+    });
+
+    // The proposal itself also belongs on the game's trail, so the history a
+    // director reads out shows where the score came from.
+    await recordEventIn(client, {
+      tournamentId: input.tournamentId,
+      actor: message.from_phone,
+      actorRole: 'unknown_sms',
+      kind: 'score.proposed',
+      subjectType: 'game',
+      subjectId: input.gameId,
+      payload: {
+        scoreReportId,
+        homeRuns: input.homeRuns,
+        awayRuns: input.awayRuns,
+        rawText: message.body,
+        matchedBy: input.assignedBy,
+      },
+    });
+  });
+}
+
+export async function dismissUnmatchedMessage(input: {
+  tournamentId: string;
+  messageId: string;
+  reason: string | null;
+  dismissedBy: string;
+  dismisserRole: string;
+}): Promise<void> {
+  await transaction(async (client) => {
+    const claimed = await client.query(
+      `UPDATE unmatched_message
+          SET status = 'dismissed', resolved_by = $2, resolved_at = now(), dismiss_reason = $3
+        WHERE id = $1 AND status = 'open'`,
+      [input.messageId, input.dismissedBy, input.reason],
+    );
+    if (claimed.rowCount === 0) return;
+
+    await recordEventIn(client, {
+      tournamentId: input.tournamentId,
+      actor: input.dismissedBy,
+      actorRole: input.dismisserRole,
+      kind: 'sms.unmatched_dismissed',
+      subjectType: 'unmatched_message',
+      subjectId: input.messageId,
+      payload: { reason: input.reason },
+    });
+  });
+}
+
 export interface ApprovalInput {
   tournamentId: string;
   gameId: string;
