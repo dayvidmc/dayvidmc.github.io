@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "migrate": "tsx src/db/migrate.ts",
-    "seed": "tsx src/db/seed.ts"
+    "seed": "tsx src/db/seed.ts",
+    "demo": "tsx src/db/demo.ts"
   },
   "dependencies": {
     "next": "^15.5.4",

@@ -66,6 +66,22 @@ npm run dev
 `npm run seed` prints a random PIN per staff member. It creates a 2027
 tournament, eight divisions, eight diamonds and a sample schedule.
 
+### Seeing it as it would look mid-weekend
+
+```bash
+dropdb tokessy && createdb tokessy && npm run migrate && npm run demo && npm run dev
+```
+
+`npm run demo` builds a tournament dated relative to *now*, so the HQ board
+shows live statuses rather than a page of grey rows: yesterday's round robin
+complete, today's games variously reported, waiting on approval, overdue and
+going red, and one disputed. Yesterday's results are chosen to produce a genuine
+circular three-way tie, so the standings screen shows the tiebreaker explaining
+itself.
+
+It is meant for the Phase 0 debrief — it is much easier to ask a director "is
+this the board you want?" than to describe one.
+
 ```bash
 npm test          # 64 unit tests, no database needed
 npm run typecheck
