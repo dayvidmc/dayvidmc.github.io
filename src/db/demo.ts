@@ -37,12 +37,36 @@ const DIAMONDS: [string, string][] = [
   ['March Central', 'March Central'],
 ];
 
-const STAFF: [string, 'director' | 'hq' | 'volunteer_coordinator' | 'auction_lead', string][] = [
+type Role =
+  | 'director' | 'hq' | 'volunteer_coordinator' | 'auction_lead'
+  | 'concession_lead' | 'concession_volunteer';
+
+const STAFF: [string, Role, string][] = [
   ['Tournament Director', 'director', '4021'],
   ['HQ Desk 1', 'hq', '5150'],
   ['HQ Desk 2', 'hq', '6274'],
   ['Volunteer Coordinator', 'volunteer_coordinator', '7318'],
   ['Auction Lead', 'auction_lead', '8493'],
+  ['Concession Lead', 'concession_lead', '2260'],
+  ['Concession Volunteer', 'concession_volunteer', '9074'],
+];
+
+/** Stands, and what each sells. Prices are what the customer pays, all in. */
+const STANDS = ['Tokessy BBQ', 'Deevy Pines Canteen', 'Mike Channing Canteen'];
+
+const MENU: [string, string, number][] = [
+  // name, group, price in cents
+  ['Hot dog', 'Hot food', 300],
+  ['Hamburger', 'Hot food', 500],
+  ['Sausage', 'Hot food', 550],
+  ['Fries', 'Hot food', 400],
+  ['Water', 'Drinks', 200],
+  ['Pop', 'Drinks', 200],
+  ['Gatorade', 'Drinks', 300],
+  ['Coffee', 'Drinks', 175],
+  ['Chips', 'Snacks', 150],
+  ['Chocolate bar', 'Snacks', 200],
+  ['Freezie', 'Snacks', 100],
 ];
 
 /**
@@ -174,6 +198,24 @@ async function main() {
         [id, name, role, await hashPin(pin)],
       );
     }
+
+    for (const stand of STANDS) {
+      await client.query(
+        'INSERT INTO concession_location (tournament_id, name, site) VALUES ($1, $2, $2)',
+        [id, stand],
+      );
+    }
+
+    // Sold everywhere (location_id NULL), ordered so the busiest sellers sit at
+    // the top of the till grid.
+    for (const [index, [name, category, priceCents]] of MENU.entries()) {
+      await client.query(
+        `INSERT INTO concession_item (tournament_id, name, category, price_cents, sort_order)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [id, name, category, priceCents, index],
+      );
+    }
+
     return id;
   });
 
@@ -325,6 +367,8 @@ async function main() {
   console.log('  /hq                       the board, mid-Saturday');
   console.log('  /hq/queue                 two scores waiting, one the parser is unsure of');
   console.log('  /hq/unmatched             two texts nobody could place');
+  console.log('  /pos                      the concession till (3 stands, 11 items)');
+  console.log('  /hq/concessions           takings, cash reconciliation, refunds');
   console.log(`  /standings/${division!.id}`);
   console.log('                            a three-way tie broken on runs allowed');
   console.log(`  /team/${team!.access_token}`);

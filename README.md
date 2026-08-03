@@ -33,6 +33,7 @@ intake paths that feed it.
 | Game detail: correct, dispute, reschedule, history | §5.3 | Built |
 | Team contacts and per-team links | §5.7 | Built — auto-saving |
 | Settings and pre-weekend readiness checklist | — | Built |
+| Concessions till, offline-capable | §8 | Built, tested — cash only; card hands off to Square |
 | Append-only audit trail | §9 | Built, enforced by the database |
 
 ## What is deliberately not here
@@ -48,8 +49,12 @@ cannot supply:
   in as many words, because a queue growing silently on Saturday while ninety
   coaches wait for a text is the worst possible way to discover this.
 - **SMS broadcast and the rain button (§5.7)** — same reason.
+- **Card processing.** The till records card sales; it does not charge them.
+  Tapping a card on a phone needs a native app — Apple and Google only expose
+  the NFC reader to signed native apps — so the card tap happens in the Square
+  app and this records the result. See `docs/CONCESSIONS.md`.
 - **Registration and payments (Module E)**, **volunteers (Module B)**,
-  **auction (Module C)**, **concessions (Module D)**.
+  **auction (Module C)**.
 - **Charitable receipting and raffles** — §7.4 and §8A.4 are legal and
   accounting questions, not technical ones. No logic has been written for
   either, on purpose.
@@ -90,7 +95,7 @@ It is meant for the Phase 0 debrief — it is much easier to ask a director "is
 this the board you want?" than to describe one.
 
 ```bash
-npm test          # 68 unit tests, no database needed
+npm test          # 87 unit tests, no database needed
 npm run typecheck
 npm run build
 ```

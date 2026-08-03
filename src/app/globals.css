@@ -571,6 +571,203 @@ legend {
   font-variant-numeric: tabular-nums;
 }
 
+/* --- The concession till ------------------------------------------------ */
+/* Everything here is sized for a thumb, at arm's length, in the sun, with a
+   queue waiting. Nothing is smaller than it needs to be. */
+
+.till {
+  padding-bottom: 130px; /* clears the fixed checkout bar */
+}
+
+.till-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.till-category {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 18px 0 8px;
+}
+
+.item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.item-button {
+  min-height: 88px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 10px;
+  border-width: 2px;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.item-button:active {
+  background: var(--green-bg);
+  border-color: var(--green);
+}
+
+.item-name {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.item-price {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Checkout bar. Fixed, because the total and the way to charge it should never
+   be something you have to scroll to find. */
+.till-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 20;
+}
+
+.till-bar-summary {
+  min-height: 40px;
+  border: none;
+  background: none;
+  font-size: 16px;
+  justify-content: space-between;
+  padding: 0;
+}
+
+.till-bar-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.till-bar-actions button {
+  flex: 1;
+  min-height: 60px;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cart-list {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.cart-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.cart-line:last-of-type {
+  border-bottom: none;
+}
+
+.cart-line > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.qty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.qty button {
+  width: 48px;
+  min-height: 48px;
+  padding: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.qty span {
+  min-width: 32px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.till-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 14px 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 12px;
+  font-size: 20px;
+}
+
+.till-total-row strong {
+  font-size: 34px;
+  font-variant-numeric: tabular-nums;
+}
+
+.till-total-row.change strong {
+  color: var(--green);
+}
+
+.quick-cash {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.quick-cash button {
+  min-height: 60px;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.till-big {
+  min-height: 72px;
+  font-size: 20px;
+}
+
+.till-done {
+  text-align: center;
+  padding-top: 40px;
+}
+
+.till-done-label {
+  color: var(--muted);
+  font-size: 17px;
+  margin: 0;
+}
+
+.till-change {
+  font-size: 64px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--green);
+  margin: 8px 0 32px;
+  line-height: 1;
+}
+
 .tiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

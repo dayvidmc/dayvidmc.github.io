@@ -23,7 +23,13 @@ const scrypt = promisify(scryptCallback) as (
 const SESSION_COOKIE = 'tokessy_staff';
 const SESSION_HOURS = 18; // a long tournament day, then sign in again
 
-export type StaffRole = 'director' | 'hq' | 'volunteer_coordinator' | 'auction_lead';
+export type StaffRole =
+  | 'director'
+  | 'hq'
+  | 'volunteer_coordinator'
+  | 'auction_lead'
+  | 'concession_lead'
+  | 'concession_volunteer';
 
 export interface StaffSession {
   staffId: string;
@@ -123,6 +129,36 @@ export function canAccessHq(session: StaffSession | null): boolean {
 /** Only the director overrides a score that is already approved, or a bracket. */
 export function isDirector(session: StaffSession | null): boolean {
   return session?.role === 'director';
+}
+
+/**
+ * Concession permissions (§8).
+ *
+ * The split that matters: anyone on a shift can ring up a sale, but only a lead
+ * can hand money back or change what things cost. Refunds and price edits are
+ * the two ways a till leaks, and they are the two things a fifteen-year-old on
+ * their first shift should not be able to do by tapping the wrong button.
+ */
+export function canSellConcessions(session: StaffSession | null): boolean {
+  return (
+    session?.role === 'concession_volunteer' ||
+    session?.role === 'concession_lead' ||
+    session?.role === 'hq' ||
+    session?.role === 'director'
+  );
+}
+
+export function canRefund(session: StaffSession | null): boolean {
+  return session?.role === 'concession_lead' || session?.role === 'director';
+}
+
+export function canEditMenu(session: StaffSession | null): boolean {
+  return session?.role === 'concession_lead' || session?.role === 'director';
+}
+
+/** Closing a drawer is a lead's job — it is the moment cash is counted. */
+export function canCloseRegister(session: StaffSession | null): boolean {
+  return session?.role === 'concession_lead' || session?.role === 'director';
 }
 
 // --- Magic links ------------------------------------------------------------
