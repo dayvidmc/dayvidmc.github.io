@@ -386,15 +386,6 @@ export async function seedDemo(): Promise<DemoResult> {
   // renders as promises: "1st in Pool 1", "Winner of Semifinal 1".
   await seedBracket(tournamentId, base);
 
-  // The round robin is complete, so the seeds resolve immediately. Writing them
-  // onto the games keeps the stored matchup and the drawn bracket identical —
-  // two sources of truth here is how the wrong team ends up advancing.
-  const [majorA] = await query<{ id: string }>(
-    "SELECT id FROM division WHERE tournament_id = $1 AND name = 'Major A'",
-    [tournamentId],
-  );
-  if (majorA) await materialiseBracket(tournamentId, majorA.id);
-
   const [division] = await query<{ id: string }>(
     "SELECT id FROM division WHERE name = 'Major A'",
   );
@@ -452,7 +443,7 @@ async function coachPhone(teamName: string): Promise<string> {
  * the whole Sunday map exists before a single playoff game, with every empty
  * spot saying what will fill it.
  */
-async function seedBracket(tournamentId: string, base: Date): Promise<void> {
+export async function seedBracket(tournamentId: string, base: Date): Promise<void> {
   const [division] = await query<{ id: string }>(
     "SELECT id FROM division WHERE tournament_id = $1 AND name = 'Major A'",
     [tournamentId],
@@ -529,4 +520,9 @@ async function seedBracket(tournamentId: string, base: Date): Promise<void> {
       ],
     );
   }
+
+  // The round robin is complete, so the seeds resolve immediately. Writing them
+  // onto the games keeps the stored matchup and the drawn bracket identical —
+  // two sources of truth here is how the wrong team ends up advancing.
+  await materialiseBracket(tournamentId, division.id);
 }

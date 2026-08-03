@@ -1,7 +1,7 @@
 import { query } from '@/db/client';
 import { currentTournament } from '@/server/repo';
 import { CopyLink } from '../_components/CopyLink';
-import { createDemoTournament } from './actions';
+import { addDemoBracket, createDemoTournament } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 export default async function SetupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ created?: string; error?: string }>;
+  searchParams: Promise<{ created?: string; bracket?: string; error?: string }>;
 }) {
   const params = await searchParams;
   const demo = process.env.DEMO_MODE === 'true';
@@ -36,6 +36,15 @@ export default async function SetupPage({
   const division = tournament
     ? await query<{ id: string }>(
         'SELECT id FROM division WHERE tournament_id = $1 ORDER BY sort_order LIMIT 1',
+        [tournament.id],
+      )
+    : [];
+
+  // A deployment seeded before brackets existed has a demo tournament but no
+  // Sunday map, and the seed will not run twice to add one.
+  const bracketGames = tournament
+    ? await query<{ id: string }>(
+        'SELECT id FROM game WHERE tournament_id = $1 AND bracket_round IS NOT NULL LIMIT 1',
         [tournament.id],
       )
     : [];
@@ -76,8 +85,19 @@ export default async function SetupPage({
       {params.error === 'not_demo' && (
         <div className="notice error">Refused: <code>DEMO_MODE</code> is not on.</div>
       )}
+      {params.error === 'bracket_exists' && (
+        <div className="notice warn">This tournament already has a bracket.</div>
+      )}
+      {params.error === 'no_tournament' && (
+        <div className="notice warn">There is no tournament to add a bracket to yet.</div>
+      )}
       {params.created && (
         <div className="notice ok">Demo tournament created. The PINs are below.</div>
+      )}
+      {params.bracket && (
+        <div className="notice ok">
+          Sunday&apos;s bracket added. <a href="/bracket">Go and look at it.</a>
+        </div>
       )}
 
       {/* --- No tournament yet ------------------------------------------- */}
@@ -138,6 +158,22 @@ export default async function SetupPage({
             </>
           )}
 
+          {demo && bracketGames.length === 0 && (
+            <>
+              <h2>Add Sunday&apos;s bracket</h2>
+              <p className="sub">
+                This demo was created before the playoff bracket existed, so it has no Sunday map.
+                Adding one draws two semifinals seeded from the Major A standings, a championship
+                and a bronze game — none of them played, so every spot shows what will fill it.
+              </p>
+              <form action={addDemoBracket}>
+                <button className="primary wide till-big" type="submit">
+                  Add the demo bracket
+                </button>
+              </form>
+            </>
+          )}
+
           <h2>A tour</h2>
           <p className="sub">The first two need no sign-in at all.</p>
           <ol className="trail" style={{ fontSize: 16, paddingLeft: 20 }}>
@@ -156,6 +192,10 @@ export default async function SetupPage({
             </li>
             <li>
               <a href="/hq/queue">Score queue</a> — approve one, watch the standings move
+            </li>
+            <li>
+              <a href="/bracket">Playoffs</a> — Sunday&apos;s map, with every empty spot naming the
+              game that decides it
             </li>
             <li>
               Sign in as <strong>Concession Volunteer</strong> → <a href="/pos">the till</a> — open
