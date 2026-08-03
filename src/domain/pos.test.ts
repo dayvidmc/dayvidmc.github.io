@@ -9,12 +9,14 @@ import {
   changeDue,
   expectedCashCents,
   formatMoney,
+  isMarkedDown,
   parseMoney,
   quickCashOptions,
   refundStatus,
   refundableCents,
   removeLine,
   roundCashToNickel,
+  sellingPrice,
   setQuantity,
   type CartLine,
   type MenuItem,
@@ -181,5 +183,53 @@ describe('money formatting', () => {
     expect(parseMoney('abc')).toBeNull();
     expect(parseMoney('1.234')).toBeNull();
     expect(parseMoney('1.2.3')).toBeNull();
+  });
+});
+
+describe('marking something down', () => {
+  const freezie = {
+    id: 'f',
+    name: 'Freezie',
+    priceCents: 100,
+    category: 'Snacks',
+    colour: null,
+  };
+
+  it('sells at the ordinary price when nothing is marked down', () => {
+    expect(sellingPrice(freezie)).toBe(100);
+    expect(sellingPrice({ ...freezie, clearancePriceCents: null })).toBe(100);
+    expect(isMarkedDown(freezie)).toBe(false);
+  });
+
+  it('sells at the markdown when one is set', () => {
+    expect(sellingPrice({ ...freezie, clearancePriceCents: 50 })).toBe(50);
+    expect(isMarkedDown({ ...freezie, clearancePriceCents: 50 })).toBe(true);
+  });
+
+  it('refuses a "markdown" that is a price rise', () => {
+    // The database refuses this too. A till that can quietly charge more than
+    // the menu says is not a till anybody should defend.
+    expect(sellingPrice({ ...freezie, clearancePriceCents: 300 })).toBe(100);
+    expect(isMarkedDown({ ...freezie, clearancePriceCents: 300 })).toBe(false);
+  });
+
+  it('handles a giveaway', () => {
+    expect(sellingPrice({ ...freezie, clearancePriceCents: 0 })).toBe(0);
+    expect(isMarkedDown({ ...freezie, clearancePriceCents: 0 })).toBe(true);
+  });
+
+  it('rings the markdown into the cart, not the old price', () => {
+    // The bug this prevents: a button that shows 50¢ and a cart that charges
+    // a dollar, which the customer notices and the volunteer cannot explain.
+    const cart = addItem([], { ...freezie, clearancePriceCents: 50 });
+    expect(cart[0]!.unitPriceCents).toBe(50);
+    expect(cartSubtotal(cart)).toBe(50);
+  });
+
+  it('keeps the marked-down price when a second one is added', () => {
+    let cart = addItem([], { ...freezie, clearancePriceCents: 50 });
+    cart = addItem(cart, { ...freezie, clearancePriceCents: 50 });
+    expect(cart).toHaveLength(1);
+    expect(cartSubtotal(cart)).toBe(100);
   });
 });

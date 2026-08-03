@@ -9,6 +9,8 @@ import {
   cashRoundingAdjustment,
   changeDue,
   formatMoney,
+  isMarkedDown,
+  sellingPrice,
   parseMoney,
   quickCashOptions,
   setQuantity,
@@ -429,7 +431,17 @@ export function Till({
                 onClick={() => setLines((current) => addItem(current, item))}
               >
                 <span className="item-name">{item.name}</span>
-                <span className="item-price">{formatMoney(item.priceCents)}</span>
+                {/* A marked-down button has to show both numbers. A price that
+                    changed without the customer being able to see why is a
+                    conversation the volunteer cannot win. */}
+                {isMarkedDown(item) ? (
+                  <span className="item-price">
+                    <s style={{ opacity: 0.6 }}>{formatMoney(item.priceCents)}</s>{' '}
+                    {formatMoney(sellingPrice(item))}
+                  </span>
+                ) : (
+                  <span className="item-price">{formatMoney(item.priceCents)}</span>
+                )}
               </button>
             ))}
           </div>

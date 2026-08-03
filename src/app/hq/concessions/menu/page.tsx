@@ -73,7 +73,16 @@ export default async function MenuPage({
               <div>
                 <div className="teams">{item.name}</div>
                 <div className="meta">
-                  {formatMoney(item.price_cents)}
+                  {item.clearance_price_cents === null ? (
+                    formatMoney(item.price_cents)
+                  ) : (
+                    <>
+                      <span style={{ textDecoration: 'line-through' }}>
+                        {formatMoney(item.price_cents)}
+                      </span>{' '}
+                      <strong>{formatMoney(item.clearance_price_cents)}</strong> marked down
+                    </>
+                  )}
                   {item.donated_by
                     ? ` · donated by ${item.donated_by}`
                     : item.cost_cents === null
@@ -93,6 +102,16 @@ export default async function MenuPage({
                   save={save} field="price_cents" label="Price"
                   defaultValue={(item.price_cents / 100).toFixed(2)}
                   hint="What the customer pays, all in."
+                />
+                <AutoSaveField
+                  save={save} field="clearance_price_cents" label="Marked down to"
+                  defaultValue={
+                    item.clearance_price_cents === null
+                      ? ''
+                      : (item.clearance_price_cents / 100).toFixed(2)
+                  }
+                  placeholder="blank = ordinary price"
+                  hint="Sunday afternoon with forty freezies left. Applies at every till immediately, and the button shows it. Clear it to put the price back."
                 />
                 <AutoSaveField
                   save={save} field="cost_cents" label="What it costs us"

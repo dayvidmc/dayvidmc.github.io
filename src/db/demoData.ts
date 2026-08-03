@@ -444,6 +444,7 @@ export async function seedDemo(): Promise<DemoResult> {
   await seedFundraising(tournamentId);
   await seedAuction(tournamentId);
   await seedEntries(tournamentId);
+  await seedPurchasesAndSponsors(tournamentId);
 
   const [division] = await query<{ id: string }>(
     "SELECT id FROM division WHERE name = 'Major A'",
@@ -738,6 +739,126 @@ async function seedAuction(tournamentId: string): Promise<void> {
 }
 
 /**
+ * What the weekend cost, and who we owe.
+ *
+ * Deliberately mid-weekend and slightly untidy: two shops on the association's
+ * card, one a volunteer paid for herself and has not had back, and a freezie
+ * marked down on the Sunday because forty of them are left. Each of those is a
+ * state a screen exists for, and a demo where the books are square shows none
+ * of them.
+ */
+async function seedPurchasesAndSponsors(tournamentId: string): Promise<void> {
+  const stands = await query<{ id: string; name: string }>(
+    'SELECT id, name FROM concession_location WHERE tournament_id = $1 ORDER BY name',
+    [tournamentId],
+  );
+  const standId = (name: string) => stands.find((s) => s.name === name)?.id ?? null;
+
+  const shops: [
+    description: string,
+    supplier: string,
+    amount: number,
+    daysAgo: number,
+    paidBy: string,
+    personally: boolean,
+    stand: string | null,
+  ][] = [
+    ['Drinks and snacks for the weekend', 'Costco', 84_350, 3, 'KBA card', false, null],
+    ['Buns, condiments, foil trays', 'Costco', 21_180, 3, 'Marion Ellis', true, null],
+    ['Ice, three runs', 'Circle K', 4_500, 1, 'Marion Ellis', true, 'Deevy Pines Canteen'],
+    ['Coffee and cups', 'Metro', 6_240, 2, 'KBA card', false, 'Tokessy BBQ'],
+  ];
+
+  for (const [description, supplier, amount, daysAgo, paidBy, personally, stand] of shops) {
+    await query(
+      `INSERT INTO concession_purchase
+         (tournament_id, location_id, description, supplier, amount_cents, occurred_on,
+          paid_by, paid_personally, recorded_by)
+       VALUES ($1,$2,$3,$4,$5, current_date - $6::int, $7,$8,'Concession Lead')`,
+      [tournamentId, stand ? standId(stand) : null, description, supplier, amount, daysAgo,
+        paidBy, personally],
+    );
+  }
+
+  // One of Marion's two shops has been paid back. The other is the debt the
+  // money screen now names her for.
+  await query(
+    `UPDATE concession_purchase
+        SET reimbursed_at = now(), reimbursed_by = 'Tournament Director'
+      WHERE tournament_id = $1 AND description = 'Ice, three runs'`,
+    [tournamentId],
+  );
+
+  // Sunday afternoon, forty freezies left.
+  await query(
+    `UPDATE concession_item
+        SET clearance_price_cents = 50, marked_down_at = now(), marked_down_by = 'Concession Lead'
+      WHERE tournament_id = $1 AND name = 'Freezie'`,
+    [tournamentId],
+  );
+
+  // --- Sponsors --------------------------------------------------------------
+  const sponsorRows: [
+    name: string,
+    pamphlet: string | null,
+    contact: string | null,
+    email: string | null,
+    promised: string | null,
+    inPamphlet: boolean,
+  ][] = [
+    ["Montana's BBQ & Bar", "Montana's BBQ & Bar (Kanata)", 'Dee Fontaine',
+      'dee.fontaine@example.com', 'Name in the pamphlet, banner at the main field', true],
+    ['Kanata Home Hardware', 'Home Hardware (Kanata) Ltd.', 'Ross Whelan',
+      'ross.whelan@example.com', 'Name in the pamphlet', true],
+    ['Sens Foundation', null, null, 'community@example.com', 'Name in the pamphlet', false],
+    ['The Barrett family', null, 'Alice Barrett', null, 'A mention in the pamphlet', false],
+  ];
+
+  for (const [name, pamphlet, contact, email, promised, inPamphlet] of sponsorRows) {
+    await query(
+      `INSERT INTO sponsor (tournament_id, name, pamphlet_name, contact_name, contact_email,
+                            promised, pamphlet_confirmed_at, pamphlet_confirmed_by)
+       VALUES ($1,$2,$3,$4,$5,$6,
+               CASE WHEN $7 THEN now() END,
+               CASE WHEN $7 THEN 'Tournament Director' END)`,
+      [tournamentId, name, pamphlet, contact, email, promised, inPamphlet],
+    );
+  }
+
+  // An auction lot and the gift it came from are the same object described
+  // twice — one by the person who took it in, one by the person who put it on
+  // a table. Joining them is what lets a letter say "your barbecue raised
+  // $320" instead of thanking somebody vaguely for their support.
+  await query(
+    `UPDATE auction_item i SET gift_id = g.id
+       FROM gift_in_kind g
+      WHERE g.tournament_id = i.tournament_id
+        AND lower(g.donor) = lower(i.donor)
+        AND i.gift_id IS NULL
+        AND i.tournament_id = $1`,
+    [tournamentId],
+  );
+
+  // Join the gifts and the cash that already exist to the relationship, so a
+  // thank-you letter can say what the gift earned.
+  await query(
+    `UPDATE gift_in_kind g SET sponsor_id = s.id
+       FROM sponsor s
+      WHERE s.tournament_id = g.tournament_id AND lower(s.name) LIKE lower(g.donor) || '%'
+        AND g.tournament_id = $1`,
+    [tournamentId],
+  );
+  await query(
+    `UPDATE revenue_entry r SET sponsor_id = s.id
+       FROM sponsor s
+      WHERE s.tournament_id = r.tournament_id AND r.stream = 'sponsorship'
+        AND lower(r.description) LIKE '%' || lower(s.name) || '%'
+        AND r.tournament_id = $1`,
+    [tournamentId],
+  );
+}
+
+/**
  * Entries, caught the morning after they opened.
  *
  * The state worth showing is the awkward one. Entries are open, one division
@@ -898,7 +1019,7 @@ async function seedFundraising(tournamentId: string): Promise<void> {
 
   const revenue: [stream: string, description: string, amount: number, cost: number][] = [
     ['sponsorship', 'Diamond sponsor signs, 12 at $250', 300_000, 42_000],
-    ['sponsorship', 'Program advertising', 145_000, 0],
+    ['sponsorship', 'Kanata Home Hardware — pamphlet and banner', 145_000, 0],
     ['raffle', '50-50, Saturday draw', 96_500, 8_000],
     ['donation', 'Cash donations at the gate', 34_000, 0],
   ];

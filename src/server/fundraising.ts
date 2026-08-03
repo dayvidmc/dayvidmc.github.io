@@ -1,4 +1,4 @@
-import { query } from '@/db/client';
+import { query, queryOne } from '@/db/client';
 import { recordEvent } from './events';
 import { auctionRaisedCents } from './auction';
 import { entriesTakenCents } from './registration';
@@ -6,6 +6,7 @@ import {
   cashPosition,
   concessionsTotal,
   manualTotals,
+  owedToVolunteers,
   summariseGifts,
   summariseRaised,
   type CashPosition,
@@ -64,6 +65,138 @@ export async function revenueEntries(tournamentId: string): Promise<RevenueEntry
   );
 }
 
+export interface PurchaseRow {
+  id: string;
+  description: string;
+  supplier: string | null;
+  amountCents: number;
+  occurredOn: string;
+  paidBy: string;
+  paidPersonally: boolean;
+  reimbursedAt: Date | null;
+  locationName: string | null;
+  receiptNote: string | null;
+  recordedBy: string;
+}
+
+export async function purchases(tournamentId: string): Promise<PurchaseRow[]> {
+  const rows = await query<{
+    id: string;
+    description: string;
+    supplier: string | null;
+    amount_cents: number;
+    occurred_on: string;
+    paid_by: string;
+    paid_personally: boolean;
+    reimbursed_at: Date | null;
+    location_name: string | null;
+    receipt_note: string | null;
+    recorded_by: string;
+  }>(
+    `SELECT p.id, p.description, p.supplier, p.amount_cents, p.occurred_on::text,
+            p.paid_by, p.paid_personally, p.reimbursed_at, p.receipt_note, p.recorded_by,
+            l.name AS location_name
+       FROM concession_purchase p
+       LEFT JOIN concession_location l ON l.id = p.location_id
+      WHERE p.tournament_id = $1
+      ORDER BY p.occurred_on DESC, p.recorded_at DESC`,
+    [tournamentId],
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    description: row.description,
+    supplier: row.supplier,
+    amountCents: row.amount_cents,
+    occurredOn: row.occurred_on,
+    paidBy: row.paid_by,
+    paidPersonally: row.paid_personally,
+    reimbursedAt: row.reimbursed_at,
+    locationName: row.location_name,
+    receiptNote: row.receipt_note,
+    recordedBy: row.recorded_by,
+  }));
+}
+
+export async function purchasesTotalCents(tournamentId: string): Promise<number> {
+  const row = await queryOne<{ total: string | null }>(
+    'SELECT COALESCE(SUM(amount_cents), 0)::text AS total FROM concession_purchase WHERE tournament_id = $1',
+    [tournamentId],
+  );
+  return Number(row?.total ?? 0);
+}
+
+export async function recordPurchase(
+  tournamentId: string,
+  input: {
+    description: string;
+    supplier: string;
+    amountCents: number;
+    occurredOn: string;
+    paidBy: string;
+    paidPersonally: boolean;
+    locationId: string | null;
+    receiptNote: string;
+  },
+  actor: string,
+  actorRole: string,
+): Promise<void> {
+  await query(
+    `INSERT INTO concession_purchase
+       (tournament_id, location_id, description, supplier, amount_cents, occurred_on,
+        paid_by, paid_personally, receipt_note, recorded_by)
+     VALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9,$10)`,
+    [
+      tournamentId,
+      input.locationId,
+      input.description.slice(0, 200),
+      input.supplier.slice(0, 160) || null,
+      input.amountCents,
+      input.occurredOn,
+      input.paidBy.slice(0, 160),
+      input.paidPersonally,
+      input.receiptNote.slice(0, 500) || null,
+      actor,
+    ],
+  );
+
+  await recordEvent({
+    tournamentId,
+    actor,
+    actorRole,
+    kind: 'purchase.recorded',
+    subjectType: 'concession_purchase',
+    payload: { ...input },
+  });
+}
+
+/** Money going back to somebody who fronted it. Only ever stamped, never unpaid. */
+export async function markReimbursed(
+  tournamentId: string,
+  id: string,
+  actor: string,
+  actorRole: string,
+): Promise<void> {
+  const updated = await query<{ id: string; paid_by: string; amount_cents: number }>(
+    `UPDATE concession_purchase
+        SET reimbursed_at = now(), reimbursed_by = $3
+      WHERE id = $1 AND tournament_id = $2 AND paid_personally AND reimbursed_at IS NULL
+      RETURNING id, paid_by, amount_cents`,
+    [id, tournamentId, actor],
+  );
+  if (updated.length === 0) return;
+
+  await recordEvent({
+    tournamentId,
+    actor,
+    actorRole,
+    kind: 'purchase.reimbursed',
+    subjectType: 'concession_purchase',
+    subjectId: id,
+    payload: { paidBy: updated[0]!.paid_by, amountCents: updated[0]!.amount_cents },
+  });
+}
+
 /** Refunds are per order, so they come off the canteen stream as a whole. */
 export async function concessionRefunds(tournamentId: string): Promise<number> {
   const rows = await query<{ n: string }>(
@@ -83,16 +216,21 @@ export interface RaisedNow extends RaisedSummary {
   auctionCountedTwice: boolean;
   /** A hand-typed entry-fee figure sitting alongside real entries. */
   entriesCountedTwice: boolean;
+  /** What volunteers are still out of pocket for. */
+  owed: ReturnType<typeof owedToVolunteers>;
 }
 
 export async function raisedSoFar(tournamentId: string): Promise<RaisedNow> {
-  const [lines, entries, refunds, auctionCents, entryCents] = await Promise.all([
+  const [lines, entries, refunds, auctionCents, entryCents, shops] = await Promise.all([
     soldLines(tournamentId),
     revenueEntries(tournamentId),
     concessionRefunds(tournamentId),
     auctionRaisedCents(tournamentId),
     entriesTakenCents(tournamentId),
+    purchases(tournamentId),
   ]);
+
+  const purchaseCents = shops.reduce((sum, shop) => sum + shop.amountCents, 0);
 
   const manual = entries.map((row) => ({
     stream: row.stream,
@@ -114,10 +252,22 @@ export async function raisedSoFar(tournamentId: string): Promise<RaisedNow> {
     manual.push({ stream: 'registration', amountCents: entryCents, costCents: 0 });
   }
 
-  const summary = summariseRaised([concessionsTotal(lines, refunds), ...manualTotals(manual)]);
+  const summary = summariseRaised([
+    concessionsTotal(lines, refunds, purchaseCents),
+    ...manualTotals(manual),
+  ]);
 
   return {
     ...summary,
+    owed: owedToVolunteers(
+      shops.map((shop) => ({
+        amountCents: shop.amountCents,
+        paidPersonally: shop.paidPersonally,
+        reimbursed: shop.reimbursedAt !== null,
+        paidBy: shop.paidBy,
+        description: shop.description,
+      })),
+    ),
     auctionCountedTwice:
       auctionCents > 0 && entries.some((row) => row.stream === 'auction' && row.amount_cents > 0),
     entriesCountedTwice:

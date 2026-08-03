@@ -3,6 +3,7 @@ import {
   cashPosition,
   concessionsTotal,
   manualTotals,
+  owedToVolunteers,
   summariseGifts,
   summariseRaised,
   type Gift,
@@ -242,5 +243,83 @@ describe('gifts in kind', () => {
   it('stops counting a receipt once it has been issued', () => {
     const summary = summariseGifts([gift({ receiptIssued: true })]);
     expect(summary.receiptsOutstanding).toBe(0);
+  });
+});
+
+
+describe('what the shopping cost, and who is owed for it', () => {
+  const purchase = (
+    amountCents: number,
+    paidBy: string,
+    paidPersonally: boolean,
+    reimbursed = false,
+  ) => ({ amountCents, paidBy, paidPersonally, reimbursed, description: 'Costco run' });
+
+  it('owes nothing when everything went on the association card', () => {
+    const owed = owedToVolunteers([purchase(40000, 'KBA card', false)]);
+    expect(owed.totalCents).toBe(0);
+    expect(owed.people).toEqual([]);
+  });
+
+  it('owes a volunteer who fronted the money', () => {
+    const owed = owedToVolunteers([purchase(24350, 'Marion Ellis', true)]);
+    expect(owed.totalCents).toBe(24350);
+    expect(owed.people).toEqual([{ name: 'Marion Ellis', amountCents: 24350, items: 1 }]);
+  });
+
+  it('adds up several shops by the same person', () => {
+    const owed = owedToVolunteers([
+      purchase(10000, 'Marion Ellis', true),
+      purchase(5000, 'Marion Ellis', true),
+    ]);
+    expect(owed.people[0]).toEqual({ name: 'Marion Ellis', amountCents: 15000, items: 2 });
+  });
+
+  it('stops owing once it has been paid back', () => {
+    const owed = owedToVolunteers([purchase(10000, 'Marion Ellis', true, true)]);
+    expect(owed.totalCents).toBe(0);
+  });
+
+  it('lists the biggest debt first, because that is the one to settle', () => {
+    const owed = owedToVolunteers([
+      purchase(5000, 'Sam', true),
+      purchase(30000, 'Marion', true),
+    ]);
+    expect(owed.people.map((p) => p.name)).toEqual(['Marion', 'Sam']);
+  });
+});
+
+describe('costs that arrive as a stack of receipts', () => {
+  const line = (takenCents: number, unitCostCents: number | null, quantity = 1) => ({
+    itemName: 'Thing',
+    quantity,
+    takenCents,
+    unitCostCents,
+    donatedBy: null,
+  });
+
+  it('counts a purchase total against the canteen stream', () => {
+    const total = concessionsTotal([line(50000, null)], 0, 12000);
+    expect(total.takenCents).toBe(50000);
+    expect(total.costCents).toBe(12000);
+    expect(total.raisedCents).toBe(38000);
+  });
+
+  it('stops calling the headline a ceiling once receipts are totalled', () => {
+    // A treasurer who does the work the honest way should not still be told
+    // her figure cannot be trusted.
+    expect(concessionsTotal([line(50000, null)], 0, 0).costIncomplete).toBe(true);
+    expect(concessionsTotal([line(50000, null)], 0, 12000).costIncomplete).toBe(false);
+  });
+
+  it('adds per-item costs and purchase totals together', () => {
+    const total = concessionsTotal([line(50000, 100, 20)], 0, 12000);
+    expect(total.costCents).toBe(2000 + 12000);
+  });
+
+  it('takes refunds off the takings, not off the cost', () => {
+    const total = concessionsTotal([line(50000, null)], 500, 12000);
+    expect(total.takenCents).toBe(49500);
+    expect(total.raisedCents).toBe(37500);
   });
 });

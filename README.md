@@ -33,13 +33,15 @@ intake paths that feed it.
 | Game detail: correct, dispute, reschedule, history | §5.3 | Built |
 | Team contacts and per-team links | §5.7 | Built — auto-saving |
 | Settings and pre-weekend readiness checklist | — | Built |
-| Concessions till, offline-capable | §8 | Built, tested — cash only; card hands off to Square |
+| Concessions till, offline-capable | §8 | Built, tested — cash and Square hand-off; markdowns set by a lead, never typed at the till |
 | Public schedule with live status | §5.7 | Built, tested |
 | Playoff bracket — the map, drawn before it is played | §5.6 | Built, tested — structure must still be seeded by hand |
 | Umpires: roster, crews with conflict checks, their own link, honoraria | — | Built, tested — not in the spec at all; see `docs/BRAINSTORM.md` §4 |
 | Registration and rosters, no payments | — | Built, tested — Module E's fees stay deferred |
 | Outbound SMS: sender, retries, opt-outs, failure screen | §5.7 | Built, tested — **dry run by default**; needs a Twilio account to reach a phone |
-| Money raised: every stream, cost of goods, gifts in kind, cash control | §8A | Built, tested — the raffle is still recorded by hand |
+| Money raised: every stream, cost of goods, gifts in kind, cash control | §8A | Built, tested — costs as receipts or per item; the raffle is still recorded by hand |
+| What it cost, and who fronted it | §8A | Built, tested — one line per shop, and volunteers owed money are named until paid back |
+| Sponsors: what was promised, the pamphlet list, the thank-you list | §7 | Built, tested — links a gift to what it fetched at the auction |
 | Silent auction: lots, printable bid sheets, a fast close, winners, payment | §7.3 | Built, tested — reports itself into the money total |
 | Team entries: a timed opening, a queue, caps and waitlists, deposits and balances | §8A/E | Built, tested — thirteen divisions grouped by age group, refund terms stated before payment; e-transfer and cheque work out of the box, card needs a merchant account |
 | Append-only audit trail | §9 | Built, enforced by the database |

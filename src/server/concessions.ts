@@ -40,12 +40,15 @@ export interface MenuRow {
   colour: string | null;
   active: boolean;
   location_id: string | null;
+  /** A markdown set by a lead. Null means sell at the ordinary price. */
+  clearance_price_cents: number | null;
 }
 
 /** Items on sale at one stand: its own, plus everything sold everywhere. */
 export async function menuForLocation(tournamentId: string, locationId: string): Promise<MenuRow[]> {
   return query<MenuRow>(
-    `SELECT id, name, category, price_cents, cost_cents, donated_by, sort_order, colour, active, location_id
+    `SELECT id, name, category, price_cents, cost_cents, donated_by, sort_order, colour, active,
+            location_id, clearance_price_cents
        FROM concession_item
       WHERE tournament_id = $1
         AND active
@@ -57,7 +60,8 @@ export async function menuForLocation(tournamentId: string, locationId: string):
 
 export async function fullMenu(tournamentId: string): Promise<MenuRow[]> {
   return query<MenuRow>(
-    `SELECT id, name, category, price_cents, cost_cents, donated_by, sort_order, colour, active, location_id
+    `SELECT id, name, category, price_cents, cost_cents, donated_by, sort_order, colour, active,
+            location_id, clearance_price_cents
        FROM concession_item WHERE tournament_id = $1 ORDER BY sort_order, name`,
     [tournamentId],
   );

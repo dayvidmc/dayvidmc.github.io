@@ -66,6 +66,8 @@ export default async function MoneyPage({
         <a className="btn" href="/hq/money/gifts" style={{ flex: 1 }}>Gifts in kind</a>
         <a className="btn" href="/hq/auction" style={{ flex: 1 }}>Auction</a>
         <a className="btn" href="/hq/entries" style={{ flex: 1 }}>Entries</a>
+        <a className="btn" href="/hq/money/purchases" style={{ flex: 1 }}>What it cost</a>
+        <a className="btn" href="/hq/sponsors" style={{ flex: 1 }}>Sponsors</a>
       </div>
 
       {params.error === 'director_only' && (
@@ -94,8 +96,9 @@ export default async function MoneyPage({
                 .map((l) => l.itemName)
                 .join(', ')}${unknownCost.length > 4 ? '…' : ''}), so they are counting as free.`
             : 'Some costs have not been recorded, so they are counting as free.'}{' '}
-          <a href="/hq/concessions/menu">Add costs on the menu</a> and this number becomes one you
-          can read out.
+          The easier fix is usually <a href="/hq/money/purchases">to record the shopping</a> as a
+          total off the receipts — one line per shop settles it for the whole weekend. Per-item
+          costs on <a href="/hq/concessions/menu">the menu</a> work too.
         </div>
       )}
 
@@ -113,6 +116,14 @@ export default async function MoneyPage({
           <a href="/hq/entries">on the entries screen</a> and a hand-typed team-entry figure below.
           Both are in the total. Remove whichever is the duplicate.
         </div>
+      )}
+
+      {summary.owed.totalCents > 0 && (
+        <a className="notice warn" href="/hq/money/purchases" style={{ display: 'block' }}>
+          <strong>{money(summary.owed.totalCents)}</strong> owed back to{' '}
+          {summary.owed.people.map((person) => person.name).join(', ')} — paid for out of their own
+          pocket. →
+        </a>
       )}
 
       {summary.donatedStockCents > 0 && (

@@ -71,7 +71,61 @@ export interface SoldLine {
  * overstate the total and silently assuming a cost would understate it. The
  * screens say which lines are unknown.
  */
-export function concessionsTotal(lines: readonly SoldLine[], refundsCents = 0): StreamTotal {
+export interface Purchase {
+  amountCents: number;
+  paidPersonally: boolean;
+  reimbursed: boolean;
+  paidBy: string;
+  description: string;
+}
+
+/**
+ * What somebody is still out of pocket for.
+ *
+ * A volunteer who fronted the Costco run is owed real money by the tournament
+ * until it goes back, and until now that debt appeared nowhere. It is not a
+ * cost of the weekend twice — the purchase is already counted against the
+ * canteen stream — it is a separate question with a separate answer: who do we
+ * owe, and how much.
+ */
+export function owedToVolunteers(
+  purchases: readonly Purchase[],
+): { totalCents: number; people: { name: string; amountCents: number; items: number }[] } {
+  const byPerson = new Map<string, { amountCents: number; items: number }>();
+  let total = 0;
+
+  for (const purchase of purchases) {
+    if (!purchase.paidPersonally || purchase.reimbursed) continue;
+    total += purchase.amountCents;
+    const existing = byPerson.get(purchase.paidBy) ?? { amountCents: 0, items: 0 };
+    byPerson.set(purchase.paidBy, {
+      amountCents: existing.amountCents + purchase.amountCents,
+      items: existing.items + 1,
+    });
+  }
+
+  return {
+    totalCents: total,
+    people: [...byPerson.entries()]
+      .map(([name, entry]) => ({ name, ...entry }))
+      .sort((a, b) => b.amountCents - a.amountCents),
+  };
+}
+
+/**
+ * What the canteens raised.
+ *
+ * Costs arrive two ways and both are counted. Per-item costs are the precise
+ * route; `purchasesCents` is a total off a stack of receipts, which is how the
+ * shopping actually gets recorded. A stream with either one is no longer
+ * guessing, so a purchase total is enough on its own to stop the headline
+ * calling itself a ceiling.
+ */
+export function concessionsTotal(
+  lines: readonly SoldLine[],
+  refundsCents = 0,
+  purchasesCents = 0,
+): StreamTotal {
   let takenCents = 0;
   let costCents = 0;
   let donatedStockCents = 0;
@@ -97,12 +151,18 @@ export function concessionsTotal(lines: readonly SoldLine[], refundsCents = 0): 
   // attributed to an item without inventing which one came back. It comes off
   // the stream instead, which is both honest and enough — nobody needs to know
   // that the refunded order was a hot dog rather than a burger.
+  // A stack of receipts is a real answer to "what did it cost", so having one
+  // settles the question the per-item column was asking. Without this, a
+  // treasurer who does the work the honest way — totals from receipts — would
+  // still be told her figure was a ceiling.
+  const total = costCents + purchasesCents;
+
   return {
     stream: 'concessions',
     takenCents: takenCents - refundsCents,
-    costCents,
-    raisedCents: takenCents - refundsCents - costCents,
-    costIncomplete,
+    costCents: total,
+    raisedCents: takenCents - refundsCents - total,
+    costIncomplete: costIncomplete && purchasesCents === 0,
     donatedStockCents,
   };
 }

@@ -44,6 +44,11 @@ export type EventKind =
   | 'entry.payment_recorded'
   | 'entry.settings_changed'
   | 'entry.fees_changed'
+  | 'sponsor.added'
+  | 'sponsor.updated'
+  | 'purchase.recorded'
+  | 'purchase.reimbursed'
+  | 'concession.marked_down'
   | 'staff.signed_in';
 
 export interface EventInput {

@@ -23,6 +23,35 @@ export interface MenuItem {
   priceCents: number;
   category: string | null;
   colour: string | null;
+  /**
+   * A markdown set by a lead, not by whoever is at the counter.
+   *
+   * Sunday afternoon with forty freezies left is a real situation and the
+   * answer is a lower price. The answer is *not* letting a volunteer type any
+   * number into a till, because a till whose prices can be anything is a till
+   * that is evidence of nothing. So this is set on the menu screen, applies to
+   * every stand selling that item, and is visible on the button.
+   */
+  clearancePriceCents?: number | null;
+}
+
+/**
+ * What this item sells for right now.
+ *
+ * One function, used by the button, the cart and the receipt, so a marked-down
+ * item cannot ring through at one price and display at another.
+ */
+export function sellingPrice(item: MenuItem): number {
+  const clearance = item.clearancePriceCents;
+  if (clearance === null || clearance === undefined) return item.priceCents;
+  // A "markdown" above the ordinary price is a price rise with a nicer name.
+  // The database refuses it too; this is the belt to that pair of braces.
+  return Math.min(clearance, item.priceCents);
+}
+
+/** True when this item is marked down from its ordinary price. */
+export function isMarkedDown(item: MenuItem): boolean {
+  return sellingPrice(item) < item.priceCents;
 }
 
 export type TenderKind = 'cash' | 'card';
@@ -113,7 +142,7 @@ export function addItem(lines: readonly CartLine[], item: MenuItem): CartLine[] 
   }
   return [
     ...lines,
-    { itemId: item.id, name: item.name, unitPriceCents: item.priceCents, quantity: 1 },
+    { itemId: item.id, name: item.name, unitPriceCents: sellingPrice(item), quantity: 1 },
   ];
 }
 

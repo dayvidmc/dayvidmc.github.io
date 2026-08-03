@@ -151,6 +151,7 @@ export default async function TillPage({
           id: item.id,
           name: item.name,
           priceCents: item.price_cents,
+          clearancePriceCents: item.clearance_price_cents,
           category: item.category,
           colour: item.colour,
         }))}

@@ -8,7 +8,9 @@ import {
   addRevenueEntry,
   deleteRevenueEntry,
   markReceiptIssued,
+  markReimbursed,
   recordCashMovement,
+  recordPurchase,
 } from '@/server/fundraising';
 import type { Stream } from '@/domain/fundraising';
 
@@ -158,4 +160,78 @@ export async function markReceiptAction(formData: FormData): Promise<void> {
   const id = String(formData.get('id') ?? '');
   if (id) await markReceiptIssued(staff.tournamentId, id);
   revalidatePath('/hq/money/gifts');
+}
+
+
+/** "700", "700.00", "$700" — all the same amount. Null when it is not money. */
+function purchaseCents(raw: string): number | null {
+  const cleaned = raw.trim().replace(/[$,\s]/g, '');
+  if (!cleaned) return null;
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  return Math.round(Number(cleaned) * 100);
+}
+
+/**
+ * Record a shop.
+ *
+ * Open to the concession lead as well as HQ, because the person who did the
+ * shopping is the person holding the receipt, and making them find a director
+ * to type it in is how receipts end up in a glovebox until September.
+ */
+export async function recordPurchaseAction(formData: FormData): Promise<void> {
+  const staff = await currentStaff();
+  if (!canAccessHq(staff) && staff?.role !== 'concession_lead') redirect('/signin');
+
+  const value = (key: string) => {
+    const raw = formData.get(key);
+    return typeof raw === 'string' ? raw.trim() : '';
+  };
+
+  const amount = purchaseCents(value('amount'));
+  const description = value('description');
+  const paidBy = value('paidBy');
+
+  if (!description || !paidBy || amount === null || amount <= 0) {
+    redirect('/hq/money/purchases?error=bad_purchase');
+  }
+
+  await recordPurchase(
+    staff!.tournamentId,
+    {
+      description,
+      supplier: value('supplier'),
+      amountCents: amount,
+      occurredOn: value('occurredOn') || new Date().toISOString().slice(0, 10),
+      paidBy,
+      paidPersonally: formData.get('paidPersonally') === '1',
+      locationId: value('locationId') || null,
+      receiptNote: value('receiptNote'),
+    },
+    staff!.name,
+    staff!.role,
+  );
+
+  revalidatePath('/hq/money/purchases');
+  revalidatePath('/hq/money');
+  redirect('/hq/money/purchases?saved=1');
+}
+
+/**
+ * Paying somebody back is the director's, unlike recording the purchase.
+ *
+ * Recording what was spent is bookkeeping. Saying money has left the
+ * tournament and gone to a named person is not, and it is the one line on this
+ * screen somebody could quietly write in their own favour.
+ */
+export async function reimburseAction(formData: FormData): Promise<void> {
+  const staff = await currentStaff();
+  if (!canAccessHq(staff)) redirect('/signin');
+  if (!isDirector(staff)) redirect('/hq/money/purchases?error=director_only');
+
+  const id = formData.get('id');
+  if (typeof id !== 'string' || !id) return;
+
+  await markReimbursed(staff!.tournamentId, id, staff!.name, staff!.role);
+  revalidatePath('/hq/money/purchases');
+  redirect('/hq/money/purchases?saved=1');
 }

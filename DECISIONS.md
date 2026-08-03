@@ -591,6 +591,90 @@ not a crash — but nobody counts to fourteen by eye on a Friday night, so it ha
 to be said. Counting affiliates would flag exactly the team that was already
 short of players, which is the opposite of useful.
 
+### 2.35 Costs arrive as a shop, not as a hot dog
+
+**Decision.** `concession_purchase` records one line per receipt — a total, a
+date, who paid. A purchase total on its own settles the "this figure is a
+ceiling" warning; per-item costs still work for anyone who wants them.
+
+**Why.** Receipts are kept and totalled. That is how the shopping actually gets
+recorded, and asking anybody to price a single freezie to the cent produces a
+column nobody fills in — which then makes the money screen call its own
+headline a ceiling forever. A treasurer doing the work the honest way should
+not be told her figure cannot be trusted.
+
+### 2.36 Somebody is out of pocket, and that is a debt to a person
+
+**Decision.** A purchase can be marked as paid personally. Until it is
+reimbursed it appears by name at the top of the purchases screen and on the
+money screen.
+
+**Why.** A volunteer who fronted the Costco run is owed real money by the
+tournament, and until now that appeared nowhere in this system at all. It is
+not a second cost — the purchase is already counted — it is a different
+question with a different answer: who do we owe, and how much.
+
+Recording a purchase is open to the concession lead, because the person who did
+the shopping is the person holding the receipt and making them find a director
+is how receipts end up in a glovebox until September. **Paying somebody back is
+the director's**, because it is the one line on that screen somebody could
+quietly write in their own favour.
+
+### 2.37 A markdown is set by a lead, never typed at the till
+
+**Decision.** `concession_item.clearance_price_cents`, set on the menu screen,
+applied by `sellingPrice()` everywhere. The till has no way to enter a price.
+
+**Why.** Sunday afternoon with forty freezies left is a real situation and a
+lower price is the right answer. Letting a volunteer type any number into a
+till is not, because a till whose prices can be anything is a till that is
+evidence of nothing — and cash reconciliation depends on it being evidence.
+
+The button shows both numbers, struck-through and new. A price that changed
+without the customer being able to see why is a conversation the volunteer
+cannot win.
+
+A "markdown" above the ordinary price is refused by the database, by the domain
+and by the save action, with an explanation on the third — it is a price rise
+with a nicer name.
+
+### 2.38 A sponsor is owed a line in the pamphlet and a thank-you
+
+**Decision.** `sponsor` holds the relationship, what was promised, how the name
+should be printed, and whether the pamphlet entry and the thank-you have gone
+out. Gifts and cash link to it.
+
+**Why.** What a sponsor wants back is not complicated, and both halves have
+failed before — not through carelessness but because the promise lived in an
+inbox and the pamphlet had a print deadline nobody tracked against it.
+
+The pamphlet outranks the thank-you on the screen, and not by a little. A late
+thank-you is a letter sent late; a missing pamphlet entry is a promise broken
+in print, in front of everybody, and unlike almost everything else here it
+cannot be fixed on the day.
+
+`pamphlet_name` is separate from `name` because "Kanata Home Hardware" is what
+everybody calls them and "Home Hardware (Kanata) Ltd." is what goes in print,
+and getting that wrong in a pamphlet is worse than leaving them out.
+
+Both flags toggle in **both** directions. The person working down that list is
+doing it from memory and will occasionally tick the wrong row; a box that
+cannot be un-ticked means the only way back is a database.
+
+### 2.39 CHEO's foundation issues the receipts, so nothing here does
+
+**Decision.** No screen in this repository prints, emails or resembles a
+charitable receipt. The sponsors screen says so in as many words.
+
+**Why.** The foundation issues them. The tournament's job is a clean list of
+who gave what — and something that looks like a receipt, produced by software
+with no charitable status behind it, is a problem for a treasurer rather than a
+convenience.
+
+The fair-market-value fields therefore exist for the thank-you letter and for
+the foundation's list, not for tax. That is a different purpose and it survives
+somebody asking what the number is for.
+
 ---
 
 ## 3. Deliberately not built

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { query } from '@/db/client';
+import { query, queryOne } from '@/db/client';
 import {
   canCloseRegister,
   canEditMenu,
@@ -106,6 +106,7 @@ export async function refundSale(formData: FormData): Promise<void> {
 
 const ITEM_FIELDS = new Set([
   'name', 'category', 'price_cents', 'cost_cents', 'donated_by', 'sort_order', 'colour',
+  'clearance_price_cents',
 ]);
 
 export async function saveMenuItem(
@@ -121,16 +122,33 @@ export async function saveMenuItem(
 
   let stored: string | number | null = value.trim() === '' ? null : value.trim();
 
-  if (field === 'price_cents' || field === 'cost_cents') {
+  if (field === 'price_cents' || field === 'cost_cents' || field === 'clearance_price_cents') {
     // Cost may be cleared: "nobody has said" is a real answer and is not the
-    // same as free. The roll-up reports which items are unknown.
-    if (field === 'cost_cents' && value.trim() === '') {
+    // same as free. The roll-up reports which items are unknown. A markdown
+    // may be cleared too, which is how the price goes back up on Monday.
+    if ((field === 'cost_cents' || field === 'clearance_price_cents') && value.trim() === '') {
       stored = null;
     } else {
       const cents = parseMoney(value);
       if (cents === null || cents < 0) return { ok: false, error: 'Enter an amount like 3.00.' };
       if (cents > 100_000) return { ok: false, error: 'That is over $1,000 — check the decimal.' };
       stored = cents;
+
+      // A "markdown" above the ordinary price is a price rise with a nicer
+      // name. The database refuses it; saying so here means the lead finds out
+      // while they are looking at the field rather than from a stack trace.
+      if (field === 'clearance_price_cents') {
+        const current = await queryOne<{ price_cents: number }>(
+          'SELECT price_cents FROM concession_item WHERE id = $1 AND tournament_id = $2',
+          [itemId, staff!.tournamentId],
+        );
+        if (current && cents > current.price_cents) {
+          return {
+            ok: false,
+            error: `That is more than the ordinary price of ${(current.price_cents / 100).toFixed(2)}.`,
+          };
+        }
+      }
     }
   }
 
