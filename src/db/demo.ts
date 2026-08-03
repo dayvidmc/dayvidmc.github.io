@@ -266,6 +266,39 @@ async function main() {
     await query('UPDATE team SET coach_phone = $2 WHERE id = $1', [t.id, fakePhone(t.name, used)]);
   }
 
+  // Diamond cover for today, so score intake path 1 is actually demonstrable.
+  //
+  // Without a row here nothing gets asked for a score, and the demo would show
+  // a board full of red games and no explanation for why nobody was chased —
+  // which is exactly the failure mode the diamonds screen exists to surface.
+  // One diamond is deliberately left uncovered so the gap warning has something
+  // real to report.
+  const diamondRows = await query<{ id: string; name: string }>(
+    'SELECT id, name FROM diamond ORDER BY name',
+  );
+  const uncovered = 'March Central';
+  const volunteerNames = ['Priya Raman', 'Dave Kolar', 'Meg Toussaint', 'Alan Wu', 'Jo Petrie'];
+
+  for (const [index, diamond] of diamondRows.entries()) {
+    if (diamond.name === uncovered) continue;
+
+    await query(
+      `INSERT INTO diamond_shift (tournament_id, diamond_id, volunteer_name, volunteer_phone,
+                                  starts_at, ends_at)
+       VALUES ($1, $2, $3, $4, $5::timestamp, $6::timestamp)`,
+      [
+        tournamentId,
+        diamond.id,
+        volunteerNames[index % volunteerNames.length],
+        // The first diamond keeps the number the demo's inbound texts come
+        // from, so those reports read as path 1 rather than an unknown number.
+        index === 0 ? DIAMOND_VOLUNTEER_PHONE : fakePhone(`shift-${diamond.name}`, used),
+        `${today} 08:00:00`,
+        `${today} 21:00:00`,
+      ],
+    );
+  }
+
   // --- Yesterday: every game approved --------------------------------------
 
   for (const [gameId, , , , homeRuns, awayRuns] of YESTERDAY) {

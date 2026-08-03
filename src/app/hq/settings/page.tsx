@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
 import { currentTournament, listDivisions } from '@/server/repo';
+import { smsIsConfigured } from '@/server/sms';
 import { query } from '@/db/client';
 import { AutoSaveField } from '../../_components/AutoSave';
 import { saveTournamentField } from '../editActions';
@@ -77,6 +78,7 @@ export default async function SettingsPage() {
         Number(c.shifts) === 0
           ? 'none yet — without these, nobody gets asked for a score'
           : `${c.shifts} shifts across ${c.diamonds} diamonds`,
+      href: '/hq/diamonds',
     },
     {
       done: !!process.env.TWILIO_AUTH_TOKEN,
@@ -86,15 +88,24 @@ export default async function SettingsPage() {
         : 'TWILIO_AUTH_TOKEN not set — inbound texts are refused in production',
     },
     {
-      // Outbound is genuinely not built yet, and the queue silently growing
-      // would be the worst way to find that out — on Saturday, when ninety
-      // coaches are waiting for a text that is never coming.
-      done: false,
-      label: 'Outbound texts are NOT being sent',
-      detail:
-        `${queued} message${queued === 1 ? '' : 's'} queued and undelivered. Approving a score and ` +
-        `moving a game both write to this queue, but nothing drains it yet — there is no sender. ` +
-        `Until one exists, treat every "queued a text" as "recorded, not sent".`,
+      done: smsIsConfigured(),
+      label: 'Outbound texts can be sent',
+      detail: smsIsConfigured()
+        ? `sender configured; ${queued} message${queued === 1 ? '' : 's'} currently queued`
+        : 'no from number or messaging service set — messages will queue here and reach nobody',
+      href: '/hq/messages',
+    },
+    {
+      // The sender exists now, but it only runs when something calls it. A
+      // heartbeat that was never scheduled looks identical to a working system
+      // right up until Saturday morning, so it gets its own line.
+      done: !!process.env.CRON_SECRET,
+      label: 'Heartbeat scheduled',
+      detail: process.env.CRON_SECRET
+        ? 'CRON_SECRET set — check the schedule is actually calling /api/cron/messaging'
+        : 'CRON_SECRET not set. Without a scheduled call to /api/cron/messaging nothing asks for ' +
+          'scores and nothing drains the queue, however well the rest is configured.',
+      href: '/hq/messages',
     },
   ];
 

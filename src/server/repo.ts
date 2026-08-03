@@ -1,7 +1,7 @@
 import { query, queryOne, transaction } from '@/db/client';
 import { parseDivisionRules } from '@/domain/divisionRules';
 import { buildRecords, completedGameCounts } from '@/domain/records';
-import { computeStandings, type StandingsRow } from '@/domain/tiebreak';
+import { coinFlipKey, computeStandings, type StandingsRow } from '@/domain/tiebreak';
 import { buildBoard, type BoardEntry, type BoardGame, type GameIntakeState } from '@/domain/gameStatus';
 import { addMinutes, toSqlTimestamp } from '@/domain/time';
 import type { DivisionRules, GameResult } from '@/domain/types';
@@ -732,6 +732,60 @@ export async function standingsForDivision(divisionId: string): Promise<PoolStan
   }
 
   return standings.sort((a, b) => a.poolName.localeCompare(b.poolName));
+}
+
+/**
+ * Record the result of a coin flip (§5.5, last resort).
+ *
+ * The engine deliberately never invents one. When the rules run out it says so
+ * and marks the placement provisional, because a randomly generated ordering
+ * that nobody witnessed is exactly the kind of opaque math that keeps directors
+ * on paper. A flip is a physical event with witnesses; this records what
+ * happened rather than deciding it.
+ *
+ * Keyed by the sorted team ids, so re-recording the same group corrects it
+ * rather than creating a second conflicting answer.
+ */
+export async function recordCoinFlip(input: {
+  tournamentId: string;
+  divisionId: string;
+  poolId: string | null;
+  /** Team ids in the order the flip decided: winner first. */
+  orderedTeamIds: string[];
+  actor: string;
+  actorRole: string;
+}): Promise<void> {
+  const groupKey = coinFlipKey(input.orderedTeamIds);
+
+  await transaction(async (client) => {
+    await client.query(
+      `INSERT INTO coin_flip (tournament_id, division_id, pool_id, group_key,
+                              ordered_team_ids, recorded_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (division_id, group_key) DO UPDATE SET
+         ordered_team_ids = EXCLUDED.ordered_team_ids,
+         recorded_by      = EXCLUDED.recorded_by,
+         recorded_at      = now()`,
+      [
+        input.tournamentId,
+        input.divisionId,
+        input.poolId,
+        groupKey,
+        input.orderedTeamIds,
+        input.actor,
+      ],
+    );
+
+    await recordEventIn(client, {
+      tournamentId: input.tournamentId,
+      actor: input.actor,
+      actorRole: input.actorRole,
+      kind: 'coin_flip.recorded',
+      subjectType: 'division',
+      subjectId: input.divisionId,
+      payload: { groupKey, orderedTeamIds: input.orderedTeamIds, poolId: input.poolId },
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------

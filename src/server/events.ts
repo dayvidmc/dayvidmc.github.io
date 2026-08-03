@@ -24,6 +24,9 @@ export type EventKind =
   | 'coin_flip.recorded'
   | 'division.rules_updated'
   | 'notification.queued'
+  | 'notification.requeued'
+  | 'diamond_shift.added'
+  | 'diamond_shift.removed'
   | 'staff.signed_in';
 
 export interface EventInput {

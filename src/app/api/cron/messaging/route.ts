@@ -48,7 +48,27 @@ export async function POST(request: Request) {
     ? await sendDueScoreRequests(tournament.id, today, now)
     : { requested: 0, nudged: 0, uncovered: [] };
 
-  const drain = await drainOnce({ tournamentId: tournament.id });
+  // A misconfigured sender throws rather than quietly pretending to send. The
+  // asks above are already queued and safe, so this reports the reason instead
+  // of returning an empty 500 to whoever is reading cron logs at 7am.
+  let drain;
+  try {
+    drain = await drainOnce({ tournamentId: tournament.id });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[cron] could not drain the queue', error);
+    return NextResponse.json(
+      {
+        date: today,
+        reaped,
+        asked: asks.requested,
+        nudged: asks.nudged,
+        error: message,
+        note: 'Messages remain queued and will send once this is fixed.',
+      },
+      { status: 503 },
+    );
+  }
 
   if (asks.uncovered.length > 0) {
     // Not an error — a staffing gap. Logged because the diamonds screen shows

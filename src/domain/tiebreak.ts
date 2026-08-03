@@ -29,6 +29,16 @@ export interface StandingsRow {
   tiebreak: TiebreakStep[];
   /** True when the rules ran out and a director still has to flip a coin. */
   awaitingCoinFlip: boolean;
+  /**
+   * The teams the flip is between, when one is required.
+   *
+   * Carried out of the engine because the screen that records a flip has to
+   * offer exactly this group and no other: which teams were still tied after
+   * five criteria is a question only the tiebreak chain can answer, and
+   * reconstructing it from ranks in the UI would be a second implementation of
+   * the same rules waiting to disagree with the first.
+   */
+  coinFlipGroup?: readonly string[];
 }
 
 /**
@@ -256,6 +266,7 @@ interface Resolved {
   teamId: string;
   steps: TiebreakStep[];
   awaitingCoinFlip: boolean;
+  coinFlipGroup?: readonly string[];
 }
 
 function describe(criterion: Criterion, buckets: Bucket[], ctx: TiebreakContext): TiebreakStep {
@@ -305,7 +316,12 @@ function resolveCoinFlip(group: readonly string[], ctx: TiebreakContext): Resolv
       `${nameList(byName, ctx)} are tied on every criterion. ` +
       `The rules call for a coin flip — this order is provisional until a director records the result.`,
   };
-  return byName.map((teamId) => ({ teamId, steps: [step], awaitingCoinFlip: true }));
+  return byName.map((teamId) => ({
+    teamId,
+    steps: [step],
+    awaitingCoinFlip: true,
+    coinFlipGroup: byName,
+  }));
 }
 
 function resolveGroup(group: readonly string[], ctx: TiebreakContext): Resolved[] {
@@ -414,6 +430,7 @@ export function computeStandings(
         record,
         tiebreak: entry.steps,
         awaitingCoinFlip: entry.awaitingCoinFlip,
+        ...(entry.coinFlipGroup ? { coinFlipGroup: entry.coinFlipGroup } : {}),
       });
       rank += 1;
     }

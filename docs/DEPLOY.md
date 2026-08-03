@@ -40,11 +40,69 @@ For the demo (see below):
 |---|---|
 | `DEMO_MODE` | `true` |
 
-Leave unset for anything real. Optional, none of it needed to boot:
-`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`,
-`TWILIO_WEBHOOK_URL`, `ANTHROPIC_API_KEY`, `SQUARE_APPLICATION_ID`.
+Leave unset for anything real.
 
-## 4. Deploy
+**For texts to actually send**, all of these:
+
+| Variable | Value |
+|---|---|
+| `TWILIO_ACCOUNT_SID` | from the Twilio console |
+| `TWILIO_AUTH_TOKEN` | from the Twilio console — also required for inbound |
+| `TWILIO_FROM_NUMBER` | *or* `TWILIO_MESSAGING_SERVICE_SID`, see below |
+| `CRON_SECRET` | a long random string — the heartbeat will not run without it |
+
+Without a from number the service refuses to boot the sender rather than
+quietly pretending to send. To run a deployment deliberately without sending
+real texts — a staging copy, say — set `ALLOW_LOG_SMS=true` and messages are
+written to the log with a `log:` provider id instead.
+
+Tuning, all optional:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `SMS_RATE_PER_SECOND` | `1` | Matches a long code. Raise it for a Messaging Service. |
+| `SMS_BATCH_LIMIT` | `50` | Messages claimed per heartbeat. |
+| `SMS_DRAIN_MAX_MS` | `25000` | Stops a heartbeat request hanging. |
+
+Optional, none of it needed to boot: `TWILIO_WEBHOOK_URL`,
+`ANTHROPIC_API_KEY`, `SQUARE_APPLICATION_ID`.
+
+## 4. Schedule the heartbeat
+
+**This is the step that is easy to skip and impossible to notice missing.**
+Nothing asks a volunteer for a score and nothing drains the outbound queue
+except a scheduled call to:
+
+```
+POST /api/cron/messaging
+Authorization: Bearer $CRON_SECRET
+```
+
+In Railway, add a second service in the same project pointed at this repo with
+a **cron schedule of `* * * * *`** and a start command of:
+
+```bash
+curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/messaging"
+```
+
+Every minute is right, not excessive: the endpoint is idempotent, a run with
+nothing to do is two cheap queries, and the cost of being a minute late is a
+volunteer waiting a minute longer. Any scheduler works — Railway cron, a GitHub
+Actions schedule, cron-job.org — the endpoint only cares about the bearer token.
+
+The response says what it did, which is what to check when something looks
+wrong:
+
+```json
+{"date":"2027-07-24","asked":3,"nudged":1,"uncovered":0,
+ "claimed":4,"sent":4,"failed":0,"abandoned":0}
+```
+
+`/hq/settings` lists the heartbeat in its readiness checklist, and `/hq/messages`
+warns when the oldest queued message has been waiting more than ten minutes —
+which is what a stopped heartbeat looks like from the inside.
+
+## 5. Deploy
 
 `railway.json` already sets the build and start commands and points the health
 check at `/api/health`, so there is nothing to configure.
@@ -58,7 +116,7 @@ serving traffic.
 boots happily but cannot reach Postgres fails the check instead of taking
 traffic.
 
-## 5. Load the demo data
+## 6. Load the demo data
 
 Once it is up, from the Railway service shell:
 
@@ -126,9 +184,17 @@ than leaking a working PIN — but the flag should still be off.
 - **`TWILIO_AUTH_TOKEN`** must be set or the inbound webhook refuses everything
   in production — deliberately, since anyone who guesses the URL could otherwise
   post scores that decide who plays on Sunday.
-- **Outbound texts still do not send.** Rows pile up in `notification` and
-  nothing drains them. `/hq/settings` shows the queue depth and says so. This is
-  item 1 in `docs/IDEAS.md`.
+- **Roster the diamond volunteers** at `/hq/diamonds`. This is the linchpin:
+  a diamond with nobody on shift is a diamond where nobody is ever asked for a
+  score, and those games go red with no explanation. The screen lists the gaps
+  at the top, and `/hq/settings` counts them.
+- **Confirm the heartbeat is actually firing** — see step 4. Everything else
+  can be configured perfectly and nothing will send.
+- **Decide the sending number.** A long code sends roughly one message per
+  second, so a broadcast to ninety teams takes about three minutes to drain and
+  Saturday evening will have bursts overlapping. A Messaging Service with a
+  toll-free number is the fix; either is fine, but decide deliberately rather
+  than discovering it at 7pm.
 - **Turn on Railway's Postgres backups.** Losing Saturday's scores loses the
   tournament.
 
@@ -139,5 +205,13 @@ most of the year, since it is idle for 51 weeks. The weekend itself is a few
 hundred requests a minute at peak — well inside a small instance.
 
 The number worth having before the board asks is the *total*: hosting plus SMS.
-Spec §11 puts the whole weekend under $200, and SMS will dominate that once
-outbound sending exists.
+Spec §11 puts the whole weekend under $200, and SMS dominates it.
+
+SMS is billed per *segment*, not per message. `/hq/messages` shows the running
+segment count and an estimate at long-code rates, so the figure comes from what
+was actually sent rather than a guess. As a rough shape: ~150 round robin games
+generating an ask, some nudges, and two confirmations each, plus a handful of
+broadcasts to ninety teams, lands in the low tens of dollars — comfortably
+inside the spec's ceiling, as long as every message stays one segment. It does
+so today because every template is plain ASCII; the tests enforce that, since a
+single em dash cuts a segment from 160 characters to 70.

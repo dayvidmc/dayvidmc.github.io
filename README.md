@@ -29,6 +29,10 @@ intake paths that feed it.
 | Standings and tiebreakers | §5.5 | Built, tested — the core deliverable |
 | Game count tracking (financial) | §5.8 | Built, tested |
 | Team links, no login | §5.7 | Built |
+| Outbound texts: queue, retries, pacing | §5.2, §5.7 | Built, tested |
+| Score requests and follow-ups to diamond volunteers | §5.2 path 1 | Built, tested — the ask, not just the reply |
+| Diamond cover, with coverage gaps up front | §5.2 | Built |
+| Coin flip recording | §5.5 | Built — director only |
 | Tile + PIN staff access | §10 | Built |
 | Game detail: correct, dispute, reschedule, history | §5.3 | Built |
 | Team contacts and per-team links | §5.7 | Built — auto-saving |
@@ -44,12 +48,11 @@ cannot supply:
 
 - **Brackets (§5.6)** — playoff format comes from the published schedule, and
   §13 Q4 (how the director actually builds it) is unanswered.
-- **Sending any text at all.** Approving a score and moving a game both write
-  rows to `notification`, and **nothing drains that queue** — there is no
-  Twilio sender. Inbound works; outbound does not. The settings screen says so
-  in as many words, because a queue growing silently on Saturday while ninety
-  coaches wait for a text is the worst possible way to discover this.
-- **SMS broadcast and the rain button (§5.7)** — same reason.
+- **SMS broadcast and the rain button (§5.7).** The transport underneath them
+  exists now — queue, retries, pacing, failure surfacing — but neither has a
+  screen. A broadcast composer is a form over `enqueue()`; the rain button is
+  the harder one, and should be built as preview-then-confirm rather than a
+  single button that fires.
 - **Card processing.** The till records card sales; it does not charge them.
   Tapping a card on a phone needs a native app — Apple and Google only expose
   the NFC reader to signed native apps — so the card tap happens in the Square
@@ -92,17 +95,40 @@ going red, and one disputed. Yesterday's results are chosen to produce a genuine
 circular three-way tie, so the standings screen shows the tiebreaker explaining
 itself.
 
+It also rosters diamond volunteers — deliberately leaving one diamond
+uncovered, so the gap warning has something real to show — which means score
+intake path 1 can be watched working end to end:
+
+```bash
+CRON_SECRET=dev ALLOW_LOG_SMS=true npm run dev
+curl -X POST -H "Authorization: Bearer dev" localhost:3000/api/cron/messaging
+```
+
+The response says what it asked, nudged and sent; `/hq/messages` shows the
+texts themselves.
+
 It is meant for the Phase 0 debrief — it is much easier to ask a director "is
 this the board you want?" than to describe one.
 
 ```bash
-npm test          # 91 unit tests, no database needed
+npm test          # 118 unit tests, no database needed
 npm run typecheck
 npm run build
 ```
 
 The domain layer is pure — no database, no network, no clock reads — so the
-whole test suite runs in about a second and needs no infrastructure. That is
+whole test suite runs in about a second and needs no infrastructure.
+
+The messaging spine also has 23 database-backed tests, covering the things only
+a real Postgres can show: that the queue claim is atomic under concurrent
+workers, that the retry schedule lands where it should, and that a crashed
+worker's messages come back. They skip unless a test database is pointed at:
+
+```bash
+createdb tokessy_test
+DATABASE_URL=postgres://.../tokessy_test npm run migrate
+TEST_DATABASE_URL=postgres://.../tokessy_test npm test    # 141 tests
+``` That is
 also what makes the **Phase 3 replay test** possible: load the 2026 schedule and
 real results, run them through the tiebreaker, and compare against what actually
 happened.

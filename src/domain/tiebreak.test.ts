@@ -302,6 +302,32 @@ describe('coin flip (§5.5)', () => {
     expect(tied.every((r) => r.awaitingCoinFlip)).toBe(false);
     expect(tied[0]!.tiebreak[0]!.reasoning).toContain('Coin flip recorded by the director');
   });
+
+  /**
+   * The screen that records a flip offers exactly this group. If the engine did
+   * not carry it out, the UI would have to work out which teams were still
+   * level after five criteria — a second implementation of §5.5 waiting to
+   * disagree with the first.
+   */
+  it('names the teams the flip is between', () => {
+    const rows = standings(['A', 'B', 'C'], games);
+    const tied = rows.filter((r) => r.awaitingCoinFlip);
+
+    expect(tied).toHaveLength(2);
+    for (const row of tied) {
+      expect([...(row.coinFlipGroup ?? [])].sort()).toEqual(['A', 'B']);
+    }
+
+    // C was separated by the rules, so it is not part of the flip.
+    const settled = rows.find((r) => r.record.teamId === 'C')!;
+    expect(settled.awaitingCoinFlip).toBe(false);
+    expect(settled.coinFlipGroup).toBeUndefined();
+  });
+
+  it('drops the group once the flip has been recorded', () => {
+    const rows = standings(['A', 'B', 'C'], games, { [coinFlipKey(['A', 'B'])]: ['B', 'A'] });
+    expect(rows.every((r) => r.coinFlipGroup === undefined)).toBe(true);
+  });
 });
 
 describe('distinctReasoning — what the standings screen actually prints', () => {
