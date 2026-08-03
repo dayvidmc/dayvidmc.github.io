@@ -89,11 +89,21 @@ Then `curl https://<your-domain>/api/health` should return
 just that Node is alive, so a process that boots happily but cannot reach
 Postgres fails the health check instead of taking traffic.
 
-## 8. Load the demo data
+## 8. Load the demo data — from the browser
 
-The app migrates itself, but the demo seed is a one-off you have to run. Railway
-has no persistent shell, so run it from your laptop against the database's
-**public** endpoint:
+Open **`https://<your-domain>/setup`** and press **Create demo tournament**.
+
+That page also tells you whether the database is actually connected, which is
+the failure worth catching first, and afterwards lists the PINs and a suggested
+tour. No terminal, no CLI — it works from a tablet.
+
+Three guards make it safe to leave reachable: it requires `DEMO_MODE=true`, it
+refuses if the database already has a tournament (so it is not a reset button
+and cannot overwrite anything), and it only responds to a form POST so no
+crawler or link preview can trigger it.
+
+<details>
+<summary>The command-line equivalent, if you have a terminal</summary>
 
 ```bash
 npm i -g @railway/cli
@@ -103,19 +113,32 @@ railway variables                 # find DATABASE_PUBLIC_URL on the Postgres ser
 DATABASE_URL='<DATABASE_PUBLIC_URL>' npm run demo
 ```
 
-The gotcha worth knowing: `railway run` injects the *internal* `DATABASE_URL`
-(`postgres.railway.internal`), which only resolves inside Railway's network and
-will hang from a laptop. `DATABASE_PUBLIC_URL` is the one that works from
-outside.
+`railway run npm run demo` looks like the obvious command and will hang: it
+injects the *internal* `DATABASE_URL` (`postgres.railway.internal`), which only
+resolves inside Railway's network. `DATABASE_PUBLIC_URL` is the one that works
+from outside.
+
+</details>
 
 The seed creates a tournament dated relative to *now*, so the board shows live
 statuses rather than grey rows: yesterday's round robin complete, today's games
 variously final, on now, upcoming and one disputed, three concession stands with
 a menu, and two texts nobody could place.
 
-It refuses to run against a database that already has a tournament. To start
-over, delete and re-add the Postgres service — a tournament with history cannot
-be deleted, because the event log is append-only by design.
+To start over, delete and re-add the Postgres service — a tournament with
+history cannot be deleted, because the event log is append-only by design.
+
+## Doing all of this from an iPad
+
+Every step above works in Safari. Railway's dashboard, GitHub's web UI for
+merging the branch, and `/setup` for the demo data are all just web pages. The
+two things that would normally need a terminal have browser equivalents:
+
+- **Seeding** — the `/setup` button, above.
+- **`SESSION_SECRET`** — you cannot run `openssl` on iPad. Any long random
+  string works: tap the password field in a new 1Password/iCloud Keychain entry
+  and let it generate one, then paste it. Length is what matters, not how it was
+  made.
 
 ## 9. Releasing again
 

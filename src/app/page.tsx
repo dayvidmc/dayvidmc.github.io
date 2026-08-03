@@ -12,8 +12,8 @@ export default async function HomePage() {
         <h1>Tokessy Tournament Operations</h1>
         <p className="sub">No tournament has been set up yet.</p>
         <div className="notice info">
-          Run <code>npm run seed</code> to create the 2027 tournament, then import a schedule from{' '}
-          <a href="/hq/import">HQ → Import schedule</a>.
+          Go to <a href="/setup">Setup</a> to get started — it checks the database and, on a demo
+          deployment, creates a tournament to look at.
         </div>
       </>
     );
