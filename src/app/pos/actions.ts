@@ -104,7 +104,9 @@ export async function refundSale(formData: FormData): Promise<void> {
 
 // --- Menu editing -----------------------------------------------------------
 
-const ITEM_FIELDS = new Set(['name', 'category', 'price_cents', 'sort_order', 'colour']);
+const ITEM_FIELDS = new Set([
+  'name', 'category', 'price_cents', 'cost_cents', 'donated_by', 'sort_order', 'colour',
+]);
 
 export async function saveMenuItem(
   itemId: string,
@@ -119,11 +121,17 @@ export async function saveMenuItem(
 
   let stored: string | number | null = value.trim() === '' ? null : value.trim();
 
-  if (field === 'price_cents') {
-    const cents = parseMoney(value);
-    if (cents === null || cents < 0) return { ok: false, error: 'Enter a price like 3.00.' };
-    if (cents > 100_000) return { ok: false, error: 'That is over $1,000 — check the decimal.' };
-    stored = cents;
+  if (field === 'price_cents' || field === 'cost_cents') {
+    // Cost may be cleared: "nobody has said" is a real answer and is not the
+    // same as free. The roll-up reports which items are unknown.
+    if (field === 'cost_cents' && value.trim() === '') {
+      stored = null;
+    } else {
+      const cents = parseMoney(value);
+      if (cents === null || cents < 0) return { ok: false, error: 'Enter an amount like 3.00.' };
+      if (cents > 100_000) return { ok: false, error: 'That is over $1,000 — check the decimal.' };
+      stored = cents;
+    }
   }
 
   if (field === 'sort_order') {

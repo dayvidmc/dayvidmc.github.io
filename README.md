@@ -39,6 +39,7 @@ intake paths that feed it.
 | Umpires: roster, crews with conflict checks, their own link, honoraria | — | Built, tested — not in the spec at all; see `docs/BRAINSTORM.md` §4 |
 | Registration and rosters, no payments | — | Built, tested — Module E's fees stay deferred |
 | Outbound SMS: sender, retries, opt-outs, failure screen | §5.7 | Built, tested — **dry run by default**; needs a Twilio account to reach a phone |
+| Money raised: every stream, cost of goods, gifts in kind, cash control | §8A | Built, tested — auction and raffle recorded by hand until they have screens |
 | Append-only audit trail | §9 | Built, enforced by the database |
 
 ## What is deliberately not here
@@ -101,7 +102,7 @@ It is meant for the Phase 0 debrief — it is much easier to ask a director "is
 this the board you want?" than to describe one.
 
 ```bash
-npm test          # 175 unit tests, no database needed
+npm test          # 200 unit tests, no database needed
 npm run typecheck
 npm run build
 
@@ -138,6 +139,8 @@ src/
     bracket.ts         playoff slots that resolve to a team, a seed or a winner
     umpires.ts         crew conflicts, workload, and what each umpire is owed
     contact.ts         phone and email normalising, shared by every editor
+    messaging.ts       send scheduling, opt-out keywords, what a text costs
+    fundraising.ts     taken vs raised, where the cash is, gifts in kind
     time.ts            tournament-local wall clock handling
     schedule/          CSV reader and schedule import validation
   db/

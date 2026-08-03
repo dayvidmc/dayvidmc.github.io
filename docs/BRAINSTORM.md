@@ -372,6 +372,20 @@ it on every game everywhere it appears.
 This is a small change that removes more HQ phone calls than anything else on
 this list.
 
+### ✓ Somewhere the total lives — built
+
+`/hq/money` now totals every stream and says plainly when it cannot: an item
+with no cost recorded makes the headline a ceiling rather than a total, and it
+says which item. Canteen figures come from the orders themselves; the auction,
+raffle, sponsorship and donations are typed in until they have screens.
+
+`/hq/money/cash` covers float out, counted back and banked — for the auction
+table and the raffle sellers as well as the tills — and names the counts that
+went in with one signature on them.
+
+`/hq/money/gifts` records what Montana's and everyone else gave, keeping goods
+and donated time apart because only one of them can be receipted.
+
 ### ▲ A donate button
 
 **100% of proceeds go to CHEO Cardiology.** That is the entire point of the

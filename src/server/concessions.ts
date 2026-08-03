@@ -32,6 +32,10 @@ export interface MenuRow {
   name: string;
   category: string | null;
   price_cents: number;
+  /** Per unit. Null means nobody has recorded one, which is not the same as free. */
+  cost_cents: number | null;
+  /** Set when the stock was given rather than bought — implies no cost at all. */
+  donated_by: string | null;
   sort_order: number;
   colour: string | null;
   active: boolean;
@@ -41,7 +45,7 @@ export interface MenuRow {
 /** Items on sale at one stand: its own, plus everything sold everywhere. */
 export async function menuForLocation(tournamentId: string, locationId: string): Promise<MenuRow[]> {
   return query<MenuRow>(
-    `SELECT id, name, category, price_cents, sort_order, colour, active, location_id
+    `SELECT id, name, category, price_cents, cost_cents, donated_by, sort_order, colour, active, location_id
        FROM concession_item
       WHERE tournament_id = $1
         AND active
@@ -53,7 +57,7 @@ export async function menuForLocation(tournamentId: string, locationId: string):
 
 export async function fullMenu(tournamentId: string): Promise<MenuRow[]> {
   return query<MenuRow>(
-    `SELECT id, name, category, price_cents, sort_order, colour, active, location_id
+    `SELECT id, name, category, price_cents, cost_cents, donated_by, sort_order, colour, active, location_id
        FROM concession_item WHERE tournament_id = $1 ORDER BY sort_order, name`,
     [tournamentId],
   );

@@ -73,7 +73,13 @@ export default async function MenuPage({
               <div>
                 <div className="teams">{item.name}</div>
                 <div className="meta">
-                  {formatMoney(item.price_cents)} · {item.category ?? 'Uncategorised'} ·{' '}
+                  {formatMoney(item.price_cents)}
+                  {item.donated_by
+                    ? ` · donated by ${item.donated_by}`
+                    : item.cost_cents === null
+                      ? ' · cost unknown'
+                      : ` · costs ${formatMoney(item.cost_cents)}`}{' '}
+                  · {item.category ?? 'Uncategorised'} ·{' '}
                   {locationName(item.location_id)}
                 </div>
               </div>
@@ -87,6 +93,17 @@ export default async function MenuPage({
                   save={save} field="price_cents" label="Price"
                   defaultValue={(item.price_cents / 100).toFixed(2)}
                   hint="What the customer pays, all in."
+                />
+                <AutoSaveField
+                  save={save} field="cost_cents" label="What it costs us"
+                  defaultValue={item.cost_cents === null ? '' : (item.cost_cents / 100).toFixed(2)}
+                  placeholder="leave blank if unknown"
+                  hint="Per unit. Without this the money screen cannot tell taken from raised, and reports the total as a ceiling."
+                />
+                <AutoSaveField
+                  save={save} field="donated_by" label="Donated by"
+                  defaultValue={item.donated_by ?? ''} placeholder="e.g. Montana's"
+                  hint="Set when the stock was given rather than bought. Costs nothing, and the money screen credits the donor with what it earned."
                 />
                 <AutoSaveField
                   save={save} field="category" label="Group it under"

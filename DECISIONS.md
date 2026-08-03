@@ -321,6 +321,42 @@ or a wrong number. None of those have a row in `team`.
 word. "Stop the game, it's raining" is not an unsubscribe request, and reading
 it as one silences a coach for the rest of the weekend.
 
+### 2.18 Taken is not raised, and an unknown cost is not a cost of zero
+
+**Decision.** Concession items carry a cost, and a total computed over any item
+whose cost is unrecorded is reported as a **ceiling** rather than a total,
+naming the items responsible. Stock marked as donated costs nothing regardless
+of what is in its cost field.
+
+**Why.** The till reported revenue and every screen called it takings, which is
+correct and is not what anyone means by "how much did we raise". The gap is not
+academic: Montana's donate the food and the labour for the main-field BBQ, so
+that stand is close to 100% margin, and a canteen selling bought-in pop is
+nowhere near. Averaging the two hides both the real cost of the canteens and
+the real size of the gift.
+
+Assuming a missing cost is zero would overstate the total; assuming a typical
+cost would understate it and be invented. Somebody is going to read this number
+out at a cheque presentation, so it says which it is.
+
+### 2.19 Donated time is recorded and cannot be receipted
+
+**Decision.** `gift_in_kind.kind` separates goods from services. A receipt
+requested against donated services is flagged rather than quietly ignored.
+
+**Why.** Under CRA rules a gift must be of property, so donated labour — a
+sponsor's staff cooking all day — is not receiptable however generous. A
+business can invoice, be paid, and donate the money back, which is; but that is
+a different arrangement somebody has to choose deliberately.
+
+It is still recorded, because it is most of what the sponsor actually gave and
+the thank-you should say so. What must not happen is a volunteer promising a
+receipt the treasurer cannot issue, and nobody finding out until September.
+
+**Confirm with:** the treasurer. This is an accounting decision, not a
+technical one; the software's job is to capture fair market value at the moment
+the gift arrives, because that is unrecoverable afterwards.
+
 ---
 
 ## 3. Deliberately not built

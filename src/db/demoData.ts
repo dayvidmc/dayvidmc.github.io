@@ -55,19 +55,29 @@ const STAFF: [string, Role, string][] = [
 /** Stands, and what each sells. Prices are what the customer pays, all in. */
 const STANDS = ['Tokessy BBQ', 'Deevy Pines Canteen', 'Mike Channing Canteen'];
 
-const MENU: [string, string, number][] = [
-  // name, group, price in cents
-  ['Hot dog', 'Hot food', 300],
-  ['Hamburger', 'Hot food', 500],
-  ['Sausage', 'Hot food', 550],
-  ['Fries', 'Hot food', 400],
-  ['Water', 'Drinks', 200],
-  ['Pop', 'Drinks', 200],
-  ['Gatorade', 'Drinks', 300],
-  ['Coffee', 'Drinks', 175],
-  ['Chips', 'Snacks', 150],
-  ['Chocolate bar', 'Snacks', 200],
-  ['Freezie', 'Snacks', 100],
+/**
+ * The menu, with what each thing costs the tournament.
+ *
+ * Montana's donate the food and the labour for the BBQ at the main field and
+ * tell the committee to charge whatever they like, so those lines cost nothing
+ * and the money screen credits the gift with what it earned. One item is left
+ * with no cost recorded on purpose, so the "this total is a ceiling" warning
+ * has something real to fire on.
+ */
+const MENU: [name: string, group: string, priceCents: number, costCents: number | null, donatedBy: string | null][] = [
+  ['Hamburger', 'Hot food', 500, 0, "Montana's"],
+  ['Hot dog', 'Hot food', 300, 0, "Montana's"],
+  ['Pulled pork', 'Hot food', 700, 0, "Montana's"],
+  ['Sausage', 'Hot food', 550, 180, null],
+  ['Fries', 'Hot food', 400, 95, null],
+  ['Water', 'Drinks', 200, 40, null],
+  ['Pop', 'Drinks', 200, 55, null],
+  ['Gatorade', 'Drinks', 300, 110, null],
+  ['Coffee', 'Drinks', 175, 30, null],
+  ['Chips', 'Snacks', 150, 60, null],
+  // Nobody has priced these up yet, which is normal and worth showing.
+  ['Chocolate bar', 'Snacks', 200, null, null],
+  ['Freezie', 'Snacks', 100, 22, null],
 ];
 
 /**
@@ -235,11 +245,12 @@ export async function seedDemo(): Promise<DemoResult> {
 
     // Sold everywhere (location_id NULL), ordered so the busiest sellers sit at
     // the top of the till grid.
-    for (const [index, [name, category, priceCents]] of MENU.entries()) {
+    for (const [index, [name, category, priceCents, costCents, donatedBy]] of MENU.entries()) {
       await client.query(
-        `INSERT INTO concession_item (tournament_id, name, category, price_cents, sort_order)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [id, name, category, priceCents, index],
+        `INSERT INTO concession_item
+           (tournament_id, name, category, price_cents, sort_order, cost_cents, donated_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [id, name, category, priceCents, index, costCents, donatedBy],
       );
     }
 
@@ -397,6 +408,10 @@ export async function seedDemo(): Promise<DemoResult> {
   // --- Registration and rosters --------------------------------------------
   await seedRosters(tournamentId);
 
+  // --- The money side -------------------------------------------------------
+  await seedConcessionSales(tournamentId, base);
+  await seedFundraising(tournamentId);
+
   const [division] = await query<{ id: string }>(
     "SELECT id FROM division WHERE name = 'Major A'",
   );
@@ -546,6 +561,152 @@ async function seedRosters(tournamentId: string): Promise<void> {
         [team.id],
       );
     }
+  }
+}
+
+/**
+ * A weekend's worth of canteen sales.
+ *
+ * Without these the till has never rung anything and both the concessions and
+ * the money screens sit at zero, which shows nothing about what either is for.
+ * The mix matters more than the volume: the main field sells the donated
+ * Montana's food, the other two sell bought-in stock, and one line is a
+ * chocolate bar nobody has costed — so the money screen has a real reason to
+ * report its total as a ceiling.
+ */
+async function seedConcessionSales(tournamentId: string, base: Date): Promise<void> {
+  const stands = await query<{ id: string; name: string }>(
+    'SELECT id, name FROM concession_location WHERE tournament_id = $1 ORDER BY name',
+    [tournamentId],
+  );
+  const items = await query<{ id: string; name: string; price_cents: number; donated_by: string | null }>(
+    'SELECT id, name, price_cents, donated_by FROM concession_item WHERE tournament_id = $1',
+    [tournamentId],
+  );
+  if (stands.length === 0 || items.length === 0) return;
+
+  const byName = new Map(items.map((item) => [item.name, item]));
+
+  // What each stand actually shifts over a day. The main field is the BBQ.
+  const plan: Record<string, [name: string, units: number][]> = {
+    "Tokessy BBQ": [
+      ['Hamburger', 140], ['Hot dog', 210], ['Pulled pork', 95],
+      ['Pop', 180], ['Water', 160], ['Chips', 70], ['Chocolate bar', 45],
+    ],
+    'Deevy Pines Canteen': [
+      ['Hot dog', 120], ['Sausage', 60], ['Fries', 90],
+      ['Pop', 150], ['Water', 130], ['Coffee', 95], ['Freezie', 110], ['Chocolate bar', 40],
+    ],
+    'Mike Channing Canteen': [
+      ['Hot dog', 80], ['Fries', 55], ['Pop', 95], ['Water', 85],
+      ['Gatorade', 40], ['Coffee', 60], ['Freezie', 75],
+    ],
+  };
+
+  for (const stand of stands) {
+    const lines = plan[stand.name];
+    if (!lines) continue;
+
+    // One order per item line rather than one per customer: the totals are the
+    // point here, and four hundred rows of two-item baskets would slow the
+    // demo seed down for no gain.
+    for (const [index, [name, units]] of lines.entries()) {
+      const item = byName.get(name);
+      if (!item) continue;
+
+      const total = item.price_cents * units;
+      const soldAt = toSqlTimestamp(addMinutes(base, -300 + index * 25));
+      const [order] = await query<{ id: string }>(
+        `INSERT INTO pos_order
+           (id, tournament_id, location_id, sold_by, sold_at, subtotal_cents, total_cents, status)
+         VALUES (gen_random_uuid(), $1, $2, 'Concession Volunteer', $3::timestamptz, $4, $4, 'complete')
+         RETURNING id`,
+        [tournamentId, stand.id, soldAt, total],
+      );
+
+      await query(
+        `INSERT INTO pos_order_line (order_id, item_id, name, unit_price_cents, quantity, line_total_cents)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [order!.id, item.id, item.name, item.price_cents, units, total],
+      );
+
+      // Roughly two thirds cash at a ballpark canteen. A cash tender has to
+      // record what was handed over and what came back — the schema insists,
+      // and rightly: a drawer count is meaningless without it.
+      const card = index % 3 === 2;
+      const tendered = card ? null : Math.ceil(total / 500) * 500;
+      await query(
+        `INSERT INTO pos_tender (order_id, kind, amount_cents, tendered_cents, change_cents)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [order!.id, card ? 'card' : 'cash', total, tendered, tendered === null ? null : tendered - total],
+      );
+    }
+  }
+}
+
+/**
+ * The money the weekend raises that does not come through a till.
+ *
+ * Left deliberately mid-weekend: the auction has taken money and has not
+ * closed, one stand's float is still out, and one count went in with a single
+ * name on it. A demo where the books balance shows nothing about what the
+ * screens are for.
+ */
+async function seedFundraising(tournamentId: string): Promise<void> {
+  const today = formatDate(toWallClock(new Date()));
+
+  const revenue: [stream: string, description: string, amount: number, cost: number][] = [
+    ['sponsorship', 'Diamond sponsor signs, 12 at $250', 300_000, 42_000],
+    ['sponsorship', 'Program advertising', 145_000, 0],
+    ['auction', 'Silent auction — Saturday, part-closed', 418_000, 0],
+    ['raffle', '50-50, Saturday draw', 96_500, 8_000],
+    ['donation', 'Cash donations at the gate', 34_000, 0],
+  ];
+
+  for (const [stream, description, amount, cost] of revenue) {
+    await query(
+      `INSERT INTO revenue_entry
+         (tournament_id, stream, description, amount_cents, cost_cents, occurred_on, recorded_by)
+       VALUES ($1,$2,$3,$4,$5,$6::date,'Tournament Director')`,
+      [tournamentId, stream, description, amount, cost, today],
+    );
+  }
+
+  const gifts: [donor: string, what: string, kind: string, value: number | null, destination: string, receipt: boolean][] = [
+    ["Montana's", 'Burgers, hot dogs and pulled pork for the main field', 'goods', 240_000, 'Tokessy BBQ', true],
+    // Their staff cook all day. Recorded because the thank-you should say so,
+    // and flagged because a receipt for donated time cannot be issued.
+    ["Montana's", 'Two cooks on the grill, both days', 'services', 90_000, 'Tokessy BBQ', true],
+    ['Kanata Home Hardware', 'Barbecue and propane', 'goods', 60_000, 'Tokessy BBQ', false],
+    ['Sens Foundation', 'Signed jersey', 'goods', 45_000, 'Silent auction table', true],
+    ['Bayshore Print', 'Raffle ticket books', 'goods', null, 'Raffle sellers', false],
+  ];
+
+  for (const [donor, what, kind, value, destination, receipt] of gifts) {
+    await query(
+      `INSERT INTO gift_in_kind
+         (tournament_id, donor, what, kind, fair_market_value_cents, destination,
+          receipt_requested, recorded_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'Tournament Director')`,
+      [tournamentId, donor, what, kind, value, destination, receipt],
+    );
+  }
+
+  const cash: [kind: string, source: string, amount: number, by: string, witness: string | null][] = [
+    ['float_out', 'Silent auction table', 30_000, 'Tournament Director', null],
+    ['float_out', 'Raffle sellers', 20_000, 'Volunteer Coordinator', null],
+    ['takings_in', 'Raffle sellers', 116_500, 'Volunteer Coordinator', 'Tournament Director'],
+    // One count with a single name on it, which the screen calls out.
+    ['takings_in', 'Gate donations box', 34_000, 'HQ Desk 1', null],
+    ['bank_deposit', 'Bank', 100_000, 'Tournament Director', 'Concession Lead'],
+  ];
+
+  for (const [kind, source, amount, by, witness] of cash) {
+    await query(
+      `INSERT INTO cash_movement (tournament_id, kind, source, amount_cents, counted_by, witnessed_by)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [tournamentId, kind, source, amount, by, witness],
+    );
   }
 }
 

@@ -31,6 +31,9 @@ export type EventKind =
   | 'team.registration_updated'
   | 'notification.queued'
   | 'notification.sent'
+  | 'money.recorded'
+  | 'money.cash_moved'
+  | 'money.gift_recorded'
   | 'staff.signed_in';
 
 export interface EventInput {
