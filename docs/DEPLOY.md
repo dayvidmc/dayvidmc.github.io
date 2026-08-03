@@ -6,74 +6,126 @@ they should take about ten minutes.
 
 ---
 
-## 1. New project, same account as Pawl
+## 1. Pick the branch
 
-In Railway, **New Project → Deploy from GitHub repo**, pick this repository and
-the branch `claude/tokessy-tournament-ops-v1o6id`.
+Railway tracks **one** branch. The work is on
+`claude/tokessy-tournament-ops-v1o6id`, not `main`, so either merge it to `main`
+first or point Railway at that branch in **Settings → Source → Branch** after
+step 2.
+
+## 2. New project, same account as Pawl
+
+**New Project → Deploy from GitHub repo →** `dayvidmc/dayvidmc.github.io`.
 
 Keep it a **separate project** from Pawl rather than a second service inside it.
-Separate projects get separate databases, separate environment variables and
-separate usage — which matters here because this one is dead for 51 weeks and
-then very much alive for three days, and you do not want that spike sharing a
-plan with something you rely on year-round.
+Separate projects get separate databases, variables and usage — which matters
+here because this one is dead for 51 weeks and then very much alive for three
+days, and that spike should not share a plan with something you rely on
+year-round.
 
-## 2. Add Postgres
+The first build will fail or boot-loop until step 4 gives it a database. That is
+expected; don't chase it.
 
-**New → Database → Add PostgreSQL**, in the same project. Railway sets
-`DATABASE_URL` on the service automatically once they are linked.
+## 3. Add Postgres
 
-## 3. Environment variables
+In the project canvas: **New → Database → Add PostgreSQL**.
 
-Required:
+## 4. Point the app at the database
+
+This does **not** happen automatically — Railway puts `DATABASE_URL` on the
+*Postgres* service, not on your app. On the **app** service:
+
+**Variables → New Variable →** name `DATABASE_URL`, value:
+
+```
+${{Postgres.DATABASE_URL}}
+```
+
+That is Railway's reference syntax; `Postgres` is the service name, so match
+whatever the database service is actually called. Using the reference rather
+than pasting the connection string means it keeps working if Railway rotates
+the credentials.
+
+## 5. The other variables
+
+On the app service:
 
 | Variable | Value |
 |---|---|
-| `DATABASE_URL` | set by Railway when you attach Postgres |
 | `SESSION_SECRET` | a long random string — `openssl rand -base64 48` |
+| `DEMO_MODE` | `true` while your parents are trying it; unset for anything real |
 
 Rotating `SESSION_SECRET` signs everyone out and invalidates every outstanding
 team link, so set it once and leave it.
 
-For the demo (see below):
+Optional, none of it needed to boot: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
+`TWILIO_FROM_NUMBER`, `TWILIO_WEBHOOK_URL`, `ANTHROPIC_API_KEY`,
+`SQUARE_APPLICATION_ID`.
 
-| Variable | Value |
-|---|---|
-| `DEMO_MODE` | `true` |
+## 6. Give it a URL
 
-Leave unset for anything real. Optional, none of it needed to boot:
-`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`,
-`TWILIO_WEBHOOK_URL`, `ANTHROPIC_API_KEY`, `SQUARE_APPLICATION_ID`.
+**Settings → Networking → Generate Domain.** Railway injects `PORT` and
+`next start` respects it, so there is nothing to set.
 
-## 4. Deploy
+## 7. Watch the first real deploy
 
 `railway.json` already sets the build and start commands and points the health
-check at `/api/health`, so there is nothing to configure.
+check at `/api/health`, so there is nothing to configure. Redeploy after step 4
+if it has not picked the change up.
 
 **Migrations run on boot.** `npm run start` is `npm run migrate && next start`,
-and the migration runner takes a Postgres advisory lock first, so two instances
-starting together cannot race. A deploy that adds a migration applies it before
-serving traffic.
+and the runner takes a Postgres advisory lock first, so two instances starting
+together cannot race. The deploy log should show, before Next starts:
 
-`/api/health` checks the database, not just that Node is alive — a process that
-boots happily but cannot reach Postgres fails the check instead of taking
-traffic.
-
-## 5. Load the demo data
-
-Once it is up, from the Railway service shell:
-
-```bash
-npm run demo
+```
+applying 001_game_operations.sql ... ok
+applying 002_unmatched_messages.sql ... ok
+applying 003_concessions.sql ... ok
+applying 004_pin_lockout.sql ... ok
 ```
 
-That creates a tournament dated relative to *now*, so the board shows live
+Then `curl https://<your-domain>/api/health` should return
+`{"ok":true,"migrations":4,...}`. That endpoint checks the database rather than
+just that Node is alive, so a process that boots happily but cannot reach
+Postgres fails the health check instead of taking traffic.
+
+## 8. Load the demo data
+
+The app migrates itself, but the demo seed is a one-off you have to run. Railway
+has no persistent shell, so run it from your laptop against the database's
+**public** endpoint:
+
+```bash
+npm i -g @railway/cli
+railway login
+railway link                      # pick the project
+railway variables                 # find DATABASE_PUBLIC_URL on the Postgres service
+DATABASE_URL='<DATABASE_PUBLIC_URL>' npm run demo
+```
+
+The gotcha worth knowing: `railway run` injects the *internal* `DATABASE_URL`
+(`postgres.railway.internal`), which only resolves inside Railway's network and
+will hang from a laptop. `DATABASE_PUBLIC_URL` is the one that works from
+outside.
+
+The seed creates a tournament dated relative to *now*, so the board shows live
 statuses rather than grey rows: yesterday's round robin complete, today's games
 variously final, on now, upcoming and one disputed, three concession stands with
 a menu, and two texts nobody could place.
 
 It refuses to run against a database that already has a tournament. To start
-over you have to drop and recreate the database — a tournament with history
-cannot be deleted, because the event log is append-only by design.
+over, delete and re-add the Postgres service — a tournament with history cannot
+be deleted, because the event log is append-only by design.
+
+## 9. Releasing again
+
+Every push to the tracked branch rebuilds and redeploys, applying any new
+migrations on boot. There is no separate release step.
+
+To roll back: **Deployments → the last good one → Redeploy.** Note that this
+rolls back *code*, not the database — a migration that has been applied stays
+applied. Nothing here drops or rewrites a column, so a rollback is safe, but
+that is a property to preserve when writing future migrations.
 
 ---
 
