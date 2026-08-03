@@ -91,10 +91,20 @@ traffic.
 
 ## 5. Load the demo data
 
-Once it is up, from the Railway service shell:
+Once it is up, from your own machine:
 
 ```bash
-npm run demo
+railway ssh --service tokessy-ops 'npm run demo'
+```
+
+There is no in-browser shell for a service, so this runs over Railway's SSH.
+If it will not connect, run the seeder locally against the database's *public*
+URL instead — `DATABASE_URL` inside Railway points at `postgres.railway.internal`,
+which only resolves from inside the project:
+
+```bash
+DATABASE_URL="$(railway variable list --service Postgres --kv \
+  | sed -n 's/^DATABASE_PUBLIC_URL=//p')" npm run demo
 ```
 
 That creates a tournament dated relative to *now*, so the board shows live
