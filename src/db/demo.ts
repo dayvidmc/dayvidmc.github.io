@@ -266,6 +266,41 @@ async function main() {
     await query('UPDATE team SET coach_phone = $2 WHERE id = $1', [t.id, fakePhone(t.name, used)]);
   }
 
+  // Diamond volunteers on shift.
+  //
+  // Without these, score intake path 1 does not happen at all: `diamond_shift`
+  // is what tells the system whose phone to text about which diamond, and a
+  // game with nobody on shift is one HQ has to chase by hand. Seeding them is
+  // what makes the demo show the primary route rather than only the fallbacks.
+  //
+  // One volunteer per diamond, covering both days end to end. Real shifts are
+  // shorter and come from Module B; this is the shape, not the roster.
+  const diamonds = await query<{ id: string; name: string }>(
+    'SELECT id, name FROM diamond WHERE tournament_id = $1 ORDER BY name',
+    [tournamentId],
+  );
+
+  for (const [index, diamond] of diamonds.entries()) {
+    // The first diamond gets the number that already reported a score above, so
+    // the queue's "diamond volunteer" row belongs to somebody who is genuinely
+    // on shift rather than to a phone number from nowhere.
+    const phone = index === 0 ? DIAMOND_VOLUNTEER_PHONE : fakePhone(`shift ${diamond.name}`, used);
+
+    await query(
+      `INSERT INTO diamond_shift
+         (tournament_id, diamond_id, volunteer_name, volunteer_phone, starts_at, ends_at)
+       VALUES ($1, $2, $3, $4, $5::timestamp, $6::timestamp)`,
+      [
+        tournamentId,
+        diamond.id,
+        `${diamond.name} scorer`,
+        phone,
+        `${yesterday} 08:00:00`,
+        `${formatDate(addMinutes(base, 24 * 60))} 23:00:00`,
+      ],
+    );
+  }
+
   // --- Yesterday: every game approved --------------------------------------
 
   for (const [gameId, , , , homeRuns, awayRuns] of YESTERDAY) {

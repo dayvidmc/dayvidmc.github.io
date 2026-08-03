@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff } from '@/server/auth';
 import { boardForDate, currentTournament, openUnmatchedCount } from '@/server/repo';
+import { outboxCounts } from '@/server/messaging/outbox';
 import { STATUS_LABEL, STATUS_MARKER, type BoardEntry } from '@/domain/gameStatus';
 import { formatDate, formatDateFriendly, formatTimeFriendly, toWallClock } from '@/domain/time';
 import { signOut } from './actions';
@@ -35,9 +36,10 @@ export default async function HqBoardPage({
   const now = toWallClock(new Date(), tournament.time_zone);
   const date = params.date ?? clampToTournament(formatDate(now), tournament.starts_on, tournament.ends_on);
 
-  const [entries, unmatchedCount] = await Promise.all([
+  const [entries, unmatchedCount, outbox] = await Promise.all([
     boardForDate(tournament.id, date, now) as Promise<(BoardEntry & { externalGameId: string })[]>,
     openUnmatchedCount(tournament.id),
+    outboxCounts(tournament.id),
   ]);
 
   const counts = entries.reduce<Record<string, number>>((acc, entry) => {
@@ -114,6 +116,15 @@ export default async function HqBoardPage({
         </a>
       )}
 
+      {/* A text that never went out is invisible everywhere else: the coach who
+          was not told his game moved has no way to know he was not told. */}
+      {outbox.failed > 0 && (
+        <a className="notice warn" href="/hq/outbox" style={{ display: 'block' }}>
+          {outbox.failed} text{outbox.failed === 1 ? '' : 's'} could not be sent. Whoever they were
+          for has not heard from us. →
+        </a>
+      )}
+
       <div style={{ display: 'flex', gap: 10, margin: '12px 0', flexWrap: 'wrap' }}>
         <a className="btn primary" href="/hq/queue" style={{ flex: '1 1 45%' }}>
           Score queue ({counts.pending ?? 0})
@@ -133,7 +144,10 @@ export default async function HqBoardPage({
         <a className="btn" href="/hq/import" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
           Schedule
         </a>
-        <a className="btn" href="/hq/settings" style={{ flex: '1 1 100%', minHeight: 44, fontSize: 15 }}>
+        <a className="btn" href="/hq/outbox" style={{ flex: '1 1 45%', minHeight: 44, fontSize: 15 }}>
+          Outbox{outbox.failed > 0 ? ` (${outbox.failed} failed)` : ''}
+        </a>
+        <a className="btn" href="/hq/settings" style={{ flex: '1 1 45%', minHeight: 44, fontSize: 15 }}>
           Settings and readiness
         </a>
       </div>

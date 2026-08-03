@@ -23,7 +23,9 @@ intake paths that feed it.
 |---|---|---|
 | Schedule import + conflict validation | §5.1 | Built, tested |
 | Score intake — 3 paths, one queue | §5.2 | Built, tested |
+| Asking for scores: prompts, reminders, SMS sending | §5.2, §5.7 | Built, tested |
 | HQ screen for texts nobody could place | §5.2 | Built |
+| HQ outbox — what failed to send, and retry | §5.7 | Built |
 | HQ board with overdue clock | §5.3 | Built, tested |
 | Division rules config | §5.4 | Built — auto-saving editor with a live overdue-clock preview |
 | Standings and tiebreakers | §5.5 | Built, tested — the core deliverable |
@@ -44,12 +46,9 @@ cannot supply:
 
 - **Brackets (§5.6)** — playoff format comes from the published schedule, and
   §13 Q4 (how the director actually builds it) is unanswered.
-- **Sending any text at all.** Approving a score and moving a game both write
-  rows to `notification`, and **nothing drains that queue** — there is no
-  Twilio sender. Inbound works; outbound does not. The settings screen says so
-  in as many words, because a queue growing silently on Saturday while ninety
-  coaches wait for a text is the worst possible way to discover this.
-- **SMS broadcast and the rain button (§5.7)** — same reason.
+- **SMS broadcast and the rain button (§5.7).** The sending machinery now
+  exists, but neither has a screen to trigger it from: the rain button is a
+  reflow-and-preview problem more than a messaging one (`docs/IDEAS.md` §4).
 - **Card processing.** The till records card sales; it does not charge them.
   Tapping a card on a phone needs a native app — Apple and Google only expose
   the NFC reader to signed native apps — so the card tap happens in the Square

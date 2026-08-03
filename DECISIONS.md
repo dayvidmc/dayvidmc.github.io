@@ -234,6 +234,74 @@ director-only.
 **Why.** §10 gives HQ "score queue, board, comms". Reshaping the schedule is not
 in that list.
 
+### 2.13 A text stops retrying after about seven minutes
+
+**Decision.** Three attempts, backing off 30s / 2m / 5m, then the message is
+marked failed and shown on `/hq/outbox`.
+
+**Why.** A normal job queue retries for hours because a late job is still a
+useful job. A tournament text is not: "Deevy 1, 10:30 — reply with the score" is
+worth something at 11:45 and worth nothing at 2pm, when the game is long over
+and the volunteer has gone home. Retrying past that point also spends sending
+capacity that belongs to messages which could still arrive in time to matter,
+during precisely the hour when the queue is longest.
+
+Failing fast and putting it in front of a person is the same fallback chain
+everything else in this system uses (§4): the last link is a human at HQ, and
+here that means phoning the diamond.
+
+Errors that can never succeed — an invalid number, or a volunteer who replied
+STOP last July — skip the retries entirely.
+
+### 2.14 The sender claims rows, rather than holding a lock across the send
+
+**Decision.** `drainOutbox` marks rows `sending` in one statement, then makes the
+Twilio call outside any transaction, then writes the result back. A row left in
+`sending` for two minutes is treated as abandoned and retried.
+
+**Why.** The obvious implementation — `FOR UPDATE SKIP LOCKED` held open while
+sending — ties up a connection from a deliberately small pool (§11) for as long
+as the slowest thing on the internet takes. Railway also restarts containers, so
+a worker dying mid-send is ordinary rather than exotic; making the claim a
+visible, reclaimable state means that case recovers by itself instead of leaving
+a message stuck forever.
+
+The reclaim window is comfortably longer than the transport's own 10-second
+timeout, so a slow send is never stolen by a second worker and delivered twice.
+
+### 2.15 A score request is never sent after its reminder
+
+**Decision.** The `score_request` prompt is only due in the window between
+"should have finished" and "grace expired". Past grace, a game that was never
+asked about gets the reminder and nothing else.
+
+**Why.** Dispatch runs on a timer and can be down for a while — or the schedule
+can be imported mid-afternoon. Without the upper bound, the first tick after that
+sends the reminder and the *next* one sends the original request, so a volunteer
+receives "still need the score" followed by "reply with the score". That reads as
+a malfunction, and a volunteer who thinks the system is broken stops replying to
+it — which costs far more than the one message.
+
+### 2.16 Inbound texts are deduplicated on Twilio's message id
+
+**Decision.** Every inbound message claims a row in `inbound_message` keyed by
+`MessageSid` before any work happens, and the reply sent is stored so a retry
+gets the same answer.
+
+**Why.** Twilio retries any webhook that times out, and this one makes an LLM
+call before it answers — so timing out is an ordinary Saturday-evening event.
+Without the claim, each retry becomes a second `score_report` for the same text.
+`score_report` deliberately takes no UPDATEs, so that duplicate could never be
+tidied away: it would sit in the approval queue looking exactly like a genuine
+second report, on the weekend when the director has least time to work out which
+is which.
+
+A retry that arrives while the first attempt is still running gets an empty
+reply rather than a guess, because telling one volunteer two different things
+about one text is worse than telling them nothing. A claim whose processing threw
+is released, so the retry — the attempt most likely to succeed — is not turned
+away as a duplicate of a message that was never processed.
+
 ---
 
 ## 3. Deliberately not built

@@ -24,6 +24,7 @@ export type EventKind =
   | 'coin_flip.recorded'
   | 'division.rules_updated'
   | 'notification.queued'
+  | 'notification.retried'
   | 'staff.signed_in';
 
 export interface EventInput {

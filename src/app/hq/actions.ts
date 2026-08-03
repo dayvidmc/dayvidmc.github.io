@@ -23,6 +23,7 @@ import {
   setDispute,
 } from '@/server/repo';
 import { recordEvent } from '@/server/events';
+import { retryFailed } from '@/server/messaging/outbox';
 import { importSchedule } from '@/domain/schedule/import';
 import { applySchedule } from '@/server/scheduleStore';
 import { parseDivisionRules } from '@/domain/divisionRules';
@@ -282,4 +283,34 @@ export async function importScheduleAction(formData: FormData): Promise<void> {
     `/hq/import?ok=${applied.created}&updated=${applied.updated}&cancelled=${applied.cancelled}` +
       `&warnings=${result.warningCount}`,
   );
+}
+
+// --- Outbox -----------------------------------------------------------------
+
+/**
+ * Put failed texts back in the queue (§5.7).
+ *
+ * The one action on the outbox screen. Retrying is safe to press repeatedly:
+ * only rows that actually failed move, and a message already sent is untouched.
+ */
+export async function retryOutbox(formData: FormData): Promise<void> {
+  const staff = await requireHq();
+  const notificationId = String(formData.get('notificationId') ?? '') || undefined;
+
+  const tournament = await currentTournament();
+  if (!tournament) redirect('/hq');
+
+  const requeued = await retryFailed(tournament.id, notificationId);
+
+  await recordEvent({
+    tournamentId: tournament.id,
+    actor: staff.name,
+    actorRole: staff.role,
+    kind: 'notification.retried',
+    subjectType: notificationId ? 'notification' : 'tournament',
+    subjectId: notificationId ?? tournament.id,
+    payload: { requeued },
+  });
+
+  revalidatePath('/hq/outbox');
 }

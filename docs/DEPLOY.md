@@ -40,9 +40,21 @@ For the demo (see below):
 |---|---|
 | `DEMO_MODE` | `true` |
 
-Leave unset for anything real. Optional, none of it needed to boot:
-`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`,
-`TWILIO_WEBHOOK_URL`, `ANTHROPIC_API_KEY`, `SQUARE_APPLICATION_ID`.
+Leave unset for anything real.
+
+Needed before any text is sent or received — the app boots without them, it just
+cannot do the thing it exists to do:
+
+| Variable | Value |
+|---|---|
+| `TWILIO_ACCOUNT_SID` | from the Twilio console |
+| `TWILIO_AUTH_TOKEN` | also signs the inbound webhook |
+| `TWILIO_FROM_NUMBER` | an E.164 number, or a Messaging Service SID (`MG...`) |
+| `CRON_SECRET` | `openssl rand -base64 32` — see step 5 |
+
+Optional: `TWILIO_WEBHOOK_URL` (only if Railway's reported URL differs from the
+one Twilio signs against), `SMS_MAX_PER_SECOND`, `ANTHROPIC_API_KEY`,
+`SQUARE_APPLICATION_ID`.
 
 ## 4. Deploy
 
@@ -58,7 +70,47 @@ serving traffic.
 boots happily but cannot reach Postgres fails the check instead of taking
 traffic.
 
-## 5. Load the demo data
+## 5. Schedule the tick
+
+Nothing time-driven happens without this. `POST /api/cron/tick` is what asks
+diamond volunteers for scores when their games should have finished, reminds the
+ones who have not replied, and drains the outbound queue — so with no scheduler,
+score intake path 1 does not run and no queued text ever leaves.
+
+In Railway, **New → Cron Job** (or a cron service in the same project) pointed at
+the deployed URL:
+
+```bash
+curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" \
+  "https://<your-app>.up.railway.app/api/cron/tick"
+```
+
+**Every minute** during the tournament (`* * * * *`). It is cheap when there is
+nothing to do — one indexed query — and a minute is the resolution at which
+"your game should have finished" still feels prompt. Outside the weekend it
+returns immediately with `no tournament running`.
+
+Safe to run more often than needed and safe to overlap with itself: prompts
+dedupe in the database, and the outbox claims rows with `FOR UPDATE SKIP
+LOCKED`, so two ticks take disjoint work rather than sending anything twice.
+
+`-f` makes curl exit non-zero on a failing tick so the run shows as failed
+rather than silently green. The body says what went wrong; the most likely
+answer is Twilio not being configured.
+
+### Sending rate
+
+`SMS_MAX_PER_SECOND` defaults to `1`, which is roughly what a bare Twilio long
+code sustains. Ninety teams times two contacts is ~180 messages, so a
+bracket-publish broadcast takes about three minutes to drain, and Saturday
+evening will have several bursts overlapping.
+
+Either accept that lag knowingly or set `TWILIO_FROM_NUMBER` to a **Messaging
+Service SID** (`MG...`) with a toll-free number and raise the rate. The code
+handles both — a value starting `MG` is sent as `MessagingServiceSid` rather
+than `From`. Decide before July rather than at 7pm on the Saturday.
+
+## 6. Load the demo data
 
 Once it is up, from the Railway service shell:
 
@@ -126,9 +178,13 @@ than leaking a working PIN — but the flag should still be off.
 - **`TWILIO_AUTH_TOKEN`** must be set or the inbound webhook refuses everything
   in production — deliberately, since anyone who guesses the URL could otherwise
   post scores that decide who plays on Sunday.
-- **Outbound texts still do not send.** Rows pile up in `notification` and
-  nothing drains them. `/hq/settings` shows the queue depth and says so. This is
-  item 1 in `docs/IDEAS.md`.
+- **All three Twilio variables and `CRON_SECRET`** must be set, or outbound does
+  nothing: without Twilio the tick refuses to run rather than pretend, and
+  without the scheduled tick nobody is ever asked for a score. `/hq/settings`
+  checks both.
+- **Put diamond volunteers on shift.** `diamond_shift` is what says whose phone
+  to text about which diamond. A diamond with nobody on shift is one HQ chases
+  by hand — `/hq/settings` counts them.
 - **Turn on Railway's Postgres backups.** Losing Saturday's scores loses the
   tournament.
 
@@ -138,6 +194,15 @@ One small service plus a Postgres instance sits near the bottom of a Hobby plan
 most of the year, since it is idle for 51 weeks. The weekend itself is a few
 hundred requests a minute at peak — well inside a small instance.
 
-The number worth having before the board asks is the *total*: hosting plus SMS.
-Spec §11 puts the whole weekend under $200, and SMS will dominate that once
-outbound sending exists.
+The number worth having before the board asks is the *total*: hosting plus SMS,
+and SMS now dominates it. A rough count for the weekend: ~150 round robin games
+plus playoffs, each costing a score request and sometimes a reminder, plus a
+confirmation to both coaches on approval — call it four or five messages per
+game, so somewhere around 800. Add broadcasts, and a rainy weekend where
+everything is rescheduled at least once.
+
+At Twilio's Canadian long-code rate that lands in the low tens of dollars, which
+is comfortably inside spec §11's $200 for the weekend — but it is worth checking
+against real pricing before the board asks, since it comes out of donation
+dollars. `/hq/outbox` counts exactly what was sent, so the figure after 2027 will
+be a measurement rather than an estimate.

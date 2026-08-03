@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
 import { currentTournament, listDivisions } from '@/server/repo';
 import { query } from '@/db/client';
+import { smsConfigured } from '@/server/messaging/transport';
 import { AutoSaveField } from '../../_components/AutoSave';
 import { saveTournamentField } from '../editActions';
 
@@ -86,15 +87,25 @@ export default async function SettingsPage() {
         : 'TWILIO_AUTH_TOKEN not set — inbound texts are refused in production',
     },
     {
-      // Outbound is genuinely not built yet, and the queue silently growing
-      // would be the worst way to find that out — on Saturday, when ninety
-      // coaches are waiting for a text that is never coming.
-      done: false,
-      label: 'Outbound texts are NOT being sent',
-      detail:
-        `${queued} message${queued === 1 ? '' : 's'} queued and undelivered. Approving a score and ` +
-        `moving a game both write to this queue, but nothing drains it yet — there is no sender. ` +
-        `Until one exists, treat every "queued a text" as "recorded, not sent".`,
+      // Outbound now has a sender, but it only runs if something calls the
+      // tick endpoint. A queue that grows while nobody drains it looks
+      // identical from every other screen, and the day to find that out is not
+      // the Saturday ninety coaches are waiting for a text.
+      done: smsConfigured(),
+      label: 'Outbound texts are being sent',
+      detail: smsConfigured()
+        ? `${queued} waiting to go out. Check the outbox for anything that failed.`
+        : 'TWILIO_ACCOUNT_SID / TWILIO_FROM_NUMBER not set — queued texts are written to the ' +
+          'server log instead of sent. Nothing reaches a phone until they are.',
+      href: '/hq/outbox',
+    },
+    {
+      done: !!process.env.CRON_SECRET,
+      label: 'Scheduled tick is configured',
+      detail: process.env.CRON_SECRET
+        ? 'score requests, reminders and the outbox queue run on a timer'
+        : 'CRON_SECRET not set — /api/cron/tick refuses to run in production, so nobody is ever ' +
+          'asked for a score and the outbox never drains. See docs/DEPLOY.md.',
     },
   ];
 
