@@ -1,8 +1,26 @@
 # Deploying to Railway
 
 Everything needed is in the repo. I could not run the deploy myself — this
-container has no Railway credentials — so the steps below are yours to run, and
-they should take about ten minutes.
+container's network policy blocks every Railway host, so the CLI cannot reach
+the API from here even with a token. The steps below are yours to run, and they
+should take about ten minutes.
+
+## The short version
+
+```bash
+railway login                 # once, opens a browser
+./scripts/railway-setup.sh
+```
+
+That script does sections 1–4 below and then waits for `/api/health` to come
+back green. It is safe to re-run: each step checks whether it has already been
+done. If one step fails, do that step in the dashboard using the click-path
+below and run the script again.
+
+It was written against Railway CLI 5.30.3 with every flag checked against that
+version's `--help`, but it has **never been run against a live Railway
+account** — nobody could reach one from the container it was written in. Read it
+before you run it; it is about a hundred lines and does nothing clever.
 
 ---
 
@@ -19,16 +37,29 @@ plan with something you rely on year-round.
 
 ## 2. Add Postgres
 
-**New → Database → Add PostgreSQL**, in the same project. Railway sets
-`DATABASE_URL` on the service automatically once they are linked.
+**New → Database → Add PostgreSQL**, in the same project.
+
+This creates a *second service*, named `Postgres`, with its own `DATABASE_URL`.
+The app service does **not** inherit it. You have to point one at the other by
+setting a reference variable on the app service:
+
+```
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+```
+
+Type it exactly, braces included — Railway resolves that at deploy time. Miss
+this and the app builds fine, boots, fails its migration step, and never passes
+the health check. It is the single most likely thing to go wrong.
+
+If you renamed the database service, use its name instead of `Postgres`.
 
 ## 3. Environment variables
 
-Required:
+Required, both on the **app** service:
 
 | Variable | Value |
 |---|---|
-| `DATABASE_URL` | set by Railway when you attach Postgres |
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` — the reference from section 2 |
 | `SESSION_SECRET` | a long random string — `openssl rand -base64 48` |
 
 Rotating `SESSION_SECRET` signs everyone out and invalidates every outstanding
