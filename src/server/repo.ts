@@ -7,6 +7,7 @@ import { addMinutes, toSqlTimestamp } from '@/domain/time';
 import type { DivisionRules, GameResult } from '@/domain/types';
 import type { CandidateGame } from '@/domain/scoreParsing';
 import { recordEventIn } from './events';
+import { divisionOfGame, materialiseBracket } from './brackets';
 
 export interface Tournament {
   id: string;
@@ -88,8 +89,8 @@ export async function boardForDate(
             g.pool_id,
             g.game_type,
             dm.name AS diamond_name,
-            ht.name AS home_team_name,
-            aw.name AS away_team_name,
+            COALESCE(ht.name, g.home_slot_label, 'To be decided') AS home_team_name,
+            COALESCE(aw.name, g.away_slot_label, 'To be decided') AS away_team_name,
             g.scheduled_start,
             g.is_disputed,
             (a.game_id IS NOT NULL) AS has_approved,
@@ -97,8 +98,8 @@ export async function boardForDate(
        FROM game g
        JOIN division d  ON d.id  = g.division_id
        JOIN diamond dm  ON dm.id = g.diamond_id
-       JOIN team ht     ON ht.id = g.home_team_id
-       JOIN team aw     ON aw.id = g.away_team_id
+       LEFT JOIN team ht     ON ht.id = g.home_team_id
+       LEFT JOIN team aw     ON aw.id = g.away_team_id
        LEFT JOIN approved_score a ON a.game_id = g.id
       WHERE g.tournament_id = $1
         AND g.cancelled_at IS NULL
@@ -361,13 +362,14 @@ export async function gamesForPicker(tournamentId: string): Promise<GamePickerOp
   return query<GamePickerOption>(
     `SELECT g.id, g.external_game_id, g.scheduled_start,
             dm.name AS diamond_name, d.name AS division_name,
-            ht.name AS home_team_name, aw.name AS away_team_name,
+            COALESCE(ht.name, g.home_slot_label, 'To be decided') AS home_team_name,
+            COALESCE(aw.name, g.away_slot_label, 'To be decided') AS away_team_name,
             (a.game_id IS NOT NULL) AS has_approved
        FROM game g
        JOIN division d ON d.id = g.division_id
        JOIN diamond dm ON dm.id = g.diamond_id
-       JOIN team ht    ON ht.id = g.home_team_id
-       JOIN team aw    ON aw.id = g.away_team_id
+       LEFT JOIN team ht    ON ht.id = g.home_team_id
+       LEFT JOIN team aw    ON aw.id = g.away_team_id
        LEFT JOIN approved_score a ON a.game_id = g.id
       WHERE g.tournament_id = $1 AND g.cancelled_at IS NULL
       ORDER BY g.scheduled_start, g.external_game_id`,
@@ -574,6 +576,12 @@ export async function approveScore(input: ApprovalInput): Promise<void> {
       [input.tournamentId, input.gameId, String(input.homeRuns), String(input.awayRuns)],
     );
   });
+
+  // Deliberately after the commit, not inside it: materialising reads standings,
+  // and standings must include the score that was just approved. Idempotent, so
+  // a crash between the two is fixed by the next approval.
+  const divisionId = await divisionOfGame(input.gameId);
+  if (divisionId) await materialiseBracket(input.tournamentId, divisionId);
 }
 
 export async function setDispute(
@@ -606,104 +614,7 @@ export async function setDispute(
 // Standings (§5.5)
 // ---------------------------------------------------------------------------
 
-export interface PoolStandings {
-  poolId: string | null;
-  poolName: string;
-  rows: StandingsRow[];
-  teamNames: Record<string, string>;
-  gameCounts: Record<string, number>;
-  awaitingCoinFlip: boolean;
-}
-
-/**
- * Standings for one division, one table per pool.
- *
- * Only approved scores reach the engine — a proposal sitting in the queue never
- * moves a standing.
- */
-export async function standingsForDivision(divisionId: string): Promise<PoolStandings[]> {
-  const teams = await query<{ id: string; name: string; pool_id: string | null }>(
-    'SELECT id, name, pool_id FROM team WHERE division_id = $1 ORDER BY name',
-    [divisionId],
-  );
-  if (teams.length === 0) return [];
-
-  const results = await query<{
-    id: string;
-    pool_id: string | null;
-    game_type: 'round_robin' | 'playoff';
-    home_team_id: string;
-    away_team_id: string;
-    home_runs: number;
-    away_runs: number;
-    result_kind: 'played' | 'forfeit';
-    forfeited_by_team_id: string | null;
-  }>(
-    `SELECT g.id, g.pool_id, g.game_type, g.home_team_id, g.away_team_id,
-            a.home_runs, a.away_runs, a.result_kind, a.forfeited_by_team_id
-       FROM game g
-       JOIN approved_score a ON a.game_id = g.id
-      WHERE g.division_id = $1 AND g.cancelled_at IS NULL`,
-    [divisionId],
-  );
-
-  const pools = await query<{ id: string; name: string }>(
-    'SELECT id, name FROM pool WHERE division_id = $1 ORDER BY name',
-    [divisionId],
-  );
-  const poolNames = new Map(pools.map((p) => [p.id, p.name]));
-
-  const flips = await query<{ group_key: string; ordered_team_ids: string[] }>(
-    'SELECT group_key, ordered_team_ids FROM coin_flip WHERE division_id = $1',
-    [divisionId],
-  );
-  const coinFlips: Record<string, string[]> = {};
-  for (const flip of flips) coinFlips[flip.group_key] = flip.ordered_team_ids;
-
-  const teamNames: Record<string, string> = {};
-  for (const team of teams) teamNames[team.id] = team.name;
-  const nameOf = (id: string) => teamNames[id] ?? id;
-
-  const games: GameResult[] = results.map((row) => ({
-    gameId: row.id,
-    divisionId,
-    poolId: row.pool_id,
-    gameType: row.game_type,
-    homeTeamId: row.home_team_id,
-    awayTeamId: row.away_team_id,
-    homeRuns: row.home_runs,
-    awayRuns: row.away_runs,
-    resultKind: row.result_kind,
-    forfeitedBy: row.forfeited_by_team_id,
-  }));
-
-  // Group teams by pool; a division with no pools ranks as one table.
-  const byPool = new Map<string | null, string[]>();
-  for (const team of teams) {
-    const list = byPool.get(team.pool_id);
-    if (list) list.push(team.id);
-    else byPool.set(team.pool_id, [team.id]);
-  }
-
-  const standings: PoolStandings[] = [];
-  for (const [poolId, teamIds] of byPool) {
-    const poolGames = games.filter((g) => teamIds.includes(g.homeTeamId) && teamIds.includes(g.awayTeamId));
-    const records = buildRecords(teamIds, poolGames);
-    const rows = computeStandings(records, poolGames, nameOf, coinFlips);
-    const counts = completedGameCounts(teamIds, poolGames);
-
-    standings.push({
-      poolId,
-      poolName: poolId ? (poolNames.get(poolId) ?? 'Pool') : 'Standings',
-      rows,
-      teamNames,
-      gameCounts: Object.fromEntries(counts),
-      awaitingCoinFlip: rows.some((r) => r.awaitingCoinFlip),
-    });
-  }
-
-  return standings.sort((a, b) => a.poolName.localeCompare(b.poolName));
-}
+export { standingsForDivision, type PoolStandings } from './standings';
 
 // ---------------------------------------------------------------------------
 // SMS intake support
@@ -808,9 +719,10 @@ export interface GameDetail {
   scheduled_start: Date;
   diamond_id: string;
   diamond_name: string;
-  home_team_id: string;
+  /** Null until a playoff slot resolves; `home_team_name` still reads sensibly. */
+  home_team_id: string | null;
   home_team_name: string;
-  away_team_id: string;
+  away_team_id: string | null;
   away_team_name: string;
   is_disputed: boolean;
   dispute_note: string | null;
@@ -827,15 +739,15 @@ export async function gameDetail(tournamentId: string, gameId: string): Promise<
   return queryOne<GameDetail>(
     `SELECT g.id, g.external_game_id, g.division_id, d.name AS division_name, g.game_type,
             g.scheduled_start, g.diamond_id, dm.name AS diamond_name,
-            g.home_team_id, ht.name AS home_team_name,
-            g.away_team_id, aw.name AS away_team_name,
+            g.home_team_id, COALESCE(ht.name, g.home_slot_label, 'To be decided') AS home_team_name,
+            g.away_team_id, COALESCE(aw.name, g.away_slot_label, 'To be decided') AS away_team_name,
             g.is_disputed, g.dispute_note, g.cancelled_at,
             a.home_runs, a.away_runs, a.result_kind, a.approved_by, a.approved_at
        FROM game g
        JOIN division d ON d.id = g.division_id
        JOIN diamond dm ON dm.id = g.diamond_id
-       JOIN team ht    ON ht.id = g.home_team_id
-       JOIN team aw    ON aw.id = g.away_team_id
+       LEFT JOIN team ht    ON ht.id = g.home_team_id
+       LEFT JOIN team aw    ON aw.id = g.away_team_id
        LEFT JOIN approved_score a ON a.game_id = g.id
       WHERE g.id = $1 AND g.tournament_id = $2`,
     [gameId, tournamentId],
@@ -861,12 +773,14 @@ export interface PublicGame {
 export async function scheduleForDivision(divisionId: string): Promise<PublicGame[]> {
   return query<PublicGame>(
     `SELECT g.id, g.external_game_id, g.game_type, p.name AS pool_name, g.scheduled_start,
-            dm.name AS diamond_name, ht.name AS home_team_name, aw.name AS away_team_name,
+            dm.name AS diamond_name,
+            COALESCE(ht.name, g.home_slot_label, 'To be decided') AS home_team_name,
+            COALESCE(aw.name, g.away_slot_label, 'To be decided') AS away_team_name,
             a.home_runs, a.away_runs, a.result_kind, g.cancelled_at
        FROM game g
        JOIN diamond dm ON dm.id = g.diamond_id
-       JOIN team ht    ON ht.id = g.home_team_id
-       JOIN team aw    ON aw.id = g.away_team_id
+       LEFT JOIN team ht    ON ht.id = g.home_team_id
+       LEFT JOIN team aw    ON aw.id = g.away_team_id
        LEFT JOIN pool p ON p.id = g.pool_id
        LEFT JOIN approved_score a ON a.game_id = g.id
       WHERE g.division_id = $1
@@ -920,12 +834,13 @@ export async function gamesForTeam(teamId: string) {
     cancelled_at: Date | null;
   }>(
     `SELECT g.id, g.external_game_id, g.scheduled_start, dm.name AS diamond_name,
-            ht.name AS home_team_name, aw.name AS away_team_name, g.game_type,
-            a.home_runs, a.away_runs, g.cancelled_at
+            COALESCE(ht.name, g.home_slot_label, 'To be decided') AS home_team_name,
+            COALESCE(aw.name, g.away_slot_label, 'To be decided') AS away_team_name,
+            g.game_type, a.home_runs, a.away_runs, g.cancelled_at
        FROM game g
        JOIN diamond dm ON dm.id = g.diamond_id
-       JOIN team ht    ON ht.id = g.home_team_id
-       JOIN team aw    ON aw.id = g.away_team_id
+       LEFT JOIN team ht    ON ht.id = g.home_team_id
+       LEFT JOIN team aw    ON aw.id = g.away_team_id
        LEFT JOIN approved_score a ON a.game_id = g.id
       WHERE g.home_team_id = $1 OR g.away_team_id = $1
       ORDER BY g.scheduled_start`,

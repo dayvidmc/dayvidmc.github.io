@@ -571,6 +571,183 @@ legend {
   font-variant-numeric: tabular-nums;
 }
 
+/* --- The bracket -------------------------------------------------------- */
+
+/* Rounds are columns. On a phone this scrolls sideways rather than reflowing:
+   a bracket stacked into one column has stopped being a bracket. */
+.bracket-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -16px;
+  padding: 0 16px 8px;
+}
+
+.bracket {
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
+  min-width: min-content;
+}
+
+.bracket-round {
+  display: flex;
+  flex-direction: column;
+  min-width: 232px;
+  flex: 1 0 232px;
+}
+
+.bracket-round-name {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 10px;
+  text-align: center;
+}
+
+/* Even spacing pushes each round's games toward the vertical centre, which is
+   what makes the columns read as feeding into one another. */
+.bracket-games {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 16px;
+  flex: 1;
+}
+
+.matchup {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  position: relative;
+}
+
+/* The connector into the next round. Decorative only — hidden from the last
+   column by the :last-child rule below. */
+.bracket-round:not(:last-child) .matchup::after {
+  content: '';
+  position: absolute;
+  right: -20px;
+  top: 50%;
+  width: 20px;
+  height: 1px;
+  background: var(--border);
+}
+
+.matchup.ready {
+  border-color: var(--blue);
+}
+
+.matchup.played {
+  border-color: var(--green);
+}
+
+/* A game under way earns the only strong treatment on the board — it is the one
+   thing on the page that changes while you are looking at it. */
+.matchup.live {
+  border-color: var(--amber);
+  border-width: 2px;
+}
+
+.matchup.live .matchup-head {
+  background: var(--amber-bg);
+  color: var(--amber);
+  font-weight: 600;
+}
+
+.matchup-head,
+.matchup-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--bg);
+}
+
+.matchup-foot {
+  border-top: 1px solid var(--border);
+}
+
+.side {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  min-height: 52px;
+}
+
+.side:last-of-type {
+  border-bottom: none;
+}
+
+.side-name {
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.25;
+  display: flex;
+  flex-direction: column;
+}
+
+.side-name small {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.side-score {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--muted);
+}
+
+/* An unfilled spot: dashed, quiet, and saying what will fill it. */
+.side.waiting {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 6px,
+    var(--bg) 6px,
+    var(--bg) 12px
+  );
+}
+
+.side.waiting .side-name {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.side.won {
+  background: var(--green-bg);
+}
+
+.side.won .side-name,
+.side.won .side-score {
+  color: var(--green);
+}
+
+.side.lost .side-name,
+.side.lost .side-score {
+  opacity: 0.5;
+}
+
+.champion {
+  background: var(--green-bg);
+  border: 1px solid var(--green);
+  color: var(--green);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 14px;
+  text-align: center;
+  font-size: 20px;
+}
+
 /* --- The concession till ------------------------------------------------ */
 /* Everything here is sized for a thumb, at arm's length, in the sun, with a
    queue waiting. Nothing is smaller than it needs to be. */

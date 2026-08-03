@@ -4,7 +4,8 @@ import { hashPin } from '@/server/auth';
 import { importSchedule } from '@/domain/schedule/import';
 import { applySchedule } from '@/server/scheduleStore';
 import { approveScore, parkUnmatchedMessage, recordProposal, setDispute } from '@/server/repo';
-import { addMinutes, formatDate, formatTime, toWallClock } from '@/domain/time';
+import { materialiseBracket } from '@/server/brackets';
+import { addMinutes, formatDate, formatTime, toSqlTimestamp, toWallClock } from '@/domain/time';
 
 /**
  * A tournament mid-Saturday, for showing someone what this looks like.
@@ -378,6 +379,22 @@ export async function seedDemo(): Promise<DemoResult> {
     reason: 'no_candidate_games',
   });
 
+  // --- Sunday's bracket, drawn before any of it is played -----------------
+  //
+  // Two semis seeded from the Major A pool, feeding a final, plus a bronze
+  // game off the losing semifinalists. Nothing is played yet, so the whole map
+  // renders as promises: "1st in Pool 1", "Winner of Semifinal 1".
+  await seedBracket(tournamentId, base);
+
+  // The round robin is complete, so the seeds resolve immediately. Writing them
+  // onto the games keeps the stored matchup and the drawn bracket identical —
+  // two sources of truth here is how the wrong team ends up advancing.
+  const [majorA] = await query<{ id: string }>(
+    "SELECT id FROM division WHERE tournament_id = $1 AND name = 'Major A'",
+    [tournamentId],
+  );
+  if (majorA) await materialiseBracket(tournamentId, majorA.id);
+
   const [division] = await query<{ id: string }>(
     "SELECT id FROM division WHERE name = 'Major A'",
   );
@@ -426,4 +443,90 @@ async function coachPhone(teamName: string): Promise<string> {
     [teamName],
   );
   return row?.coach_phone ?? '+16135550000';
+}
+
+/**
+ * Draw the Major A playoff bracket.
+ *
+ * Deliberately left entirely unplayed: the point of the demo is to show that
+ * the whole Sunday map exists before a single playoff game, with every empty
+ * spot saying what will fill it.
+ */
+async function seedBracket(tournamentId: string, base: Date): Promise<void> {
+  const [division] = await query<{ id: string }>(
+    "SELECT id FROM division WHERE tournament_id = $1 AND name = 'Major A'",
+    [tournamentId],
+  );
+  const [pool] = await query<{ id: string }>(
+    'SELECT id FROM pool WHERE division_id = $1 LIMIT 1',
+    [division!.id],
+  );
+  const [diamond] = await query<{ id: string }>(
+    "SELECT id FROM diamond WHERE tournament_id = $1 AND name = 'Tokessy'",
+    [tournamentId],
+  );
+  if (!division || !pool || !diamond) return;
+
+  // Tomorrow, in the afternoon.
+  const day = addMinutes(base, 24 * 60);
+  const slot = (hour: number, minute: number) => {
+    const d = new Date(day.getTime());
+    d.setUTCHours(hour, minute, 0, 0);
+    return toSqlTimestamp(d);
+  };
+
+  // Both sides start empty on purpose. The seeds get filled in by
+  // `materialiseBracket` from the finished round robin; the bronze and the
+  // championship stay empty, because on Saturday night nobody knows who is in
+  // them — which is exactly what the map should say.
+  const games: [string, string, number, number, string][] = [
+    // externalId, label, round, position, startTime
+    ['MA-SF1', 'Semifinal 1', 1, 0, slot(10, 0)],
+    ['MA-SF2', 'Semifinal 2', 1, 1, slot(12, 15)],
+    ['MA-BRZ', 'Bronze', 2, 0, slot(14, 30)],
+    ['MA-FIN', 'Championship', 2, 1, slot(16, 45)],
+  ];
+
+  const ids: Record<string, string> = {};
+  for (const [externalId, label, round, position, startsAt] of games) {
+    const [row] = await query<{ id: string }>(
+      `INSERT INTO game (tournament_id, division_id, pool_id, external_game_id, scheduled_start,
+                         diamond_id, game_type,
+                         bracket_round, bracket_position, bracket_label, is_championship_final)
+       VALUES ($1,$2,$3,$4,$5::timestamp,$6,'playoff',$7,$8,$9,$10)
+       RETURNING id`,
+      [
+        tournamentId, division.id, pool.id, externalId, startsAt, diamond.id,
+        round, position, label, externalId === 'MA-FIN',
+      ],
+    );
+    ids[externalId] = row!.id;
+  }
+
+  const slots: [string, 'home' | 'away', string, string | null, number | null][] = [
+    // game, side, kind, sourceExternalId, seedRank
+    ['MA-SF1', 'home', 'seed', null, 1],
+    ['MA-SF1', 'away', 'seed', null, 4],
+    ['MA-SF2', 'home', 'seed', null, 2],
+    ['MA-SF2', 'away', 'seed', null, 3],
+    ['MA-BRZ', 'home', 'loser', 'MA-SF1', null],
+    ['MA-BRZ', 'away', 'loser', 'MA-SF2', null],
+    ['MA-FIN', 'home', 'winner', 'MA-SF1', null],
+    ['MA-FIN', 'away', 'winner', 'MA-SF2', null],
+  ];
+
+  for (const [gameKey, side, kind, sourceKey, rank] of slots) {
+    await query(
+      `INSERT INTO bracket_slot (game_id, side, kind, pool_id, seed_rank, source_game_id)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [
+        ids[gameKey],
+        side,
+        kind,
+        kind === 'seed' ? pool.id : null,
+        kind === 'seed' ? rank : null,
+        sourceKey ? ids[sourceKey] : null,
+      ],
+    );
+  }
 }

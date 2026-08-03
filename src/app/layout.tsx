@@ -26,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </strong>
             <nav>
               <a href="/schedule">Schedule</a>
+              <a href="/bracket">Playoffs</a>
               <a href="/hq">HQ</a>
             </nav>
           </div>

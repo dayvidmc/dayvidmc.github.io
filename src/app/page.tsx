@@ -34,6 +34,10 @@ export default async function HomePage() {
           Schedule
           <small>who&apos;s playing, and what&apos;s on now</small>
         </a>
+        <a className="btn tile" href="/bracket">
+          Playoffs
+          <small>the Sunday map, filling in as it goes</small>
+        </a>
       </div>
 
       <h2>Standings</h2>

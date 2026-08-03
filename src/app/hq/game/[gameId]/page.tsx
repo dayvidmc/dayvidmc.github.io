@@ -64,6 +64,11 @@ export default async function GamePage({ params }: { params: Promise<{ gameId: s
 
   const save = saveGameField.bind(null, game.id);
 
+  // A playoff game whose semifinal has not finished has no teams yet, so there
+  // is nothing a score could be recorded against. Offering the form anyway
+  // invites a volunteer to type runs into a game that does not exist.
+  const undecided = !game.home_team_id || !game.away_team_id;
+
   return (
     <>
       <h1>
@@ -111,7 +116,17 @@ export default async function GamePage({ params }: { params: Promise<{ gameId: s
 
       <h2>{approved ? 'Correct the score' : 'Enter a score'}</h2>
 
-      {approved ? (
+      {undecided ? (
+        <div className="notice info">
+          Both teams have to be known before a score can go in. This game is waiting on{' '}
+          {!game.home_team_id && !game.away_team_id
+            ? `${game.home_team_name} and ${game.away_team_name}`
+            : (game.home_team_id ? game.away_team_name : game.home_team_name)}
+          .{' '}
+          <a href={`/hq/bracket/${game.division_id}`}>Open the bracket</a> to follow it, or pin a
+          team there if you need to set it by hand.
+        </div>
+      ) : approved ? (
         <form action={correctScore} className="card">
           <p className="sub" style={{ marginTop: 0 }}>
             This is already approved. Changing it recalculates standings immediately, queues a text
@@ -266,10 +281,22 @@ function describe(kind: string, payload: Record<string, unknown>): string {
       return `Flagged as disputed${payload.note ? ` — ${String(payload.note)}` : ''}`;
     case 'score.dispute_resolved':
       return 'Dispute resolved';
-    case 'schedule.game_updated':
+    case 'schedule.game_updated': {
+      // Bracket movement shares this event kind, and reading "moved to another
+      // diamond" when a semifinal decided who plays here is worse than useless.
+      const side = payload.bracketSlotResolved ?? payload.bracketSlotPinned;
+      if (payload.bracketSlotUnpinned) {
+        return `${String(payload.bracketSlotUnpinned) === 'home' ? 'Home' : 'Away'} side handed back to the bracket`;
+      }
+      if (side) {
+        const where = String(side) === 'home' ? 'Home' : 'Away';
+        const how = payload.bracketSlotPinned ? 'set by hand' : 'filled from the bracket';
+        return `${where} side ${how}${payload.label ? ` — ${String(payload.label)}` : ''}`;
+      }
       return payload.field === 'scheduled_start'
         ? `Moved from ${String(payload.from)} to ${String(payload.to)}`
         : `Moved to ${String(payload.diamond ?? 'another diamond')}`;
+    }
     default:
       return kind;
   }

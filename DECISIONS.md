@@ -234,6 +234,40 @@ director-only.
 **Why.** §10 gives HQ "score queue, board, comms". Reshaping the schedule is not
 in that list.
 
+### 2.13 A playoff game with an undecided side has no team, not a placeholder
+
+**Decision.** `game.home_team_id` and `game.away_team_id` are nullable. A
+playoff side that has not been decided is `NULL`, and `home_slot_label` /
+`away_slot_label` carry what the screen should say instead — "Winner of
+Semifinal 1", "1st in Pool A". A round robin game with an empty side is still
+rejected, by a check constraint.
+
+**Why.** Requiring a team on every game left only two options for Sunday's
+bracket, and both printed something untrue: invent a placeholder team, or park a
+real team in a game it may never play. Either way the board, the public
+schedule and the team pages showed a matchup that did not exist, and a
+volunteer could report a score against it. The first version of the bracket did
+exactly this, and the failure was the one you would expect — the map drew one
+matchup while the game row held another, and the wrong team advanced.
+
+**Consequence.** Resolution is not a display concern. `materialiseBracket`
+writes the resolved slot onto the game row after every approval, so there is one
+answer to "who is playing this game" rather than two that can disagree. It never
+touches a played game or a slot a director pinned, and it leaves alone any side
+the bracket was never asked to own.
+
+### 2.14 Pinning a slot keeps the rule underneath it
+
+**Decision.** A director pinning a team into a bracket slot sets `overridden`
+and the team; the slot's original rule (seed, winner-of, loser-of) is left
+intact. Unpinning drops the pinned team and hands the slot back to the rule.
+
+**Why.** §5.6 gives the director final say on every slot. The first version
+overwrote the rule, which made unpinning a dead end — the slot could not
+remember what it used to be, so releasing it left a hole. Keeping the rule
+underneath costs nothing and makes the override reversible, which is what
+"final say" should mean.
+
 ---
 
 ## 3. Deliberately not built

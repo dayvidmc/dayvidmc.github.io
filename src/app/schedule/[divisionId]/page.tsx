@@ -73,6 +73,9 @@ export default async function DivisionSchedulePage({
         <a className="btn" href={`/standings/${division.id}`} style={{ flex: 1 }}>
           Standings
         </a>
+        <a className="btn" href={`/bracket/${division.id}`} style={{ flex: 1 }}>
+          Playoffs
+        </a>
       </div>
 
       {onNow.length > 0 && (
