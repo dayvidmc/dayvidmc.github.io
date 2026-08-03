@@ -1038,3 +1038,119 @@ legend {
   color: var(--muted);
   font-size: 14px;
 }
+
+
+/* --- Bid sheets ---------------------------------------------------------- */
+
+/*
+ * A silent auction runs on paper, so this is the one part of the app designed
+ * for a printer rather than a phone. The constraints are physical: a lot number
+ * legible across a room, rows tall enough to write in with a biro while
+ * standing, and one sheet per page because they end up on different tables.
+ */
+
+.bid-sheet {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.bid-sheet-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  border-bottom: 2px solid var(--text);
+  padding-bottom: 12px;
+}
+
+.bid-sheet-lot {
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.bid-sheet-title {
+  font-size: 22px;
+  margin: 4px 0 0;
+}
+
+.bid-sheet-desc {
+  color: var(--muted);
+  margin: 4px 0 0;
+  font-size: 15px;
+}
+
+.bid-sheet-terms {
+  text-align: right;
+  font-size: 15px;
+  line-height: 1.8;
+  white-space: nowrap;
+}
+
+.bid-sheet-table {
+  margin-top: 12px;
+}
+
+.bid-sheet-table th {
+  text-align: left;
+  font-size: 12px;
+}
+
+/* Tall enough to write in standing up, holding the pen against a table. */
+.bid-sheet-table td {
+  height: 38px;
+  border-bottom: 1px solid var(--border);
+}
+
+.bid-sheet-foot {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+@media print {
+  /* Nothing but the sheets. The app's chrome on a bid sheet wastes the top
+     third of a page that somebody has to write on. */
+  header.bar,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  .wrap {
+    max-width: none;
+    padding: 0;
+  }
+
+  .bid-sheet {
+    border: none;
+    padding: 0;
+    margin: 0;
+    /* One lot per page: they go on different tables. */
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .bid-sheet:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .bid-sheet-table td {
+    height: 44px;
+    border-bottom: 1px solid #999;
+  }
+
+  .bid-sheet-desc,
+  .bid-sheet-foot {
+    color: #333;
+  }
+}

@@ -376,8 +376,9 @@ this list.
 
 `/hq/money` now totals every stream and says plainly when it cannot: an item
 with no cost recorded makes the headline a ceiling rather than a total, and it
-says which item. Canteen figures come from the orders themselves; the auction,
-raffle, sponsorship and donations are typed in until they have screens.
+says which item. Canteen figures come from the orders themselves and the
+auction reports itself; the raffle, sponsorship and donations are typed in
+until they have screens.
 
 `/hq/money/cash` covers float out, counted back and banked — for the auction
 table and the raffle sellers as well as the tills — and names the counts that
@@ -385,6 +386,29 @@ went in with one signature on them.
 
 `/hq/money/gifts` records what Montana's and everyone else gave, keeping goods
 and donated time apart because only one of them can be receipted.
+
+### ✓ The silent auction, on paper but not only on paper — built
+
+`/hq/auction` is the lot board: what is out, what has been won, what is still
+owed and who has not collected. `/hq/auction/sheets` prints the actual sheets —
+one lot per page, a phone column, rows tall enough to write in standing up.
+
+The screen that matters is `/hq/auction/close`. At eight o'clock somebody is
+holding forty sheets with a queue forming at the payment table. Forty forms is
+forty page loads; this is one textarea — lot number, name, bid, one per line,
+with a phone number picked up if it is there. Anything it cannot read is
+reported back rather than skipped quietly, because a winning bid that goes
+missing is how a lot gets sold twice. A lot somebody else has already closed is
+left alone and named, because two people walking the tables with overlapping
+stacks is normal.
+
+Then **Text the winners**, through the same outbound queue as everything else,
+so anyone who has texted STOP is skipped — and the winners who left no number
+are counted, so somebody knows how many to go and find by voice.
+
+Still on paper on purpose: bidding itself. §7.2 recommends sheets plus a QR
+code for year one, and this is the plumbing that would make the QR code cheap
+later.
 
 ### ▲ A donate button
 

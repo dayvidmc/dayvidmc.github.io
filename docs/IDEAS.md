@@ -204,9 +204,11 @@ no code at all.
 
 ## 10. The other modules
 
-Per the spec's build order, unchanged: registration and payments first
-(§8A, hard external deadline), then volunteers (§6, needed for spring
-recruitment and the source of diamond shift data), then auction (§7).
+Per the spec's build order: registration and payments first (§8A, hard external
+deadline), then volunteers (§6, needed for spring recruitment and the source of
+diamond shift data). The auction (§7) is built — paper sheets, a fast close and
+the payment queue — so what is left of Module C is sponsor and donor
+relationships, which is §13 Q7's question about who owns them.
 
 The one decision that cannot wait is §12's: **ship registration for 2027, or
 keep it where it is and ship it for 2028?** If 2028, the game-ops modules need

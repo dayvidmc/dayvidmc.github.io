@@ -39,7 +39,8 @@ intake paths that feed it.
 | Umpires: roster, crews with conflict checks, their own link, honoraria | — | Built, tested — not in the spec at all; see `docs/BRAINSTORM.md` §4 |
 | Registration and rosters, no payments | — | Built, tested — Module E's fees stay deferred |
 | Outbound SMS: sender, retries, opt-outs, failure screen | §5.7 | Built, tested — **dry run by default**; needs a Twilio account to reach a phone |
-| Money raised: every stream, cost of goods, gifts in kind, cash control | §8A | Built, tested — auction and raffle recorded by hand until they have screens |
+| Money raised: every stream, cost of goods, gifts in kind, cash control | §8A | Built, tested — the raffle is still recorded by hand |
+| Silent auction: lots, printable bid sheets, a fast close, winners, payment | §7.3 | Built, tested — reports itself into the money total |
 | Append-only audit trail | §9 | Built, enforced by the database |
 
 ## What is deliberately not here
@@ -60,8 +61,8 @@ cannot supply:
   Tapping a card on a phone needs a native app — Apple and Google only expose
   the NFC reader to signed native apps — so the card tap happens in the Square
   app and this records the result. See `docs/CONCESSIONS.md`.
-- **Registration and payments (Module E)**, **volunteers (Module B)**,
-  **auction (Module C)**.
+- **Registration and payments (Module E)** and **volunteers (Module B)**. The
+  auction (Module C) is now built; sponsor relationships are not.
 - **Charitable receipting and raffles** — §7.4 and §8A.4 are legal and
   accounting questions, not technical ones. No logic has been written for
   either, on purpose.

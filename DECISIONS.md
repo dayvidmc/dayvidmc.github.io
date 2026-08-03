@@ -357,6 +357,50 @@ receipt the treasurer cannot issue, and nobody finding out until September.
 technical one; the software's job is to capture fair market value at the moment
 the gift arrives, because that is unrecoverable afterwards.
 
+### 2.20 A tie on a bid sheet goes to whoever wrote it first
+
+**Decision.** `winningBid()` sorts by amount descending, then by the time the
+bid was recorded ascending. Two bids of $150 mean the first one wins.
+
+**Why.** The sheet already says this. The second person to write $150 wrote it
+underneath the first, on a sheet that says the highest bid wins and gives an
+increment to clear. Any other rule — a coin toss, asking them to bid again —
+needs someone to stand there and adjudicate at the moment the room is emptying.
+
+**Confirm with:** nobody. If the auction lead wants a different rule they will
+say so, and it is a one-line change with a test that names it.
+
+### 2.21 A lot with a bid on it cannot be marked "no bids"
+
+**Decision.** `setStatusAction` refuses `unsold` on a lot with a live bid, and
+the button is not shown for one. Striking every bid out first, or withdrawing
+the lot, are the two honest routes.
+
+**Why.** The two states look identical afterwards — a lot with no winner
+against it — but one of them has quietly removed real money from the total.
+This runs at 9pm on a phone with buttons next to each other. The "no bids"
+sweep on the board has the same shape and is the same guard: it names the lots
+it will close, and it only touches empty sheets.
+
+**Related:** the same reasoning as §2.13. A state that cannot be told apart
+from a mistake afterwards is worth refusing at the moment it is made.
+
+### 2.22 A phone number off a bid sheet is normalised, and an illegible one is dropped
+
+**Decision.** Both bid-writing paths put the number through `normalisePhone`.
+One that will not parse is stored as no number rather than rejecting the bid.
+
+**Why.** Winners are texted through the same outbound queue as everyone else,
+and that queue matches a person to a number by exact string comparison — an
+opt-out recorded against `+16135550188` does not stop a message addressed to
+`613-555-0188`, and that is somebody who asked us to stop texting them.
+
+The dropping half matters more. This runs at 8pm with a stack of paper: a
+winning bid must never be lost because the mobile column was scrawled. A
+winner with no readable number gets found by voice, which is what would have
+happened if the column had been left blank — and the count of those winners is
+shown, so somebody knows how many to go and find.
+
 ---
 
 ## 3. Deliberately not built

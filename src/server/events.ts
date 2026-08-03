@@ -34,6 +34,11 @@ export type EventKind =
   | 'money.recorded'
   | 'money.cash_moved'
   | 'money.gift_recorded'
+  | 'auction.item_added'
+  | 'auction.status_changed'
+  | 'auction.bid_voided'
+  | 'auction.paid'
+  | 'auction.winners_notified'
   | 'staff.signed_in';
 
 export interface EventInput {

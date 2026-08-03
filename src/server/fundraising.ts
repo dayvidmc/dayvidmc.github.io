@@ -1,5 +1,6 @@
 import { query } from '@/db/client';
 import { recordEvent } from './events';
+import { auctionRaisedCents } from './auction';
 import {
   cashPosition,
   concessionsTotal,
@@ -71,23 +72,44 @@ export async function concessionRefunds(tournamentId: string): Promise<number> {
   return Number(rows[0]?.n ?? 0);
 }
 
-export async function raisedSoFar(tournamentId: string): Promise<RaisedSummary> {
-  const [lines, entries, refunds] = await Promise.all([
+export interface RaisedNow extends RaisedSummary {
+  /**
+   * True when the auction has both real lots *and* a hand-typed figure. Both
+   * are counted, which is right — but somebody has almost certainly recorded
+   * the same money twice, and a headline that quietly double-counts is the
+   * worst possible failure for this screen.
+   */
+  auctionCountedTwice: boolean;
+}
+
+export async function raisedSoFar(tournamentId: string): Promise<RaisedNow> {
+  const [lines, entries, refunds, auctionCents] = await Promise.all([
     soldLines(tournamentId),
     revenueEntries(tournamentId),
     concessionRefunds(tournamentId),
+    auctionRaisedCents(tournamentId),
   ]);
 
-  return summariseRaised([
-    concessionsTotal(lines, refunds),
-    ...manualTotals(
-      entries.map((row) => ({
-        stream: row.stream,
-        amountCents: row.amount_cents,
-        costCents: row.cost_cents,
-      })),
-    ),
-  ]);
+  const manual = entries.map((row) => ({
+    stream: row.stream,
+    amountCents: row.amount_cents,
+    costCents: row.cost_cents,
+  }));
+
+  // The auction module is the source of truth once lots exist. A hand-typed
+  // auction figure still counts, because deleting somebody's entry silently
+  // would be worse — but it is called out.
+  if (auctionCents > 0) {
+    manual.push({ stream: 'auction', amountCents: auctionCents, costCents: 0 });
+  }
+
+  const summary = summariseRaised([concessionsTotal(lines, refunds), ...manualTotals(manual)]);
+
+  return {
+    ...summary,
+    auctionCountedTwice:
+      auctionCents > 0 && entries.some((row) => row.stream === 'auction' && row.amount_cents > 0),
+  };
 }
 
 export async function addRevenueEntry(

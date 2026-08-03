@@ -411,6 +411,7 @@ export async function seedDemo(): Promise<DemoResult> {
   // --- The money side -------------------------------------------------------
   await seedConcessionSales(tournamentId, base);
   await seedFundraising(tournamentId);
+  await seedAuction(tournamentId);
 
   const [division] = await query<{ id: string }>(
     "SELECT id FROM division WHERE name = 'Major A'",
@@ -645,6 +646,66 @@ async function seedConcessionSales(tournamentId: string, base: Date): Promise<vo
 }
 
 /**
+ * The silent auction, caught mid-close.
+ *
+ * Some lots are shut and paid for, some are shut and the winner still owes,
+ * some are still taking bids, and one had no interest at all. That is what the
+ * table looks like at 8:30 on the Saturday, and it is the only state in which
+ * the screens are worth looking at.
+ */
+async function seedAuction(tournamentId: string): Promise<void> {
+  const lots: [title: string, donor: string, value: number | null, min: number, status: string][] = [
+    ['Signed Senators jersey', 'Sens Foundation', 45_000, 20_000, 'closed'],
+    ['Weekend at a Mont-Tremblant chalet', 'The Barrett family', 120_000, 60_000, 'closed'],
+    ['Case of Montana\'s gift cards', "Montana's", 25_000, 10_000, 'closed'],
+    ['Kanata Home Hardware barbecue', 'Kanata Home Hardware', 60_000, 30_000, 'closed'],
+    ['Two Redblacks tickets', 'Anonymous', 20_000, 8_000, 'open'],
+    ['Baseball clinic with a coach', 'Kanata Minor Baseball', 15_000, 6_000, 'open'],
+    ['Hand-knitted team blanket', 'Marion Ellis', null, 4_000, 'open'],
+    ['Signed team photo, 1998 champions', 'The Tokessy family', 5_000, 2_000, 'unsold'],
+  ];
+
+  const bids: Record<number, [name: string, phone: string | null, amount: number][]> = {
+    1: [['Sam Rivera', '+16135551188', 22_000], ['Devi Anand', '+16135552244', 26_500], ['Sam Rivera', '+16135551188', 31_000]],
+    2: [['Marlo Fitzgerald', '+16135553311', 65_000], ['Jordan Blake', null, 82_000]],
+    3: [['Alex Kim', '+16135554455', 11_000], ['Noor Haddad', '+16135556677', 14_500]],
+    4: [['Riley Novak', null, 32_000]],
+    5: [['Casey Moreau', '+16135557788', 9_500]],
+    6: [['Quinn Silva', '+16135558899', 7_000], ['Avery Chan', null, 8_500]],
+  };
+
+  for (const [index, [title, donor, value, min, status]] of lots.entries()) {
+    const lot = index + 1;
+    const [row] = await query<{ id: string }>(
+      `INSERT INTO auction_item
+         (tournament_id, lot_number, title, donor, fair_market_value_cents,
+          minimum_bid_cents, bid_increment_cents, status, closed_at, closed_by)
+       VALUES ($1,$2,$3,$4,$5,$6,500,$7,
+               CASE WHEN $7 IN ('closed','unsold') THEN now() END,
+               CASE WHEN $7 IN ('closed','unsold') THEN 'Auction Lead' END)
+       RETURNING id`,
+      [tournamentId, lot, title, donor, value, min, status],
+    );
+
+    for (const [name, phone, amount] of bids[lot] ?? []) {
+      await query(
+        `INSERT INTO auction_bid (item_id, bidder_name, bidder_phone, amount_cents, source, recorded_by)
+         VALUES ($1,$2,$3,$4,'paper','Auction Lead')`,
+        [row!.id, name, phone, amount],
+      );
+    }
+  }
+
+  // Two of the four closed lots have been paid for; the other two are the
+  // queue at the table.
+  await query(
+    `UPDATE auction_item SET paid_at = now(), paid_by = 'Auction Lead', payment_method = 'cash'
+      WHERE tournament_id = $1 AND lot_number IN (1, 3)`,
+    [tournamentId],
+  );
+}
+
+/**
  * The money the weekend raises that does not come through a till.
  *
  * Left deliberately mid-weekend: the auction has taken money and has not
@@ -658,7 +719,6 @@ async function seedFundraising(tournamentId: string): Promise<void> {
   const revenue: [stream: string, description: string, amount: number, cost: number][] = [
     ['sponsorship', 'Diamond sponsor signs, 12 at $250', 300_000, 42_000],
     ['sponsorship', 'Program advertising', 145_000, 0],
-    ['auction', 'Silent auction — Saturday, part-closed', 418_000, 0],
     ['raffle', '50-50, Saturday draw', 96_500, 8_000],
     ['donation', 'Cash donations at the gate', 34_000, 0],
   ];

@@ -64,6 +64,7 @@ export default async function MoneyPage({
         <a className="btn" href="/hq" style={{ flex: 1 }}>← Board</a>
         <a className="btn" href="/hq/money/cash" style={{ flex: 1 }}>Cash</a>
         <a className="btn" href="/hq/money/gifts" style={{ flex: 1 }}>Gifts in kind</a>
+        <a className="btn" href="/hq/auction" style={{ flex: 1 }}>Auction</a>
       </div>
 
       {params.error === 'director_only' && (
@@ -94,6 +95,14 @@ export default async function MoneyPage({
             : 'Some costs have not been recorded, so they are counting as free.'}{' '}
           <a href="/hq/concessions/menu">Add costs on the menu</a> and this number becomes one you
           can read out.
+        </div>
+      )}
+
+      {summary.auctionCountedTwice && (
+        <div className="notice error">
+          <strong>The auction may be counted twice.</strong> There are real lots recorded{' '}
+          <a href="/hq/auction">on the auction screen</a> and a hand-typed auction figure below.
+          Both are in the total. Remove whichever is the duplicate.
         </div>
       )}
 
@@ -174,8 +183,9 @@ export default async function MoneyPage({
 
       <h2>Recorded by hand</h2>
       <p className="sub">
-        The silent auction and the raffle will get proper screens. Until they do, a total that is
-        missing them is worse than useless, because somebody will read it out on the Sunday.
+        The auction now has <a href="/hq/auction">its own screen</a> and reports itself. The raffle
+        does not yet, so it is typed in here — a total missing it is worse than useless, because
+        somebody will read it out on the Sunday.
       </p>
 
       {director && (
