@@ -387,7 +387,15 @@ export async function seedDemo(): Promise<DemoResult> {
   await seedBracket(tournamentId, base);
 
   // --- The crew -------------------------------------------------------------
+  //
+  // The demo turns umpire score entry on so the capability can be looked at.
+  // The default is off, and stays off for a real tournament until a director
+  // decides otherwise.
+  await query('UPDATE tournament SET umpire_score_entry = true WHERE id = $1', [tournamentId]);
   await seedUmpires(tournamentId);
+
+  // --- Registration and rosters --------------------------------------------
+  await seedRosters(tournamentId);
 
   const [division] = await query<{ id: string }>(
     "SELECT id FROM division WHERE name = 'Major A'",
@@ -479,6 +487,63 @@ async function seedUmpires(tournamentId: string): Promise<void> {
          VALUES ($1, $2, 'base3', 'Volunteer Coordinator')
          ON CONFLICT DO NOTHING`,
         [concurrent.second_id, plate.umpire_id],
+      );
+    }
+  }
+}
+
+const FIRST_NAMES = [
+  'Sam', 'Alex', 'Jordan', 'Riley', 'Casey', 'Avery', 'Quinn', 'Rowan', 'Emerson', 'Finley',
+  'Harper', 'Kai', 'Logan', 'Micah', 'Noor', 'Parker', 'Reese', 'Sage', 'Tatum', 'Wren',
+];
+const LAST_NAMES = [
+  'Rivera', 'Nakamura', 'Okafor', 'Tremblay', 'Singh', 'Bell', 'Cote', 'Raman', 'Lefebvre',
+  'Mensah', 'Novak', 'Ivanov', 'Dubois', 'Haddad', 'Kowalski', 'Moreau', 'Silva', 'Chan',
+];
+
+/**
+ * Rosters, and registration states worth looking at.
+ *
+ * Not every team is tidy on purpose. One is short of nine players so the
+ * blocking case is visible, one has no roster at all because that is normal
+ * before the coaches' meeting, one is locked, and the states run across
+ * invited, registered and confirmed. A demo where everything is green shows
+ * nothing about what the screen is for.
+ */
+async function seedRosters(tournamentId: string): Promise<void> {
+  const teams = await query<{ id: string; name: string }>(
+    'SELECT id, name FROM team WHERE tournament_id = $1 ORDER BY name',
+    [tournamentId],
+  );
+
+  for (const [index, team] of teams.entries()) {
+    // Every fifth team has no roster yet; every seventh is short.
+    if (index % 5 === 4) continue;
+    const size = index % 7 === 3 ? 7 : 11 + (index % 4);
+
+    for (let n = 0; n < size; n += 1) {
+      const first = FIRST_NAMES[(index * 3 + n * 7) % FIRST_NAMES.length]!;
+      const last = LAST_NAMES[(index * 5 + n * 3) % LAST_NAMES.length]!;
+      await query(
+        `INSERT INTO player (tournament_id, team_id, name, jersey)
+         VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+        [tournamentId, team.id, `${first} ${last}`, String(n + 2)],
+      );
+    }
+
+    const status = index % 5 === 0 ? 'registered' : index % 11 === 7 ? 'invited' : 'confirmed';
+    await query(
+      `UPDATE team SET registration_status = $2,
+              registered_at = CASE WHEN $2 <> 'invited' THEN now() ELSE NULL END
+        WHERE id = $1`,
+      [team.id, status],
+    );
+
+    // One locked roster, so the read-only coach view is reachable.
+    if (index === 1) {
+      await query(
+        "UPDATE team SET roster_locked_at = now(), roster_locked_by = 'Tournament Director' WHERE id = $1",
+        [team.id],
       );
     }
   }

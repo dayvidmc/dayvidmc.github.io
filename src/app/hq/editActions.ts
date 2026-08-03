@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { query, queryOne, transaction } from '@/db/client';
 import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
-import { recordEventIn } from '@/server/events';
+import { recordEvent, recordEventIn } from '@/server/events';
 import { applyRuleEdit, parseDivisionRules } from '@/domain/divisionRules';
 import { approveScore, recordProposal, setDispute } from '@/server/repo';
 import { localWallClock, toSqlTimestamp } from '@/domain/time';
@@ -165,10 +165,31 @@ export async function saveTeamField(
 
 const TOURNAMENT_FIELDS = new Set(['name', 'starts_on', 'ends_on', 'day_start_time', 'day_end_time']);
 
+/** Settings that are a yes/no rather than a value, so "" is a legal answer. */
+const TOURNAMENT_FLAGS = new Set(['umpire_score_entry']);
+
 export async function saveTournamentField(field: string, value: string): Promise<SaveResult> {
   const staff = await currentStaff();
   if (!canAccessHq(staff)) return DENIED;
   if (!isDirector(staff)) return { ok: false, error: 'Only the director can change this.' };
+  if (TOURNAMENT_FLAGS.has(field)) {
+    await query(`UPDATE tournament SET ${field} = $2 WHERE id = $1`, [
+      staff!.tournamentId,
+      value === 'true',
+    ]);
+    await recordEvent({
+      tournamentId: staff!.tournamentId,
+      actor: staff!.name,
+      actorRole: staff!.role,
+      kind: 'division.rules_updated',
+      subjectType: 'tournament',
+      subjectId: staff!.tournamentId,
+      payload: { setting: field, value: value === 'true' },
+    });
+    revalidatePath('/hq/settings');
+    return { ok: true };
+  }
+
   if (!TOURNAMENT_FIELDS.has(field)) return { ok: false, error: 'Unknown setting.' };
 
   const trimmed = value.trim();

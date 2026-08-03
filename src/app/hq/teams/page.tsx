@@ -122,6 +122,9 @@ export default async function TeamsPage({
               path={`/team/${team.access_token}`}
               label="Team link — forward this to the coach once"
             />
+            <a className="btn" href={`/hq/registration/${team.id}`} style={{ minHeight: 44 }}>
+              Registration and roster
+            </a>
           </div>
         );
       })}

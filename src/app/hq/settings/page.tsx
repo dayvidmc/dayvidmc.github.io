@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
 import { currentTournament, listDivisions } from '@/server/repo';
 import { query } from '@/db/client';
-import { AutoSaveField } from '../../_components/AutoSave';
+import { AutoSaveField, AutoSaveToggle } from '../../_components/AutoSave';
 import { saveTournamentField } from '../editActions';
 
 export const dynamic = 'force-dynamic';
@@ -134,6 +134,17 @@ export default async function SettingsPage() {
         <AutoSaveField
           save={saveTournamentField} field="day_end_time" label="Play ends" type="time"
           defaultValue={tournament.day_end_time.slice(0, 5)}
+        />
+      </fieldset>
+
+      <fieldset disabled={!editable}>
+        <legend>How scores come in</legend>
+        <AutoSaveToggle
+          save={saveTournamentField}
+          field="umpire_score_entry"
+          label="Umpires can report scores"
+          defaultChecked={tournament.umpire_score_entry}
+          hint="Off by default. Umpires always get their own link with their games and the division rules; this decides whether it also carries a score box. Some associations are explicit that their umpires officiate and do not administer — this is that decision, not a technical one."
         />
       </fieldset>
 

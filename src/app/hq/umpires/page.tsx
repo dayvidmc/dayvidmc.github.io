@@ -30,6 +30,8 @@ export default async function UmpiresPage() {
   const tournament = await currentTournament();
   if (!tournament) return <div className="notice info">No tournament set up yet.</div>;
 
+  const scoreEntry = tournament.umpire_score_entry;
+
   const [umpires, issues, owed] = await Promise.all([
     umpireRoster(tournament.id),
     issuesForTournament(tournament.id),
@@ -48,6 +50,13 @@ export default async function UmpiresPage() {
       <p className="sub">
         {active.length} active. Details save as you type.
       </p>
+
+      {!scoreEntry && (
+        <div className="notice info">
+          Umpires are not reporting scores at this tournament. Their links still show their games
+          and the rules for each division. <a href="/hq/settings">Change it in settings</a>.
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <a className="btn" href="/hq" style={{ flex: 1 }}>← Board</a>
@@ -155,7 +164,11 @@ export default async function UmpiresPage() {
 
             <CopyLink
               path={`/umpire/${umpire.access_token}`}
-              label="Their link — games, the rules for each, and a box to report the score"
+              label={
+                scoreEntry
+                  ? 'Their link — games, the rules for each, and a box to report the score'
+                  : 'Their link — their games and the rules for each'
+              }
             />
           </div>
         );

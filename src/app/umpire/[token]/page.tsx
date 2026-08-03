@@ -39,6 +39,11 @@ export default async function UmpirePage({
   const tournament = await currentTournament();
   const now = toWallClock(new Date(), tournament?.time_zone);
 
+  // Off unless the director has turned it on. When off this page is still
+  // worth having — it is where an umpire finds their games and the rules for
+  // each — so only the score box goes away.
+  const scoreEntry = tournament?.umpire_score_entry === true;
+
   const games = await query<{
     game_id: string;
     external_game_id: string;
@@ -101,6 +106,12 @@ export default async function UmpirePage({
 
       {search.error === 'bad_score' && (
         <div className="notice error">That score did not look right. Two whole numbers, please.</div>
+      )}
+      {search.error === 'off' && (
+        <div className="notice info">
+          Scores are not being reported through umpires at this tournament. Give it to the diamond
+          volunteer as usual.
+        </div>
       )}
       {search.error === 'not_yours' && (
         <div className="notice error">
@@ -220,7 +231,7 @@ export default async function UmpirePage({
                     available after a score is in: a correction from the person
                     who was standing there is worth more than protecting the
                     first answer. */}
-                {!game.no_show && status !== 'upcoming' && (
+                {scoreEntry && !game.no_show && status !== 'upcoming' && (
                   <form action={reportScore}>
                     {/* The link is the login. */}
                     <input type="hidden" name="token" value={token} />
@@ -254,8 +265,9 @@ export default async function UmpirePage({
 
       {games.length > 0 && (
         <p className="sub" style={{ marginTop: 24 }}>
-          Every score goes to HQ to be confirmed before it moves a standing, yours included. That is
-          not about trusting you less — it is so no single typo decides who plays on Sunday.
+          {scoreEntry
+            ? 'Every score goes to HQ to be confirmed before it moves a standing, yours included. That is not about trusting you less — it is so no single typo decides who plays on Sunday.'
+            : 'Scores are not reported through this page at this tournament — hand them to the diamond volunteer as usual. Your games and the rules for each stay here.'}
         </p>
       )}
     </>

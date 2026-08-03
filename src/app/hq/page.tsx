@@ -130,6 +130,9 @@ export default async function HqBoardPage({
         <a className="btn" href="/hq/teams" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
           Teams
         </a>
+        <a className="btn" href="/hq/registration" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
+          Registration
+        </a>
         <a className="btn" href="/hq/import" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
           Schedule
         </a>

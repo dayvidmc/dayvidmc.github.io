@@ -22,6 +22,12 @@ import { umpireByAccessToken } from '@/server/umpires';
  * The token is the authentication. It is not guessable, it is per-umpire, and
  * it is checked against the game before anything is written: an umpire can only
  * report on a game they are actually assigned to.
+ *
+ * The whole path is behind a tournament setting that is off by default. Whether
+ * umpires report scores is a decision about how this tournament is run — some
+ * associations are explicit that their umpires officiate and do not administer
+ * — so the capability exists and the director turns it on. The check is here,
+ * not only on the screen: hiding a form does not close a route.
  */
 export async function reportScore(formData: FormData): Promise<void> {
   const token = String(formData.get('token') ?? '');
@@ -29,6 +35,12 @@ export async function reportScore(formData: FormData): Promise<void> {
 
   const umpire = await umpireByAccessToken(token);
   if (!umpire) redirect('/');
+
+  const setting = await queryOne<{ umpire_score_entry: boolean }>(
+    'SELECT umpire_score_entry FROM tournament WHERE id = $1',
+    [umpire.tournament_id],
+  );
+  if (!setting?.umpire_score_entry) redirect(`/umpire/${token}?error=off`);
 
   // The assignment is the authorisation. Without this check, anyone holding
   // any umpire's link could file a score against any game in the tournament.

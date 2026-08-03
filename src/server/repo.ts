@@ -18,13 +18,15 @@ export interface Tournament {
   ends_on: string;
   day_start_time: string;
   day_end_time: string;
+  /** Whether umpires may file scores (§5.2 path 4). Off unless turned on. */
+  umpire_score_entry: boolean;
 }
 
 /** The tournament in play. There is one; scoping is for cloning years cleanly. */
 export async function currentTournament(): Promise<Tournament | null> {
   return queryOne<Tournament>(
     `SELECT id, name, year, time_zone, starts_on::text, ends_on::text,
-            day_start_time::text, day_end_time::text
+            day_start_time::text, day_end_time::text, umpire_score_entry
        FROM tournament ORDER BY year DESC LIMIT 1`,
   );
 }

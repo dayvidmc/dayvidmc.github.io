@@ -27,6 +27,8 @@ export type EventKind =
   | 'umpire.assigned'
   | 'umpire.unassigned'
   | 'umpire.no_show'
+  | 'roster.updated'
+  | 'team.registration_updated'
   | 'notification.queued'
   | 'staff.signed_in';
 
