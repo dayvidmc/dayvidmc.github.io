@@ -268,6 +268,11 @@ from winning a tiebreaker, so a director confirms it.
   post scores that decide who plays on Sunday.
 - Load-test the Saturday-evening peak specifically (§11). The profile is dead
   for 51 weeks, then every diamond finishing at once.
+- Read [docs/ANSWERS.md](docs/ANSWERS.md) **before asking the committee
+  anything.** Every question already put to the family and the answer given,
+  what the tournament's own website says, and what is genuinely still open. It
+  exists because three questions were asked twice, and both times the answer was
+  already written down in this repository.
 - Read [DECISIONS.md](DECISIONS.md) and get the open questions answered.
 - Read [docs/IDEAS.md](docs/IDEAS.md) — what is missing, ordered by whether it
   would hurt to skip. The messaging spine is first for a reason.

@@ -1058,6 +1058,12 @@ it.
 
 ## 4. Open questions from §13, and what each one blocks
 
+> **Several of these have since been answered.** The live list, with every
+> answer the family has given and where it came from, is
+> [docs/ANSWERS.md](docs/ANSWERS.md). Read that first; this section is kept for
+> what each question was blocking rather than as a list of what is still
+> unknown.
+
 1. **Does a per-diamond volunteer role already exist?** Blocks nothing in code —
    `diamond_shift` is built and score intake path 1 works. But if the role does
    not exist, it is a spring recruitment ask, and path 1 is the primary route.
