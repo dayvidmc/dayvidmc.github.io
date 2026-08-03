@@ -95,6 +95,50 @@ export function computeGameStatus(
   return { ...base, status: 'scheduled' };
 }
 
+/**
+ * What the public sees.
+ *
+ * Deliberately a different, smaller vocabulary than the HQ board. "Overdue" and
+ * "pending approval" describe how well HQ is keeping up, and putting either in
+ * front of ninety visiting families would invite a hundred phone calls about a
+ * game that finished fine and simply has not been phoned in yet.
+ *
+ * A game past its expected end with no approved score reads as "awaiting
+ * score", which is both true and unalarming.
+ */
+export type PublicStatus = 'upcoming' | 'on_now' | 'awaiting_score' | 'final' | 'cancelled';
+
+export function publicGameStatus(
+  scheduledStart: Date,
+  rules: DivisionRules,
+  state: { hasApprovedScore: boolean; cancelled: boolean },
+  now: Date,
+): PublicStatus {
+  if (state.cancelled) return 'cancelled';
+  if (state.hasApprovedScore) return 'final';
+
+  const { expectedEndAt } = gameClock(scheduledStart, rules);
+  if (now < scheduledStart) return 'upcoming';
+  if (now < expectedEndAt) return 'on_now';
+  return 'awaiting_score';
+}
+
+export const PUBLIC_STATUS_LABEL: Record<PublicStatus, string> = {
+  upcoming: 'Upcoming',
+  on_now: 'On now',
+  awaiting_score: 'Awaiting score',
+  final: 'Final',
+  cancelled: 'Cancelled',
+};
+
+export const PUBLIC_STATUS_MARKER: Record<PublicStatus, string> = {
+  upcoming: '⚪',
+  on_now: '🔵',
+  awaiting_score: '🟡',
+  final: '🟢',
+  cancelled: '⚫',
+};
+
 /** Board ordering: what needs attention first. */
 const STATUS_PRIORITY: Record<GameStatus, number> = {
   disputed: 0,

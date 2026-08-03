@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { cookies } from 'next/headers';
-import { queryOne } from '@/db/client';
+import { query, queryOne } from '@/db/client';
 
 /**
  * Access model (§10): tile + PIN for staff, magic links for everyone else, no
@@ -51,6 +51,90 @@ export async function hashPin(pin: string): Promise<string> {
   const salt = randomBytes(16);
   const derived = await scrypt(pin, salt, 32);
   return `scrypt$${salt.toString('base64url')}$${derived.toString('base64url')}`;
+}
+
+/** Wrong PINs allowed before the account rests. */
+export const MAX_PIN_ATTEMPTS = 5;
+/** How long it rests for. */
+export const LOCKOUT_MINUTES = 15;
+
+export interface PinAttemptResult {
+  ok: boolean;
+  /** Set when the account is locked; minutes remaining, rounded up. */
+  lockedForMinutes?: number;
+  /** Set on a wrong PIN that did not trigger a lockout. */
+  attemptsLeft?: number;
+}
+
+/**
+ * Check a PIN, counting failures.
+ *
+ * The lockout is per account rather than per IP: an attacker rotating through
+ * IPs still cannot get more than five guesses at any one person, and a
+ * volunteer sharing a stadium's wifi is never punished for someone else's
+ * mistyping.
+ *
+ * A locked account is told how long it has left rather than being refused
+ * silently. Hiding it would just mean the volunteer keeps trying, and the
+ * information is worth less to an attacker than a confused person at HQ costs.
+ */
+export async function checkPinAttempt(
+  staff: { id: string; tournament_id: string; pin_hash: string; failed_attempts: number; locked_until: Date | null },
+  pin: string,
+  remoteHint: string | null,
+): Promise<PinAttemptResult> {
+  const now = Date.now();
+
+  if (staff.locked_until && staff.locked_until.getTime() > now) {
+    const minutes = Math.ceil((staff.locked_until.getTime() - now) / 60_000);
+    await recordAttempt(staff, false, remoteHint);
+    return { ok: false, lockedForMinutes: minutes };
+  }
+
+  const correct = await verifyPin(pin, staff.pin_hash);
+  await recordAttempt(staff, correct, remoteHint);
+
+  if (correct) {
+    await query(
+      `UPDATE staff_member
+          SET failed_attempts = 0, locked_until = NULL, last_signed_in = now()
+        WHERE id = $1`,
+      [staff.id],
+    );
+    return { ok: true };
+  }
+
+  // A lockout that has expired starts the count again from this failure.
+  const expired = staff.locked_until !== null && staff.locked_until.getTime() <= now;
+  const attempts = (expired ? 0 : staff.failed_attempts) + 1;
+
+  if (attempts >= MAX_PIN_ATTEMPTS) {
+    await query(
+      `UPDATE staff_member
+          SET failed_attempts = $2, locked_until = now() + ($3 || ' minutes')::interval
+        WHERE id = $1`,
+      [staff.id, attempts, String(LOCKOUT_MINUTES)],
+    );
+    return { ok: false, lockedForMinutes: LOCKOUT_MINUTES };
+  }
+
+  await query('UPDATE staff_member SET failed_attempts = $2, locked_until = NULL WHERE id = $1', [
+    staff.id,
+    attempts,
+  ]);
+  return { ok: false, attemptsLeft: MAX_PIN_ATTEMPTS - attempts };
+}
+
+async function recordAttempt(
+  staff: { id: string; tournament_id: string },
+  succeeded: boolean,
+  remoteHint: string | null,
+): Promise<void> {
+  await query(
+    `INSERT INTO sign_in_attempt (tournament_id, staff_id, succeeded, remote_hint)
+     VALUES ($1, $2, $3, $4)`,
+    [staff.tournament_id, staff.id, succeeded, remoteHint],
+  );
 }
 
 export async function verifyPin(pin: string, stored: string): Promise<boolean> {

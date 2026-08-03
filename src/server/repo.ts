@@ -842,6 +842,39 @@ export async function gameDetail(tournamentId: string, gameId: string): Promise<
   );
 }
 
+export interface PublicGame {
+  id: string;
+  external_game_id: string;
+  game_type: 'round_robin' | 'playoff';
+  pool_name: string | null;
+  scheduled_start: Date;
+  diamond_name: string;
+  home_team_name: string;
+  away_team_name: string;
+  home_runs: number | null;
+  away_runs: number | null;
+  result_kind: 'played' | 'forfeit' | null;
+  cancelled_at: Date | null;
+}
+
+/** Every game in a division, for the public schedule. */
+export async function scheduleForDivision(divisionId: string): Promise<PublicGame[]> {
+  return query<PublicGame>(
+    `SELECT g.id, g.external_game_id, g.game_type, p.name AS pool_name, g.scheduled_start,
+            dm.name AS diamond_name, ht.name AS home_team_name, aw.name AS away_team_name,
+            a.home_runs, a.away_runs, a.result_kind, g.cancelled_at
+       FROM game g
+       JOIN diamond dm ON dm.id = g.diamond_id
+       JOIN team ht    ON ht.id = g.home_team_id
+       JOIN team aw    ON aw.id = g.away_team_id
+       LEFT JOIN pool p ON p.id = g.pool_id
+       LEFT JOIN approved_score a ON a.game_id = g.id
+      WHERE g.division_id = $1
+      ORDER BY g.scheduled_start, g.external_game_id`,
+    [divisionId],
+  );
+}
+
 export async function listDiamonds(tournamentId: string) {
   return query<{ id: string; name: string }>(
     'SELECT id, name FROM diamond WHERE tournament_id = $1 ORDER BY name',

@@ -34,6 +34,7 @@ intake paths that feed it.
 | Team contacts and per-team links | §5.7 | Built — auto-saving |
 | Settings and pre-weekend readiness checklist | — | Built |
 | Concessions till, offline-capable | §8 | Built, tested — cash only; card hands off to Square |
+| Public schedule with live status | §5.7 | Built, tested |
 | Append-only audit trail | §9 | Built, enforced by the database |
 
 ## What is deliberately not here
@@ -95,7 +96,7 @@ It is meant for the Phase 0 debrief — it is much easier to ask a director "is
 this the board you want?" than to describe one.
 
 ```bash
-npm test          # 87 unit tests, no database needed
+npm test          # 91 unit tests, no database needed
 npm run typecheck
 npm run build
 ```
@@ -203,6 +204,7 @@ from winning a tiebreaker, so a director confirms it.
 - Read [DECISIONS.md](DECISIONS.md) and get the open questions answered.
 - Read [docs/IDEAS.md](docs/IDEAS.md) — what is missing, ordered by whether it
   would hurt to skip. The messaging spine is first for a reason.
+- To put it on Railway, see [docs/DEPLOY.md](docs/DEPLOY.md).
 
 > The 2027 parallel run is non-negotiable (spec §12). This tournament has run 29
 > years and raised over $536,000 for CHEO Cardiology. It cannot have a bad year

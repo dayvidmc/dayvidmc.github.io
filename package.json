@@ -6,27 +6,31 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "npm run migrate && next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "migrate": "tsx src/db/migrate.ts",
     "seed": "tsx src/db/seed.ts",
-    "demo": "tsx src/db/demo.ts"
+    "demo": "tsx src/db/demo.ts",
+    "start:no-migrate": "next start"
   },
   "dependencies": {
     "next": "^15.5.4",
     "pg": "^8.16.3",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "tsx": "^4.20.3"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
     "@types/pg": "^8.15.5",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
-    "tsx": "^4.20.3",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

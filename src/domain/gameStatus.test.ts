@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { buildBoard, computeGameStatus, gameClock, gamesNeedingNudge, type BoardGame } from './gameStatus';
+import {
+  buildBoard,
+  computeGameStatus,
+  gameClock,
+  gamesNeedingNudge,
+  publicGameStatus,
+  PUBLIC_STATUS_LABEL,
+  type BoardGame,
+} from './gameStatus';
 import { MAJOR_2026_RULES } from './divisionRules';
 import { localWallClock, parseClockTime, toWallClock, formatTime, formatDate } from './time';
 
@@ -96,6 +104,44 @@ describe('status precedence', () => {
       wayLate,
     );
     expect(result.status).toBe('disputed');
+  });
+});
+
+describe('what the public sees', () => {
+  const publicAt = (time: string, over: { hasApprovedScore?: boolean; cancelled?: boolean } = {}) =>
+    publicGameStatus(
+      start,
+      rules,
+      { hasApprovedScore: false, cancelled: false, ...over },
+      at(time),
+    );
+
+  it('walks upcoming → on now → awaiting score', () => {
+    expect(publicAt('10:00')).toBe('upcoming');
+    expect(publicAt('11:00')).toBe('on_now');
+    expect(publicAt('12:20')).toBe('awaiting_score'); // past 10:30 + 105 min
+  });
+
+  it('shows final once a score is approved, whatever the clock says', () => {
+    expect(publicAt('11:00', { hasApprovedScore: true })).toBe('final');
+    expect(publicAt('16:00', { hasApprovedScore: true })).toBe('final');
+  });
+
+  it('never leaks HQ vocabulary to the public', () => {
+    // The same game HQ calls "overdue" and chases the volunteer about reads as
+    // "awaiting score" here — true, and it does not start a hundred phone calls.
+    const hq = computeGameStatus(start, rules, state(), at('16:00'));
+    expect(hq.status).toBe('overdue');
+    expect(publicAt('16:00')).toBe('awaiting_score');
+
+    const labels = Object.values(PUBLIC_STATUS_LABEL).join(' ').toLowerCase();
+    expect(labels).not.toContain('overdue');
+    expect(labels).not.toContain('disputed');
+    expect(labels).not.toContain('pending');
+  });
+
+  it('shows a cancelled game as cancelled even if it has a score', () => {
+    expect(publicAt('16:00', { cancelled: true, hasApprovedScore: true })).toBe('cancelled');
   });
 });
 

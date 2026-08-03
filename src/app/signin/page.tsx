@@ -14,10 +14,13 @@ export const dynamic = 'force-dynamic';
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; staff?: string }>;
+  searchParams: Promise<{ error?: string; staff?: string; locked?: string; left?: string }>;
 }) {
   const params = await searchParams;
   const tournament = await currentTournament();
+  // Demo mode shows the PINs on screen. Only ever for a throwaway deployment —
+  // see DEPLOY.md. The banner is loud on purpose.
+  const demo = process.env.DEMO_MODE === 'true';
 
   if (!tournament) {
     return (
@@ -30,8 +33,8 @@ export default async function SignInPage({
     );
   }
 
-  const staff = await query<{ id: string; name: string; role: string }>(
-    `SELECT id, name, role FROM staff_member
+  const staff = await query<{ id: string; name: string; role: string; demo_pin: string | null }>(
+    `SELECT id, name, role, ${demo ? 'demo_pin' : 'NULL AS demo_pin'} FROM staff_member
       WHERE tournament_id = $1 AND active ORDER BY role, name`,
     [tournament.id],
   );
@@ -49,7 +52,24 @@ export default async function SignInPage({
     <>
       <h1>Sign in</h1>
 
-      {params.error && <div className="notice error">That PIN didn&apos;t match. Try again.</div>}
+      {demo && (
+        <div className="notice warn">
+          <strong>Demo.</strong> PINs are shown below and the data is throwaway. Never run a real
+          tournament with <code>DEMO_MODE</code> on.
+        </div>
+      )}
+
+      {params.locked ? (
+        <div className="notice error">
+          Too many wrong PINs. This tile is locked for {params.locked} more minute
+          {params.locked === '1' ? '' : 's'}.
+        </div>
+      ) : params.error ? (
+        <div className="notice error">
+          That PIN didn&apos;t match.
+          {params.left ? ` ${params.left} attempt${params.left === '1' ? '' : 's'} left.` : ''}
+        </div>
+      ) : null}
 
       {!selected ? (
         <>
@@ -64,6 +84,7 @@ export default async function SignInPage({
                 <a key={member.id} className="btn tile" href={`/signin?staff=${member.id}`}>
                   {member.name}
                   <small>{ROLE_LABEL[member.role] ?? member.role}</small>
+                  {member.demo_pin && <small>PIN {member.demo_pin}</small>}
                 </a>
               ))}
             </div>
@@ -73,6 +94,7 @@ export default async function SignInPage({
         <form action={signIn}>
           <p className="sub">
             {selected.name} — {ROLE_LABEL[selected.role] ?? selected.role}
+            {selected.demo_pin ? ` · demo PIN ${selected.demo_pin}` : ''}
           </p>
           <input type="hidden" name="staffId" value={selected.id} />
           <label htmlFor="pin">PIN</label>

@@ -2,16 +2,16 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { queryOne } from '@/db/client';
 import {
   canAccessHq,
+  checkPinAttempt,
   currentStaff,
   encodeSession,
   isDirector,
   newSession,
   sessionCookie,
-  verifyPin,
   type StaffRole,
 } from '@/server/auth';
 import {
@@ -54,12 +54,29 @@ export async function signIn(formData: FormData): Promise<void> {
     role: StaffRole;
     tournament_id: string;
     pin_hash: string;
-  }>('SELECT id, name, role, tournament_id, pin_hash FROM staff_member WHERE id = $1 AND active', [
-    staffId,
-  ]);
+    failed_attempts: number;
+    locked_until: Date | null;
+  }>(
+    `SELECT id, name, role, tournament_id, pin_hash, failed_attempts, locked_until
+       FROM staff_member WHERE id = $1 AND active`,
+    [staffId],
+  );
 
-  if (!staff || !(await verifyPin(pin, staff.pin_hash))) {
-    redirect('/signin?error=1');
+  // An unknown id gets the same generic answer as a wrong PIN, so the form
+  // cannot be used to enumerate which tiles are real.
+  if (!staff) redirect('/signin?error=1');
+
+  const headerBag = await headers();
+  const remoteHint =
+    headerBag.get('x-forwarded-for')?.split(',')[0]?.trim() ?? headerBag.get('x-real-ip') ?? null;
+
+  const attempt = await checkPinAttempt(staff, pin, remoteHint);
+
+  if (!attempt.ok) {
+    const params = new URLSearchParams({ staff: staffId, error: '1' });
+    if (attempt.lockedForMinutes) params.set('locked', String(attempt.lockedForMinutes));
+    else if (attempt.attemptsLeft !== undefined) params.set('left', String(attempt.attemptsLeft));
+    redirect(`/signin?${params.toString()}`);
   }
 
   const store = await cookies();

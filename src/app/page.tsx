@@ -28,6 +28,14 @@ export default async function HomePage() {
         {tournament.starts_on} to {tournament.ends_on} · 100% of proceeds to CHEO Cardiology
       </p>
 
+      <h2>Games</h2>
+      <div className="tiles" style={{ marginBottom: 24 }}>
+        <a className="btn tile" href="/schedule">
+          Schedule
+          <small>who&apos;s playing, and what&apos;s on now</small>
+        </a>
+      </div>
+
       <h2>Standings</h2>
       {divisions.length === 0 ? (
         <div className="empty">

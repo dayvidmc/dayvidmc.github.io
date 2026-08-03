@@ -193,9 +193,13 @@ async function main() {
       ]);
     }
     for (const [name, role, pin] of STAFF) {
+      // demo_pin is shown on the sign-in screen when DEMO_MODE=true, so someone
+      // trying this for the first time does not need a PIN read out to them.
+      // Real setup never writes this column.
       await client.query(
-        'INSERT INTO staff_member (tournament_id, name, role, pin_hash) VALUES ($1, $2, $3, $4)',
-        [id, name, role, await hashPin(pin)],
+        `INSERT INTO staff_member (tournament_id, name, role, pin_hash, demo_pin)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [id, name, role, await hashPin(pin), pin],
       );
     }
 
