@@ -35,6 +35,7 @@ intake paths that feed it.
 | Settings and pre-weekend readiness checklist | — | Built |
 | Concessions till, offline-capable | §8 | Built, tested — cash only; card hands off to Square |
 | Public schedule with live status | §5.7 | Built, tested |
+| Playoff bracket — the map, drawn before it is played | §5.6 | Built, tested — structure must still be seeded by hand |
 | Append-only audit trail | §9 | Built, enforced by the database |
 
 ## What is deliberately not here
@@ -42,8 +43,12 @@ intake paths that feed it.
 Per the spec's own build order, and because these need answers this repository
 cannot supply:
 
-- **Brackets (§5.6)** — playoff format comes from the published schedule, and
-  §13 Q4 (how the director actually builds it) is unanswered.
+- **A way to *build* a bracket from a screen.** The map, the seeding, the
+  propagation and the director's per-slot override are all built and tested.
+  Creating the structure is not: `bracket_slot` rows are written by the demo
+  seed, and a director with a real playoff schedule has no screen for it. §13
+  Q4 — how he builds it today — decides which shape that screen takes. See
+  `docs/IDEAS.md` §3.
 - **Sending any text at all.** Approving a score and moving a game both write
   rows to `notification`, and **nothing drains that queue** — there is no
   Twilio sender. Inbound works; outbound does not. The settings screen says so
@@ -204,6 +209,9 @@ from winning a tiebreaker, so a director confirms it.
 - Read [DECISIONS.md](DECISIONS.md) and get the open questions answered.
 - Read [docs/IDEAS.md](docs/IDEAS.md) — what is missing, ordered by whether it
   would hurt to skip. The messaging spine is first for a reason.
+- Read [docs/BRAINSTORM.md](docs/BRAINSTORM.md) — the same territory approached
+  from the other end: what each person's weekend actually needs. Written to be
+  argued with at the debrief. It is where the missing umpire came from.
 - To put it on Railway, see [docs/DEPLOY.md](docs/DEPLOY.md).
 
 > The 2027 parallel run is non-negotiable (spec §12). This tournament has run 29
