@@ -39,6 +39,11 @@ export type EventKind =
   | 'auction.bid_voided'
   | 'auction.paid'
   | 'auction.winners_notified'
+  | 'entry.submitted'
+  | 'entry.decided'
+  | 'entry.payment_recorded'
+  | 'entry.settings_changed'
+  | 'entry.fees_changed'
   | 'staff.signed_in';
 
 export interface EventInput {

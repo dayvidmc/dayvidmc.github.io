@@ -401,6 +401,73 @@ winner with no readable number gets found by voice, which is what would have
 happened if the column had been left blank — and the count of those winners is
 shown, so somebody knows how many to go and find.
 
+### 2.23 A card number never reaches this server
+
+**Decision.** The payment provider hosts the page that takes the card. Our
+interface has two calls — start a checkout, verify a webhook — and no method
+that accepts a card number. There must never be one.
+
+**Why.** PCI DSS scope. A tournament run by volunteers can attest to SAQ-A,
+which is the bracket you are in when the card is entered on the processor's own
+page and your server only ever sees a token. The moment a card field is posted
+to this application, the committee is signing a different form about a system
+none of them maintain.
+
+The corollary is that "our own payment taking" means *our own merchant account
+with somebody else's card form*. The money is the tournament's; the card page
+is not, and should not be.
+
+**Confirm with:** the treasurer, when opening the merchant account.
+
+### 2.24 The window is enforced in the write, not on the screen
+
+**Decision.** Before the opening minute the public page has no form on it —
+not a disabled one, none — and `createEntry` re-reads the opening time from the
+database inside the same transaction that inserts.
+
+**Why.** With one hard opening time announced to ninety coaches, the fairness of
+every place given out rests on nobody being able to submit early. A disabled
+control is a suggestion; the server refusing is the door. Both are needed: the
+missing form is the polite half, the transaction is the real one.
+
+**Related:** the same reasoning puts the queue in `submitted_at` order and
+nothing else, and gives the HQ board no way to sort by anything. A column header
+that let somebody order the queue by "paid" would quietly turn an opening time
+into an auction.
+
+### 2.25 A payment row means money moved
+
+**Decision.** `entry_payment` has no status column and is append-only. A started
+card checkout lives at the provider until it succeeds; the webhook writes the
+row. A coach saying they have sent an e-transfer is a claim on the entry, not a
+payment.
+
+**Why.** A row that can go from `pending` to `paid` has to be reconciled against
+the provider forever, and a stale pending row is indistinguishable from a real
+one at the moment somebody is deciding whether a team is in. Keeping the claim
+separate also means the treasurer's to-do list — "somebody says they sent this,
+find it" — is a real list rather than an inference.
+
+A claim is settled by a payment recorded *after* it, not by the entry being paid
+at all: the same coach transfers the deposit in January and the balance in
+March, and treating the second claim as handled because the first was is how a
+balance goes missing.
+
+### 2.26 Accepting creates the team; un-accepting does not delete it
+
+**Decision.** Accepting an entry creates the `team` row in the same transaction
+and stamps the balance deadline. Moving an accepted entry to any other status
+breaks the link and leaves the team.
+
+**Why.** By the time somebody changes their mind the team may be on a schedule,
+in a pool, and in a bracket slot. Deleting it would leave games pointing at
+nothing. The director is told the link is broken and can deal with the schedule,
+which is a conversation, not a cascade.
+
+The deadline is stamped rather than recomputed for the same reason §2.14 pins a
+bracket slot: the date the coach was told is the date on the record, even if
+somebody changes the setting in March.
+
 ---
 
 ## 3. Deliberately not built
@@ -411,7 +478,9 @@ shown, so somebody knows how many to go and find.
 | Charitable receipting | §8A.4 — entry fees are generally not receiptable; who issues the receipt is unresolved. The schema separates payment types from day one so this is not painful later, but no receipting logic is written. |
 | Scheduling engine | §5.1 — explicitly out of scope for v1. |
 | Bracket generation | §5.6 — depends on §13 Q4 (how the schedule is actually built). |
-| Player rosters, stats, the public website | §2 — RAMP and WordPress keep these. |
+| Player rosters, stats, the public website | §2 — RAMP and WordPress keep these. Entry-taking is now ours; the rest of what RAMP does is not, and should not be. |
+| A card form of our own | §2.23 — the provider's hosted page takes the card. This is permanent, not an interim step. |
+| Charging a card from HQ | A card payment only ever arrives from the provider with its own reference. A hand-typed one would create money in this system that does not exist in the merchant account. |
 
 ---
 
@@ -443,12 +512,35 @@ shown, so somebody knows how many to go and find.
 Spec §12 poses it: **ship registration for 2027, or keep it where it is and ship
 it for 2028?**
 
-Everything in this repository can run in parallel with the current process — if
-it fails, nobody notices. Registration cannot. There is no shadow mode for
+Everything else in this repository can run in parallel with the current process
+— if it fails, nobody notices. Entry-taking cannot. There is no shadow mode for
 taking money.
 
-The spec's own advice, on the 30th anniversary: take the second option. If the
-committee agrees, the 2027 game-ops modules need coach contact data imported
-from the existing system rather than collected natively. The `team` table has
-`coach_phone`, `coach_email` and `alternate_contact` columns ready for exactly
-that import, and team communication (§5.7) does not work without them.
+The spec's advice, on the 30th anniversary, was the second option. That was
+written before entry-taking existed; it now does, and the shape of the risk has
+changed enough to be worth restating rather than assuming.
+
+**What is now true.** The two rails that cost nothing — e-transfer and cheque —
+need no external account and no card processing at all. In that configuration
+the software is doing what a spreadsheet and an inbox do today: taking an
+application, holding a queue, and recording money a treasurer confirms by hand.
+The failure mode is a bad afternoon, not a lost fee, because no money passes
+through anything this code controls.
+
+**What is still true.** The opening minute is unforgiving. Ninety coaches
+refreshing one page at one time, and if it is down or wrong, the tournament
+spends the evening on the phone and the fairness of the queue is gone. Nothing
+tests that except doing it.
+
+**So the honest recommendation is a middle one the spec did not offer.** Take
+entries here for 2027 with e-transfer and cheque only, keep the existing process
+as the stated fallback in the same announcement, and leave cards for 2028 once a
+year's figures exist to show the committee what the processing fees would have
+cost the ward. If instead the committee wants to wait entirely, the 2027 game-ops
+modules need coach contact data imported from the existing system rather than
+collected natively — the `team` table has `coach_phone`, `coach_email` and
+`alternate_contact` ready for exactly that import, and team communication (§5.7)
+does not work without them.
+
+**Confirm with:** the committee. This is a risk appetite question, not a
+technical one, and it is the only decision in this document that has a deadline.

@@ -65,6 +65,7 @@ export default async function MoneyPage({
         <a className="btn" href="/hq/money/cash" style={{ flex: 1 }}>Cash</a>
         <a className="btn" href="/hq/money/gifts" style={{ flex: 1 }}>Gifts in kind</a>
         <a className="btn" href="/hq/auction" style={{ flex: 1 }}>Auction</a>
+        <a className="btn" href="/hq/entries" style={{ flex: 1 }}>Entries</a>
       </div>
 
       {params.error === 'director_only' && (
@@ -102,6 +103,14 @@ export default async function MoneyPage({
         <div className="notice error">
           <strong>The auction may be counted twice.</strong> There are real lots recorded{' '}
           <a href="/hq/auction">on the auction screen</a> and a hand-typed auction figure below.
+          Both are in the total. Remove whichever is the duplicate.
+        </div>
+      )}
+
+      {summary.entriesCountedTwice && (
+        <div className="notice error">
+          <strong>Entry fees may be counted twice.</strong> There are real entries recorded{' '}
+          <a href="/hq/entries">on the entries screen</a> and a hand-typed team-entry figure below.
           Both are in the total. Remove whichever is the duplicate.
         </div>
       )}
@@ -183,9 +192,10 @@ export default async function MoneyPage({
 
       <h2>Recorded by hand</h2>
       <p className="sub">
-        The auction now has <a href="/hq/auction">its own screen</a> and reports itself. The raffle
-        does not yet, so it is typed in here — a total missing it is worse than useless, because
-        somebody will read it out on the Sunday.
+        The auction has <a href="/hq/auction">its own screen</a> and team entries have{' '}
+        <a href="/hq/entries">theirs</a>; both report themselves. The raffle does not yet, so it is
+        typed in here — a total missing it is worse than useless, because somebody will read it out
+        on the Sunday.
       </p>
 
       {director && (

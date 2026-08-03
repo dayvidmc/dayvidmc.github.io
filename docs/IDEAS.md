@@ -204,11 +204,26 @@ no code at all.
 
 ## 10. The other modules
 
-Per the spec's build order: registration and payments first (§8A, hard external
-deadline), then volunteers (§6, needed for spring recruitment and the source of
-diamond shift data). The auction (§7) is built — paper sheets, a fast close and
-the payment queue — so what is left of Module C is sponsor and donor
-relationships, which is §13 Q7's question about who owns them.
+The auction (§7) is built, and so are team entries with payment (§8A/E) — a
+timed opening, a queue, caps and waitlists, deposits and balances across
+e-transfer, cheque and card.
+
+What is left:
+
+- **Volunteers (§6)**, needed for spring recruitment and the source of diamond
+  shift data. This is now the largest unbuilt module.
+- **Sponsor and donor relationships** — the rest of Module C, waiting on §13 Q7
+  about who owns them.
+- **An email when an entry lands and when it is accepted.** The coach currently
+  has to keep their own reference. The text spine can carry this and nothing
+  else needs building for it.
+- **A merchant account**, if the committee wants cards. Everything on this side
+  is written and dry-runs end to end; see `docs/DEPLOY.md`.
+
+The §12 decision — ship entry-taking for 2027 or 2028 — is now a question about
+confidence rather than about code. Both rails that cost nothing (e-transfer,
+cheque) work with no external account at all, so a parallel run in which the
+tournament takes entries both ways is possible in a way it was not before.
 
 The one decision that cannot wait is §12's: **ship registration for 2027, or
 keep it where it is and ship it for 2028?** If 2028, the game-ops modules need

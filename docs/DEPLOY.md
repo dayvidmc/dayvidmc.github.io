@@ -102,6 +102,47 @@ states you are in: nothing can be sent, dry run, or sending for real. If the
 oldest message has been waiting more than fifteen minutes, nothing is calling
 the drain.
 
+### Taking entry fees by card
+
+**None of this is needed to take entries.** e-Transfer and cheque work with
+nothing configured at all, cost the tournament nothing, and are what most
+Ontario minor baseball tournaments already use. Set them up in HQ → Entries →
+Fees and dates and you are done. Card payments are a convenience that costs
+roughly 2.9% + 30¢ per entry — about $20 on a $700 fee, or $1,800 across ninety
+teams, all of it money that would otherwise reach CHEO.
+
+If the committee wants cards anyway:
+
+**1. A Stripe account in the tournament's name.** The money lands there and is
+paid out to the tournament's own bank account. Nothing about this repository
+holds the funds.
+
+**2. Three variables.** Same rule as texting — credentials alone are not
+consent, so the provider has to be named explicitly.
+
+| Variable | Value |
+|---|---|
+| `PAYMENT_PROVIDER` | `stripe` |
+| `STRIPE_SECRET_KEY` | `sk_live_…` from Stripe → Developers → API keys |
+| `STRIPE_WEBHOOK_SECRET` | `whsec_…`, from the webhook you add next |
+
+Without `STRIPE_WEBHOOK_SECRET` the app refuses to take card payments at all,
+rather than accepting webhooks it cannot verify. That is deliberate: an
+unverified webhook is a way for anyone to mark any team as paid.
+
+**3. A webhook in Stripe.** Developers → Webhooks → Add endpoint, pointed at
+`https://<your-domain>/api/payments/webhook`, subscribed to
+`checkout.session.completed`. Stripe shows you the signing secret once — that
+is the value above.
+
+**4. Check it.** HQ → Entries → Fees and dates says plainly whether card
+payments are on, off, or configured-but-broken, and why. Take one real entry
+with a real card before announcing the opening time.
+
+The card is entered on Stripe's own page and never touches this server, which
+is what keeps the tournament in the simplest PCI bracket. See `DECISIONS.md`
+§2.23 — that is not an implementation detail to optimise away later.
+
 ## 6. Give it a URL
 
 **Settings → Networking → Generate Domain.** Railway injects `PORT` and
@@ -246,6 +287,24 @@ than leaking a working PIN — but the flag should still be off.
   item 1 in `docs/IDEAS.md`.
 - **Turn on Railway's Postgres backups.** Losing Saturday's scores loses the
   tournament.
+
+### Before entries open
+
+The opening time is announced to ninety coaches and cannot be quietly moved
+afterwards, so everything below has to be right the first time.
+
+- **Set the fees, the deposits and the caps** per division at HQ → Entries →
+  Fees and dates. A division left at zero takes free entries.
+- **Set the e-transfer address and the cheque payee.** With neither set, and no
+  card provider, a coach's page has no way to pay on it at all — it says so, but
+  that is not a state to open in.
+- **Set the opening time last**, once the rest is right. Before it there is no
+  form on the public page, which is the intended state while you set up.
+- **Take one entry yourself** end to end: enter a team, pay the deposit, accept
+  it in HQ, pay the balance, and check it appears on HQ → Money raised.
+- **`DEMO_MODE` off.** With it on, the coach's page offers a card button that
+  records a payment without taking one. That is right for showing a committee
+  and catastrophic in front of a real coach.
 
 ## Cost
 

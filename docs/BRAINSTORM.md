@@ -410,6 +410,35 @@ Still on paper on purpose: bidding itself. §7.2 recommends sheets plus a QR
 code for year one, and this is the plumbing that would make the QR code cheap
 later.
 
+### ✓ Entries, taken by the tournament itself — built
+
+RAMP registers *an association's own members for a season*: a family account, a
+participant, a package, a payment. A tournament entry is a different shape —
+another association's coach, one team, one weekend, one fee — and that mismatch
+is why entries still ran by email.
+
+`/enter` is the front door. Before the opening minute it has a countdown and no
+form on it at all, and the server refuses an entry regardless, because with one
+hard opening time the fairness of every place rests on nobody submitting early.
+At the minute, the form appears: division, team, a contact, an email, and a box
+for the thing no form anticipated. No account, because "create an account" is
+the single biggest drop-off in a tournament entry flow and a coach from Nepean
+should not need one in Kanata's system.
+
+They get a reference — `TK-XXXX-XXXX`, in an alphabet with no I, O, 0, 1, S or 5
+because it gets read down a phone — and three ways to pay a deposit. e-Transfer
+first, and said plainly to be the one that gives most to the ward. Cheque.
+Card, if a merchant account is ever opened, on the provider's own page.
+
+`/hq/entries` is the queue, in arrival order, and there is no way to sort it any
+other way. That is the point. The director accepts, which creates the team that
+plays games and starts the balance clock; caps and waitlists are per division,
+and a full division still takes entries because teams drop out every year.
+
+What is left of this: an email when an entry lands, and one when it is accepted.
+Right now the coach has to keep the reference themselves, which is a real gap —
+the text spine can carry it, and should.
+
 ### ▲ A donate button
 
 **100% of proceeds go to CHEO Cardiology.** That is the entire point of the

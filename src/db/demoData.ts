@@ -412,6 +412,7 @@ export async function seedDemo(): Promise<DemoResult> {
   await seedConcessionSales(tournamentId, base);
   await seedFundraising(tournamentId);
   await seedAuction(tournamentId);
+  await seedEntries(tournamentId);
 
   const [division] = await query<{ id: string }>(
     "SELECT id FROM division WHERE name = 'Major A'",
@@ -702,6 +703,140 @@ async function seedAuction(tournamentId: string): Promise<void> {
     `UPDATE auction_item SET paid_at = now(), paid_by = 'Auction Lead', payment_method = 'cash'
       WHERE tournament_id = $1 AND lot_number IN (1, 3)`,
     [tournamentId],
+  );
+}
+
+/**
+ * Entries, caught the morning after they opened.
+ *
+ * The state worth showing is the awkward one. Entries are open, one division
+ * is over its cap, several teams are waiting on a decision, one has paid a
+ * deposit by card and one insists they sent an e-transfer nobody can find. A
+ * demo where every team has paid and every division has room shows nothing
+ * about what these screens are for.
+ */
+async function seedEntries(tournamentId: string): Promise<void> {
+  // Open yesterday evening, closing in a month. So the public page shows the
+  // form rather than a countdown, which is the more interesting of the two.
+  await query(
+    `UPDATE tournament
+        SET entries_open_at = (current_date - 1) + time '19:00',
+            entries_close_at = (current_date + 30) + time '23:59',
+            etransfer_address = 'treasurer@kanatabaseball.com',
+            cheque_payable_to = 'Kanata Baseball Association',
+            cheque_mail_to = 'PO Box 1247, Kanata ON K2K 0B1',
+            balance_due_days = 14
+      WHERE id = $1`,
+    [tournamentId],
+  );
+
+  // Real fees for a three-day tournament, and a cap on the division everybody
+  // wants.
+  await query(
+    `UPDATE division SET entry_fee_cents = 70000, deposit_cents = 20000,
+                         team_cap = CASE WHEN name = 'Major A' THEN 4 ELSE 8 END
+      WHERE tournament_id = $1`,
+    [tournamentId],
+  );
+
+  const divisions = await query<{ id: string; name: string }>(
+    'SELECT id, name FROM division WHERE tournament_id = $1 ORDER BY sort_order, name',
+    [tournamentId],
+  );
+  const divisionId = (name: string) =>
+    divisions.find((division) => division.name === name)?.id ?? divisions[0]!.id;
+
+  // The accepted ones name teams that are already in the tournament, and are
+  // linked to them, because that is exactly what accepting an entry does.
+  const applications: [
+    reference: string,
+    team: string,
+    association: string,
+    division: string,
+    coach: string,
+    email: string,
+    phone: string | null,
+    minutesAfterOpen: number,
+    status: string,
+    notes: string | null,
+  ][] = [
+    ['TK-3F7K-9QB2', 'Gloucester Major A', 'Gloucester Baseball', 'Major A', 'Dana Whitfield',
+      'dana.whitfield@example.com', '+16135550101', 1, 'accepted', null],
+    ['TK-8HJP-4RT6', 'Orleans Major A', 'Orleans Minor Baseball', 'Major A', 'Marcus Bell',
+      'marcus.bell@example.com', '+16135550102', 3, 'accepted',
+      'We cannot play before noon on the Friday — half the team is at a school trip.'],
+    ['TK-2WQD-7NCV', 'Barrhaven Bandits', 'Barrhaven Baseball', 'Major A', 'Priya Raman',
+      'priya.raman@example.com', '+16135550103', 4, 'submitted', null],
+    ['TK-6ZXK-3MPT', 'West Carleton Wolves', 'West Carleton Baseball', 'Major A', 'Tom Reilly',
+      'tom.reilly@example.com', null, 9, 'submitted',
+      'Played in 2019 as West Carleton Red. Same club, new name.'],
+    ['TK-9BRT-2KHW', 'Almonte Thunder', 'Mississippi Mills Baseball', 'Major A', 'Jen Okafor',
+      'jen.okafor@example.com', '+16135550105', 22, 'submitted', null],
+    ['TK-4NMC-8VQJ', 'Manotick Minor', 'Rideau Baseball', 'Minor', 'Ray Deschamps',
+      'ray.deschamps@example.com', '+16135550106', 6, 'accepted', null],
+    ['TK-7TQV-5DKZ', 'Cumberland Colts', 'Cumberland Baseball', 'Minor', 'Ellen Novak',
+      'ellen.novak@example.com', '+16135550107', 40, 'waitlisted', null],
+  ];
+
+  const created = new Map<string, string>();
+
+  for (const [reference, team, association, division, coach, email, phone, minutes, status, notes] of applications) {
+    const [existing] = await query<{ id: string }>(
+      'SELECT id FROM team WHERE tournament_id = $1 AND lower(name) = lower($2)',
+      [tournamentId, team],
+    );
+
+    const [row] = await query<{ id: string }>(
+      `INSERT INTO entry (tournament_id, division_id, team_name, association, coach_name,
+                          coach_email, coach_phone, notes, reference, submitted_at, status,
+                          decided_at, decided_by, balance_due_on, team_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
+               (current_date - 1) + time '19:00' + ($10 || ' minutes')::interval,
+               $11,
+               CASE WHEN $11 <> 'submitted' THEN now() END,
+               CASE WHEN $11 <> 'submitted' THEN 'Tournament Director' END,
+               CASE WHEN $11 = 'accepted' THEN current_date + 13 END,
+               CASE WHEN $11 = 'accepted' THEN $12::uuid END)
+       RETURNING id`,
+      [tournamentId, divisionId(division), team, association, coach, email, phone, notes,
+        reference, String(minutes), status, existing?.id ?? null],
+    );
+    created.set(reference, row!.id);
+  }
+
+  // What has actually arrived. Deliberately uneven: a card deposit, an
+  // e-transfer, one team paid in full, and two accepted teams that have not.
+  const payments: [reference: string, kind: string, amount: number, method: string, ref: string][] = [
+    ['TK-3F7K-9QB2', 'deposit', 20_000, 'card', 'pi_demo_3F7K'],
+    ['TK-3F7K-9QB2', 'balance', 50_000, 'etransfer', 'etr-88213'],
+    ['TK-8HJP-4RT6', 'deposit', 20_000, 'etransfer', 'etr-88240'],
+    ['TK-2WQD-7NCV', 'deposit', 20_000, 'cheque', 'chq-4471'],
+    ['TK-4NMC-8VQJ', 'deposit', 20_000, 'card', 'pi_demo_4NMC'],
+  ];
+
+  for (const [reference, kind, amount, method, externalRef] of payments) {
+    await query(
+      `INSERT INTO entry_payment (entry_id, kind, amount_cents, method, external_ref, recorded_by)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [created.get(reference), kind, amount, method,
+        externalRef, method === 'card' ? 'stripe webhook' : 'Tournament Director'],
+    );
+  }
+
+  // One team says they sent an e-transfer that nobody has matched. This is the
+  // single most common thing that happens, and the chase list exists for it.
+  await query(
+    `UPDATE entry SET etransfer_claimed_at = now() - interval '2 days',
+                      etransfer_claimed_ref = 'e-transfer sent Tuesday'
+      WHERE id = $1`,
+    [created.get('TK-6ZXK-3MPT')],
+  );
+
+  // And one accepted team is past its balance deadline, which is the state the
+  // whole chase list is built around: a place held by money that never came.
+  await query(
+    `UPDATE entry SET balance_due_on = current_date - 5 WHERE id = $1`,
+    [created.get('TK-4NMC-8VQJ')],
   );
 }
 

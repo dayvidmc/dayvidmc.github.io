@@ -1,6 +1,7 @@
 import { query } from '@/db/client';
 import { recordEvent } from './events';
 import { auctionRaisedCents } from './auction';
+import { entriesTakenCents } from './registration';
 import {
   cashPosition,
   concessionsTotal,
@@ -80,14 +81,17 @@ export interface RaisedNow extends RaisedSummary {
    * worst possible failure for this screen.
    */
   auctionCountedTwice: boolean;
+  /** A hand-typed entry-fee figure sitting alongside real entries. */
+  entriesCountedTwice: boolean;
 }
 
 export async function raisedSoFar(tournamentId: string): Promise<RaisedNow> {
-  const [lines, entries, refunds, auctionCents] = await Promise.all([
+  const [lines, entries, refunds, auctionCents, entryCents] = await Promise.all([
     soldLines(tournamentId),
     revenueEntries(tournamentId),
     concessionRefunds(tournamentId),
     auctionRaisedCents(tournamentId),
+    entriesTakenCents(tournamentId),
   ]);
 
   const manual = entries.map((row) => ({
@@ -103,12 +107,22 @@ export async function raisedSoFar(tournamentId: string): Promise<RaisedNow> {
     manual.push({ stream: 'auction', amountCents: auctionCents, costCents: 0 });
   }
 
+  // Entry fees, same arrangement: the entries module owns the figure once
+  // entries exist, and a hand-typed one alongside it is flagged rather than
+  // dropped.
+  if (entryCents !== 0) {
+    manual.push({ stream: 'registration', amountCents: entryCents, costCents: 0 });
+  }
+
   const summary = summariseRaised([concessionsTotal(lines, refunds), ...manualTotals(manual)]);
 
   return {
     ...summary,
     auctionCountedTwice:
       auctionCents > 0 && entries.some((row) => row.stream === 'auction' && row.amount_cents > 0),
+    entriesCountedTwice:
+      entryCents !== 0 &&
+      entries.some((row) => row.stream === 'registration' && row.amount_cents > 0),
   };
 }
 
