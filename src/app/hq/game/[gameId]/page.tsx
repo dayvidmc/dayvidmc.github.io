@@ -2,6 +2,10 @@ import { notFound, redirect } from 'next/navigation';
 import { canAccessHq, currentStaff } from '@/server/auth';
 import { currentTournament, gameDetail, listDiamonds } from '@/server/repo';
 import { gameHistory } from '@/server/events';
+import { crewForGame } from '@/server/umpires';
+import { POSITION_LABEL } from '@/domain/umpires';
+import { formatPhone } from '@/domain/contact';
+import { markNoShowAction } from '../../umpires/actions';
 import { computeGameStatus, STATUS_LABEL, STATUS_MARKER } from '@/domain/gameStatus';
 import { parseDivisionRules } from '@/domain/divisionRules';
 import { queryOne } from '@/db/client';
@@ -40,10 +44,11 @@ export default async function GamePage({ params }: { params: Promise<{ gameId: s
   const game = await gameDetail(tournament.id, gameId);
   if (!game) notFound();
 
-  const [diamonds, history, divisionRow] = await Promise.all([
+  const [diamonds, history, divisionRow, crew] = await Promise.all([
     listDiamonds(tournament.id),
     gameHistory(tournament.id, gameId),
     queryOne<{ rules: unknown }>('SELECT rules FROM division WHERE id = $1', [game.division_id]),
+    crewForGame(gameId),
   ]);
 
   const { rules } = parseDivisionRules(divisionRow?.rules);
@@ -177,6 +182,51 @@ export default async function GamePage({ params }: { params: Promise<{ gameId: s
           </button>
         </form>
       )}
+
+      {/* --- Who is on it ---------------------------------------------------- */}
+
+      <h2>Crew</h2>
+      <div className="card">
+        {crew.length === 0 ? (
+          <p className="sub" style={{ margin: 0 }}>
+            Nobody assigned. <a href={`/hq/umpires/crews?date=${formatDate(game.scheduled_start)}`}>
+              Build the crew for this day</a>.
+          </p>
+        ) : (
+          crew.map((member) => (
+            <div key={member.position} className="row-item" style={{ alignItems: 'flex-start' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600 }}>
+                  {member.name}
+                  {member.no_show && ' — did not turn up'}
+                </div>
+                <div className="meta">
+                  {POSITION_LABEL[member.position]}
+                  {member.phone ? ` · ${formatPhone(member.phone)}` : ' · no mobile'}
+                </div>
+              </div>
+
+              {/* Recorded here rather than on the crew screen because this is
+                  where somebody is standing when they find out. */}
+              <form action={markNoShowAction}>
+                <input type="hidden" name="gameId" value={game.id} />
+                <input type="hidden" name="position" value={member.position} />
+                <input type="hidden" name="noShow" value={member.no_show ? 'false' : 'true'} />
+                <input type="hidden" name="back" value={`/hq/game/${game.id}`} />
+                <button type="submit" style={{ minHeight: 40, padding: '8px 12px', fontSize: 14 }}>
+                  {member.no_show ? 'They were here' : 'No-show'}
+                </button>
+              </form>
+            </div>
+          ))
+        )}
+        {crew.length > 0 && (
+          <p className="hint">
+            A no-show is not the same as unassigning: it keeps the record that they were expected,
+            and takes the game off what they are owed.
+          </p>
+        )}
+      </div>
 
       {/* --- When and where -------------------------------------------------- */}
 

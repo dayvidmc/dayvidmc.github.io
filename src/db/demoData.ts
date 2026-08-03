@@ -1,6 +1,6 @@
 import { query, transaction } from './client';
 import { MAJOR_2026_RULES } from '@/domain/divisionRules';
-import { hashPin } from '@/server/auth';
+import { hashPin, newAccessToken } from '@/server/auth';
 import { importSchedule } from '@/domain/schedule/import';
 import { applySchedule } from '@/server/scheduleStore';
 import { approveScore, parkUnmatchedMessage, recordProposal, setDispute } from '@/server/repo';
@@ -386,6 +386,9 @@ export async function seedDemo(): Promise<DemoResult> {
   // renders as promises: "1st in Pool 1", "Winner of Semifinal 1".
   await seedBracket(tournamentId, base);
 
+  // --- The crew -------------------------------------------------------------
+  await seedUmpires(tournamentId);
+
   const [division] = await query<{ id: string }>(
     "SELECT id FROM division WHERE name = 'Major A'",
   );
@@ -402,6 +405,83 @@ export async function seedDemo(): Promise<DemoResult> {
     standingsPath: division ? `/standings/${division.id}` : null,
     teamPath: team ? `/team/${team.access_token}` : null,
   };
+}
+
+/**
+ * Umpires, with a crew on every game that has happened or is happening.
+ *
+ * Deliberately includes one deliberate mess: an umpire double-booked across two
+ * diamonds at the same time. The crew screen is only worth anything if it
+ * catches that, and a demo where everything is tidy proves nothing.
+ */
+async function seedUmpires(tournamentId: string): Promise<void> {
+  const crew: [string, string, number][] = [
+    // name, level, rate in dollars
+    ['Dana Reyes', 'Level 4', 45],
+    ['Sam Cote', 'Level 3', 40],
+    ['Priya Raman', 'Level 3', 40],
+    ['Marcus Bell', 'Level 2', 35],
+    ['Jo Tremblay', 'Level 2', 35],
+  ];
+
+  const used = new Set<string>();
+  const ids: string[] = [];
+
+  for (const [name, level, rate] of crew) {
+    const [row] = await query<{ id: string }>(
+      `INSERT INTO umpire (tournament_id, name, level, rate_cents, phone, access_token)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [tournamentId, name, level, rate * 100, fakePhone(name, used), newAccessToken()],
+    );
+    ids.push(row!.id);
+  }
+
+  // Two umpires per game, walked through the roster so the days look worked
+  // rather than generated.
+  const games = await query<{ id: string }>(
+    `SELECT id FROM game WHERE tournament_id = $1 AND cancelled_at IS NULL
+      ORDER BY scheduled_start, external_game_id`,
+    [tournamentId],
+  );
+
+  for (const [index, game] of games.entries()) {
+    const plate = ids[index % ids.length]!;
+    const base = ids[(index + 2) % ids.length]!;
+    await query(
+      `INSERT INTO game_umpire (game_id, umpire_id, position, assigned_by)
+       VALUES ($1,$2,'plate','Volunteer Coordinator'), ($1,$3,'base','Volunteer Coordinator')
+       ON CONFLICT DO NOTHING`,
+      [game.id, plate, base],
+    );
+  }
+
+  // Now break it on purpose. Two games start at the same time; put the first
+  // one's plate umpire on the second as well, so the crew screen has a real
+  // double-booking to catch. A demo where everything is tidy proves nothing.
+  const [concurrent] = await query<{ first_id: string; second_id: string }>(
+    `SELECT a.id AS first_id, b.id AS second_id
+       FROM game a
+       JOIN game b ON b.scheduled_start = a.scheduled_start AND b.id > a.id
+      WHERE a.tournament_id = $1 AND a.cancelled_at IS NULL AND b.cancelled_at IS NULL
+      ORDER BY a.scheduled_start
+      LIMIT 1`,
+    [tournamentId],
+  );
+
+  if (concurrent) {
+    const [plate] = await query<{ umpire_id: string }>(
+      "SELECT umpire_id FROM game_umpire WHERE game_id = $1 AND position = 'plate'",
+      [concurrent.first_id],
+    );
+    if (plate) {
+      await query(
+        `INSERT INTO game_umpire (game_id, umpire_id, position, assigned_by)
+         VALUES ($1, $2, 'base3', 'Volunteer Coordinator')
+         ON CONFLICT DO NOTHING`,
+        [concurrent.second_id, plate.umpire_id],
+      );
+    }
+  }
 }
 
 /**

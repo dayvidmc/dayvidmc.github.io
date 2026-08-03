@@ -207,7 +207,7 @@ export async function pendingQueue(tournamentId: string): Promise<QueuedReport[]
 export interface ProposalInput {
   tournamentId: string;
   gameId: string;
-  source: 'diamond_volunteer' | 'coach_sms' | 'hq_phone' | 'director' | 'import';
+  source: 'diamond_volunteer' | 'coach_sms' | 'hq_phone' | 'umpire' | 'director' | 'import';
   reportedBy: string | null;
   rawText: string | null;
   homeRuns: number | null;

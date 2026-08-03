@@ -36,6 +36,7 @@ intake paths that feed it.
 | Concessions till, offline-capable | §8 | Built, tested — cash only; card hands off to Square |
 | Public schedule with live status | §5.7 | Built, tested |
 | Playoff bracket — the map, drawn before it is played | §5.6 | Built, tested — structure must still be seeded by hand |
+| Umpires: roster, crews with conflict checks, their own link, honoraria | — | Built, tested — not in the spec at all; see `docs/BRAINSTORM.md` §4 |
 | Append-only audit trail | §9 | Built, enforced by the database |
 
 ## What is deliberately not here
@@ -101,7 +102,7 @@ It is meant for the Phase 0 debrief — it is much easier to ask a director "is
 this the board you want?" than to describe one.
 
 ```bash
-npm test          # 91 unit tests, no database needed
+npm test          # 129 unit tests, no database needed
 npm run typecheck
 npm run build
 ```
@@ -125,6 +126,9 @@ src/
     tiebreak.ts        the tiebreaker engine and its reasoning output
     gameStatus.ts      the overdue clock and HQ board ordering
     scoreParsing.ts    deterministic score-text reader
+    bracket.ts         playoff slots that resolve to a team, a seed or a winner
+    umpires.ts         crew conflicts, workload, and what each umpire is owed
+    contact.ts         phone and email normalising, shared by every editor
     time.ts            tournament-local wall clock handling
     schedule/          CSV reader and schedule import validation
   db/

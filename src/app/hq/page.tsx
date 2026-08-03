@@ -133,10 +133,13 @@ export default async function HqBoardPage({
         <a className="btn" href="/hq/import" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
           Schedule
         </a>
-        <a className="btn" href="/hq/brackets" style={{ flex: '1 1 45%', minHeight: 44, fontSize: 15 }}>
+        <a className="btn" href="/hq/brackets" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
           Brackets
         </a>
-        <a className="btn" href="/hq/concessions" style={{ flex: '1 1 45%', minHeight: 44, fontSize: 15 }}>
+        <a className="btn" href="/hq/umpires" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
+          Umpires
+        </a>
+        <a className="btn" href="/hq/concessions" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
           Concessions
         </a>
         <a className="btn" href="/hq/settings" style={{ flex: '1 1 100%', minHeight: 44, fontSize: 15 }}>

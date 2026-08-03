@@ -12,6 +12,7 @@ const SOURCE_LABEL: Record<string, string> = {
   coach_sms: 'Coach (text)',
   unknown_sms: 'Text, matched by HQ',
   hq_phone: 'Phoned in to HQ',
+  umpire: 'Umpire',
   director: 'Director',
   import: 'Import',
 };

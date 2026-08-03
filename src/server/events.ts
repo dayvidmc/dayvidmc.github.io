@@ -23,6 +23,10 @@ export type EventKind =
   | 'sms.unmatched_dismissed'
   | 'coin_flip.recorded'
   | 'division.rules_updated'
+  | 'umpire.added'
+  | 'umpire.assigned'
+  | 'umpire.unassigned'
+  | 'umpire.no_show'
   | 'notification.queued'
   | 'staff.signed_in';
 

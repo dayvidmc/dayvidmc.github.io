@@ -8,6 +8,7 @@ import { recordEventIn } from '@/server/events';
 import { applyRuleEdit, parseDivisionRules } from '@/domain/divisionRules';
 import { approveScore, recordProposal, setDispute } from '@/server/repo';
 import { localWallClock, toSqlTimestamp } from '@/domain/time';
+import { looksLikeEmail, normalisePhone } from '@/domain/contact';
 import type { SaveResult } from '../_components/AutoSave';
 
 /**
@@ -127,18 +128,6 @@ const TEAM_FIELDS: Record<string, { column: string; label: string }> = {
  * number saved as "613-555-0142" would never match the "+16135550142" Twilio
  * sends, and the text would land on the unmatched screen for no visible reason.
  */
-function normalisePhone(raw: string): { ok: true; value: string | null } | { ok: false; error: string } {
-  const trimmed = raw.trim();
-  if (trimmed === '') return { ok: true, value: null };
-
-  const digits = trimmed.replace(/[^\d+]/g, '');
-  const bare = digits.replace(/^\+?1?/, '');
-  if (bare.length !== 10 || !/^\d{10}$/.test(bare)) {
-    return { ok: false, error: 'Needs 10 digits, e.g. 613 555 0142.' };
-  }
-  return { ok: true, value: `+1${bare}` };
-}
-
 export async function saveTeamField(
   teamId: string,
   field: string,
@@ -158,7 +147,7 @@ export async function saveTeamField(
     stored = phone.value;
   }
 
-  if (field === 'coach_email' && stored !== null && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(stored)) {
+  if (field === 'coach_email' && stored !== null && !looksLikeEmail(stored)) {
     return { ok: false, error: 'That does not look like an email address.' };
   }
 

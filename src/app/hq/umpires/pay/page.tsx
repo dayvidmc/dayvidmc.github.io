@@ -1,0 +1,142 @@
+import { redirect } from 'next/navigation';
+import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
+import { currentTournament } from '@/server/repo';
+import { honorariaFor, umpireRoster } from '@/server/umpires';
+import { NoAccess } from '../../../_components/NoAccess';
+
+export const dynamic = 'force-dynamic';
+
+const money = (cents: number) =>
+  `$${(cents / 100).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/**
+ * What the umpires are owed.
+ *
+ * This is real money leaving a charity's account, so the page shows its
+ * working rather than a total: games assigned, games that never happened,
+ * no-shows, and games actually worked. A treasurer who cannot explain a number
+ * cannot sign it off, and "the software said $2,840" is not an explanation.
+ *
+ * Director-only, like the concession takings — it is payroll, not operations.
+ */
+export default async function HonorariaPage() {
+  const staff = await currentStaff();
+  if (!canAccessHq(staff)) redirect('/signin');
+  if (!isDirector(staff)) {
+    return (
+      <NoAccess
+        role={staff!.role}
+        name={staff!.name}
+        needs="the director — it is what the tournament owes its umpires"
+        back="/hq/umpires"
+      />
+    );
+  }
+
+  const tournament = await currentTournament();
+  if (!tournament) return <div className="notice info">No tournament set up yet.</div>;
+
+  const [lines, roster] = await Promise.all([
+    honorariaFor(tournament.id),
+    umpireRoster(tournament.id),
+  ]);
+
+  const total = lines.reduce((sum, line) => sum + line.owedCents, 0);
+  const worked = lines.reduce((sum, line) => sum + line.gamesWorked, 0);
+  const noRate = lines.filter((line) => line.rateCents === 0 && line.gamesWorked > 0);
+  const unassigned = roster.filter((u) => u.active && u.games === 0);
+
+  return (
+    <>
+      <h1>Honoraria</h1>
+      <p className="sub">
+        {worked} game{worked === 1 ? '' : 's'} worked across {lines.length} umpire
+        {lines.length === 1 ? '' : 's'}
+      </p>
+
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <a className="btn" href="/hq/umpires" style={{ flex: 1 }}>← Roster</a>
+        <a className="btn" href="/hq/umpires/crews" style={{ flex: 1 }}>Crews</a>
+      </div>
+
+      <div className="card">
+        <strong style={{ fontSize: 28 }}>{money(total)}</strong>
+        <div className="meta">owed in total</div>
+      </div>
+
+      {noRate.length > 0 && (
+        <div className="notice warn">
+          {noRate.length} umpire{noRate.length === 1 ? '' : 's'} worked games with no rate set, so
+          {noRate.length === 1 ? ' they are' : ' they are'} counting as $0:{' '}
+          {noRate.map((l) => l.umpireName).join(', ')}. Set it on{' '}
+          <a href="/hq/umpires">the roster</a>.
+        </div>
+      )}
+
+      {lines.length === 0 && (
+        <div className="empty">
+          Nobody has been assigned to a game yet. <a href="/hq/umpires/crews">Build the crews</a>.
+        </div>
+      )}
+
+      {lines.length > 0 && (
+        <>
+          <h2>The working</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Umpire</th>
+                <th style={{ textAlign: 'right' }}>Worked</th>
+                <th style={{ textAlign: 'right' }}>Rate</th>
+                <th style={{ textAlign: 'right' }}>Owed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((line) => (
+                <tr key={line.umpireId}>
+                  <td className="team">
+                    {line.umpireName}
+                    {(line.gamesNotPlayed > 0 || line.noShows > 0) && (
+                      <div className="meta">
+                        {line.gamesAssigned} assigned
+                        {line.gamesNotPlayed > 0 && `, ${line.gamesNotPlayed} not played`}
+                        {line.noShows > 0 && `, ${line.noShows} no-show`}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {line.gamesWorked}
+                  </td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {line.rateCents ? money(line.rateCents) : '—'}
+                  </td>
+                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                    {money(line.owedCents)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <p className="sub">
+            A game counts as worked once its score has been approved. A game that never happened —
+            rained out, forfeited before first pitch — does not, and neither does one where the
+            umpire did not turn up and somebody recorded it. That is the whole rule; there is
+            nothing else behind these numbers.
+          </p>
+        </>
+      )}
+
+      {unassigned.length > 0 && (
+        <>
+          <h2>On the roster, on no games</h2>
+          <div className="card">
+            <div className="meta">
+              {unassigned.map((u) => u.name).join(', ')}
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+}

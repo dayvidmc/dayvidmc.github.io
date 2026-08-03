@@ -16,15 +16,18 @@ debrief (spec §12, Phase 0). Ideas are marked:
 - **●** — solid, worth doing
 - **○** — nice, cheap, or speculative
 - **✗** — argued against, with the reason
+- **✓** — built since this was written
 
 Two facts shape almost everything below, so they are stated once here:
 
 1. **Nothing sends a text.** `notification` rows accumulate and no sender
    drains them. Every idea that involves telling somebody something is blocked
    on this. It is the single highest-value thing left.
-2. **Umpires do not exist in this system.** No role, no table, no assignment,
-   no page. Not one line of code mentions them. That is the largest structural
-   gap after messaging, and an entire section below is about it.
+2. **Umpires did not exist in this system** when this was written — no role, no
+   table, no assignment, no page. That was the largest structural gap after
+   messaging, and §4 has since been built: roster, crews with conflict checks,
+   their own link with score reporting, and honoraria. Items there are marked
+   **✓** where they are done.
 
 ---
 
@@ -161,9 +164,11 @@ missing.
 Today it catches diamond double-booking, team double-booking and tight
 turnarounds. It should also catch:
 
-- **an umpire double-booked** (needs §4 below to exist first)
-- **travel time between sites** — `diamond.site` exists and is not used for
-  anything; two games 20 minutes apart at different parks is a real failure
+- **an umpire double-booked** — now caught on `/hq/umpires/crews`, but only
+  after the fact; the importer still does not know about crews
+- **travel time between sites** — `diamond.site` is read for umpires now and
+  still ignored for teams; two games 20 minutes apart at different parks is a
+  real failure
 - **three games in a row** for one team
 - **a 9pm finish followed by an 8am start**
 
@@ -269,54 +274,59 @@ currently uses it.
 
 ---
 
-## 4. The umpires — this section is the finding
+## 4. The umpires — this section was the finding, and is now half built
 
-**There is no umpire anywhere in this system.** No `umpire` table, no role in
-`StaffRole`, no assignment on a game, no page, no mention in any document. A
-`grep -i umpire` across the whole repository returns nothing.
+**When this was written there was no umpire anywhere in the system.** No table,
+no role, no assignment, no page; `grep -i umpire` returned nothing. That was a
+gap in the spec rather than in the code, and it is still worth raising at the
+debrief — but the first four items below have since been built, because umpires
+are the group with the strongest claim to being *the* source of truth about
+what happened in a game.
 
-That is not an oversight in the code so much as a gap in the spec, and it is
-worth raising at the debrief, because umpires are the group with the strongest
-claim to being *the* source of truth about what happened in a game.
+Built: the roster, crew assignment with conflict checks, the umpire's own link
+with score reporting, and the honorarium report. Still open: availability
+collected from the umpires themselves, no-show recovery, and incident reports.
 
-### ▲ Umpires as a first-class entity
+### ✓ Umpires as a first-class entity — built
 
-Name, phone, certification level, which divisions they can work, and
-availability by day and time block. Everything else depends on this existing.
+Name, phone, level, per-game rate and a personal link, on `/hq/umpires`.
+Availability by day and time block is *not* built; see the last item here.
 
-### ▲ Assignment, with the same conflict validation as diamonds
+### ✓ Assignment, with the same conflict validation as diamonds — built
 
 An umpire cannot be at two diamonds at once, cannot cross sites in fifteen
-minutes, and should not work six straight games in July heat. The validation
-engine for this already exists for diamonds and teams; umpires would be a third
-kind of resource running through the same checks.
+minutes, and should not work six straight games in July heat. `/hq/umpires/crews`
+checks all four, and separates a **clash** (impossible) from a **strain**
+(legal and unkind). Neither is blocked — on a morning when two umpires call in
+sick, being told the cost and allowed to proceed beats being refused.
 
-### ▲ The umpire reports the score
+### ✓ The umpire reports the score — built
 
 Path 1 assumes a diamond volunteer texts it in. But the umpire is *at* the
 game, is neutral, and signs the sheet. They are a better source than the
 volunteer and a much better source than a coach.
 
-Give them the same kind of magic link the coaches have, with their games on it
-and a score box. This is likely the single largest improvement available to
-score-intake reliability, and it needs no SMS at all.
+`/umpire/[token]` — the same kind of link the coaches have, with their games,
+the division rules for each, and a score box. It goes to the approval queue
+like every other path, because the umpire being a better source is not a reason
+to skip the second pair of eyes. Needs no SMS at all.
 
-### ▲ Honorarium tracking
+### ✓ Honorarium tracking — built
 
 Most tournaments pay umpires per game. Right now that is games worked × rate,
 counted from a notebook, by a volunteer, on Sunday night, with real money at
 stake and a charity's books on the other side.
 
-Games are already tracked. Assignment plus a rate turns this into a report that
-takes zero minutes and is auditable — which matters more than usual when 100%
-of proceeds go to CHEO.
+`/hq/umpires/pay`, director-only, showing its working rather than a total:
+games assigned, games that never happened, no-shows, and games actually worked.
+A treasurer who cannot explain a number cannot sign it off, and that matters
+more than usual when 100% of proceeds go to CHEO.
 
-### ● Division rules at the plate
+### ✓ Division rules at the plate — built
 
-Division rules already exist and are configurable (§5.4) — mercy rule, time
-limit, inning cap. The umpire is the person who needs them most and has no way
-to see them. Their game page should show the rules for that division, on their
-phone, at the diamond.
+Mercy rule, time limit, inning cap and what makes a game official all differ by
+division and are configurable (§5.4). Each game on the umpire's page now opens
+to show its division's rules, on their phone, at the diamond.
 
 ### ● No-show recovery
 
@@ -330,11 +340,16 @@ and liability reasons to have these recorded with a timestamp, and a protest
 that reaches the director on Sunday needs the umpire's account attached to the
 game.
 
-### ○ Self-serve availability
+### ▲ Self-serve availability — the next real gap
 
-Umpires enter their own availability before the weekend rather than the
-coordinator collecting it by text. Depends on how the local association
-actually assigns — ask before designing.
+The roster has no notion of when anybody is free. Every conflict check today is
+about what an umpire has *already been given*, not what they said they could
+do, so a coordinator can still assign someone to a Sunday they are away for.
+
+Deliberately left out for now: it depends on how the local association actually
+assigns, which nobody here knows. If they assign centrally, the coordinator
+enters availability and this is a small screen. If umpires self-serve, it needs
+its own flow off the umpire link. Ask before designing.
 
 ---
 
