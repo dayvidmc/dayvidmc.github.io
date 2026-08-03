@@ -84,7 +84,7 @@ export default async function ImportPage({
         <textarea id="csv" name="csv" placeholder={SAMPLE} required />
 
         <div className="card" style={{ marginTop: 12 }}>
-          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', margin: 0 }}>
+          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', margin: 0, minHeight: 44, padding: '4px 0' }}>
             <input
               type="checkbox"
               name="cancelMissing"

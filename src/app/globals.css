@@ -14,8 +14,12 @@
   --text: #16191d;
   --muted: #5c6470;
 
-  --green: #1a7f37;
-  --amber: #9a6700;
+  /* Both of these sat at 4.4:1 on their own tinted backgrounds — under AA, and
+     under it in exactly the place it matters most: a status word on a coloured
+     row, read on a phone in direct sun. Darkened until every pairing in this
+     file clears 4.5:1 with room to spare. */
+  --green: #146c2e;
+  --amber: #855700;
   --red: #b42318;
   --blue: #0b5cad;
 
@@ -91,6 +95,19 @@ header.bar .wrap {
 
 header.bar strong {
   font-size: 17px;
+  white-space: nowrap;
+}
+
+/* On a narrow phone the full name wrapped onto two lines and pushed the nav
+   onto a third, costing a fifth of the screen before any content. */
+@media (max-width: 420px) {
+  header.bar strong {
+    font-size: 15px;
+  }
+
+  header.bar nav a {
+    padding: 8px 8px;
+  }
 }
 
 header.bar nav {
@@ -423,6 +440,29 @@ td.team {
   margin: 6px 0 0;
 }
 
+/* Hidden from sight, present for a screen reader. Used where the visible
+   context makes a label redundant to look at but not to hear. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A <summary> is a button, and gets a button's tap target. Left to itself it
+   is one line of text tall, which on a phone is a miss half the time. */
+summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
 label.toggle {
   display: flex;
   align-items: center;
@@ -514,7 +554,11 @@ legend {
   font-variant-numeric: tabular-nums;
 }
 
-.rows .row-item {
+/* A label on the left, an action on the right. This was written as
+   `.rows .row-item` and no page ever had a `.rows` wrapper, so every one of
+   these rows had been rendering unstyled — the action stacked under the label
+   instead of sitting beside it. */
+.row-item {
   display: flex;
   gap: 12px;
   align-items: center;
@@ -523,8 +567,16 @@ legend {
   border-bottom: 1px solid var(--border);
 }
 
-.rows .row-item:last-child {
+.row-item:last-child {
   border-bottom: none;
+}
+
+/* On a phone a name plus a dropdown plus a button will not fit on one line, so
+   let the action drop under the label rather than squeezing both. */
+@media (max-width: 480px) {
+  .row-item {
+    flex-wrap: wrap;
+  }
 }
 
 .copyable {

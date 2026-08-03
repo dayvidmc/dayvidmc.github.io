@@ -213,7 +213,7 @@ export default async function GamePage({ params }: { params: Promise<{ gameId: s
                 <input type="hidden" name="position" value={member.position} />
                 <input type="hidden" name="noShow" value={member.no_show ? 'false' : 'true'} />
                 <input type="hidden" name="back" value={`/hq/game/${game.id}`} />
-                <button type="submit" style={{ minHeight: 40, padding: '8px 12px', fontSize: 14 }}>
+                <button type="submit" style={{ minHeight: 44, padding: '8px 12px', fontSize: 14 }}>
                   {member.no_show ? 'They were here' : 'No-show'}
                 </button>
               </form>

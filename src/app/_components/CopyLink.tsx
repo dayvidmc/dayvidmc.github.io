@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 /**
  * A link with a copy button.
@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react';
  * a laptop at the Tokessy site.
  */
 export function CopyLink({ path, label }: { path: string; label?: string }) {
+  const id = useId();
   const [copied, setCopied] = useState(false);
   const [canCopy, setCanCopy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -42,9 +43,17 @@ export function CopyLink({ path, label }: { path: string; label?: string }) {
 
   return (
     <>
-      {label && <label>{label}</label>}
+      <label htmlFor={id} className={label ? undefined : 'sr-only'}>
+        {label ?? 'Link'}
+      </label>
       <div className="copyable">
-        <input ref={inputRef} readOnly value={path} onFocus={(e) => e.target.select()} />
+        <input
+          id={id}
+          ref={inputRef}
+          readOnly
+          value={path}
+          onFocus={(e) => e.target.select()}
+        />
         {canCopy && (
           <button type="button" onClick={copy} style={{ flex: '0 0 auto', minHeight: 44, padding: '8px 14px' }}>
             {copied ? 'Copied' : 'Copy'}

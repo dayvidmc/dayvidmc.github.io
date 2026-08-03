@@ -104,7 +104,7 @@ export default async function CrewsPage({
             key={day}
             className="btn"
             href={`/hq/umpires/crews?date=${day}`}
-            style={{ minHeight: 40, padding: '8px 14px', fontSize: 15, fontWeight: day === date ? 700 : 400 }}
+            style={{ minHeight: 44, padding: '8px 14px', fontSize: 15, fontWeight: day === date ? 700 : 400 }}
           >
             {formatDateFriendly(new Date(`${day}T00:00:00Z`))}
           </a>
@@ -198,7 +198,7 @@ export default async function CrewsPage({
                       <input type="hidden" name="gameId" value={game.id} />
                       <input type="hidden" name="position" value={position} />
                       <input type="hidden" name="back" value={back} />
-                      <button type="submit" style={{ minHeight: 40, padding: '8px 12px', fontSize: 14 }}>
+                      <button type="submit" style={{ minHeight: 44, padding: '8px 12px', fontSize: 14 }}>
                         Remove
                       </button>
                     </form>
@@ -207,7 +207,15 @@ export default async function CrewsPage({
                       <input type="hidden" name="gameId" value={game.id} />
                       <input type="hidden" name="position" value={position} />
                       <input type="hidden" name="back" value={back} />
-                      <select name="umpireId" defaultValue="" style={{ minHeight: 40, fontSize: 14, maxWidth: 220 }}>
+                      <label htmlFor={`ump-${game.id}-${position}`} className="sr-only">
+                        Assign an umpire to {position} for {game.external_game_id}
+                      </label>
+                      <select
+                        id={`ump-${game.id}-${position}`}
+                        name="umpireId"
+                        defaultValue=""
+                        style={{ minHeight: 44, fontSize: 14, maxWidth: 220 }}
+                      >
                         <option value="" disabled>
                           Assign…
                         </option>
@@ -223,7 +231,7 @@ export default async function CrewsPage({
                           </option>
                         ))}
                       </select>
-                      <button type="submit" style={{ minHeight: 40, padding: '8px 12px', fontSize: 14 }}>
+                      <button type="submit" style={{ minHeight: 44, padding: '8px 12px', fontSize: 14 }}>
                         Add
                       </button>
                     </form>

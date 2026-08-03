@@ -161,7 +161,11 @@ export default async function UnmatchedPage() {
             <form action={dismissUnmatched} style={{ marginTop: 10 }}>
               <input type="hidden" name="messageId" value={message.id} />
               <div className="row">
+                <label htmlFor={`reason-${message.id}`} className="sr-only">
+                  Why this message is being dismissed
+                </label>
                 <input
+                  id={`reason-${message.id}`}
                   name="reason"
                   type="text"
                   placeholder="Why? (optional — e.g. wrong number, just a question)"

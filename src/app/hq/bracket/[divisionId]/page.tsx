@@ -142,7 +142,7 @@ export default async function HqBracketPage({
                           <input type="hidden" name="divisionId" value={division.id} />
                           <input type="hidden" name="gameId" value={game.gameId} />
                           <input type="hidden" name="side" value={side} />
-                          <button type="submit" style={{ minHeight: 40, padding: '8px 12px', fontSize: 14 }}>
+                          <button type="submit" style={{ minHeight: 44, padding: '8px 12px', fontSize: 14 }}>
                             Unpin
                           </button>
                         </form>
@@ -151,13 +151,21 @@ export default async function HqBracketPage({
                           <input type="hidden" name="divisionId" value={division.id} />
                           <input type="hidden" name="gameId" value={game.gameId} />
                           <input type="hidden" name="side" value={side} />
-                          <select name="teamId" defaultValue="" style={{ minHeight: 40, fontSize: 14 }}>
+                          <label htmlFor={`pin-${game.gameId}-${side}`} className="sr-only">
+                            Pin a team into the {side} side of {game.label}
+                          </label>
+                          <select
+                            id={`pin-${game.gameId}-${side}`}
+                            name="teamId"
+                            defaultValue=""
+                            style={{ minHeight: 44, fontSize: 14 }}
+                          >
                             <option value="" disabled>Pin a team…</option>
                             {teams.map((team) => (
                               <option key={team.id} value={team.id}>{team.name}</option>
                             ))}
                           </select>
-                          <button type="submit" style={{ minHeight: 40, padding: '8px 12px', fontSize: 14 }}>
+                          <button type="submit" style={{ minHeight: 44, padding: '8px 12px', fontSize: 14 }}>
                             Pin
                           </button>
                         </form>

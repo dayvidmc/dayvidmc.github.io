@@ -52,7 +52,7 @@ export default async function HqBoardPage({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1>HQ board</h1>
         <form action={signOut}>
-          <button type="submit" style={{ minHeight: 36, padding: '6px 12px', fontSize: 14 }}>
+          <button type="submit" style={{ minHeight: 44, padding: '8px 14px', fontSize: 14 }}>
             Sign out
           </button>
         </form>
@@ -73,7 +73,7 @@ export default async function HqBoardPage({
             className="btn"
             href={`/hq?date=${day}`}
             style={{
-              minHeight: 40,
+              minHeight: 44,
               padding: '8px 14px',
               fontSize: 15,
               fontWeight: day === date ? 700 : 400,

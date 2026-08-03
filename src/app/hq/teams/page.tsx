@@ -60,7 +60,7 @@ export default async function TeamsPage({
           <a
             className="btn"
             href="/hq/teams"
-            style={{ minHeight: 40, padding: '8px 14px', fontSize: 15, fontWeight: params.division ? 400 : 700 }}
+            style={{ minHeight: 44, padding: '8px 14px', fontSize: 15, fontWeight: params.division ? 400 : 700 }}
           >
             All
           </a>
@@ -70,7 +70,7 @@ export default async function TeamsPage({
               className="btn"
               href={`/hq/teams?division=${encodeURIComponent(division)}`}
               style={{
-                minHeight: 40,
+                minHeight: 44,
                 padding: '8px 14px',
                 fontSize: 15,
                 fontWeight: params.division === division ? 700 : 400,

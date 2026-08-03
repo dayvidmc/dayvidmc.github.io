@@ -159,7 +159,7 @@ export default async function SettingsPage() {
               <div className="meta">{check.detail}</div>
             </div>
             {check.href && !check.done && (
-              <a className="btn" href={check.href} style={{ minHeight: 40, padding: '8px 14px', fontSize: 15 }}>
+              <a className="btn" href={check.href} style={{ minHeight: 44, padding: '8px 14px', fontSize: 15 }}>
                 Fix
               </a>
             )}
