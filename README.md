@@ -102,10 +102,20 @@ It is meant for the Phase 0 debrief — it is much easier to ask a director "is
 this the board you want?" than to describe one.
 
 ```bash
-npm test          # 129 unit tests, no database needed
+npm test          # 150 unit tests, no database needed
 npm run typecheck
 npm run build
+
+# Migrations, against a throwaway database. Applies them twice: once to an
+# empty database, and once to one carrying data from every earlier migration.
+CHECK_DATABASE_URL=postgres://…/tokessy_migcheck npm run migrate:check
 ```
+
+The second migration pass exists because of a real outage. A migration that
+rebuilt a CHECK constraint from an outdated list passed against every fresh
+database and was rejected by the live one, which held a value added by a later
+migration — and since migrations run on boot, the site would not start. A
+fresh-database test cannot catch that by construction.
 
 The domain layer is pure — no database, no network, no clock reads — so the
 whole test suite runs in about a second and needs no infrastructure. That is

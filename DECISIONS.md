@@ -268,6 +268,25 @@ remember what it used to be, so releasing it left a hole. Keeping the rule
 underneath costs nothing and makes the override reversible, which is what
 "final say" should mean.
 
+### 2.15 A CHECK constraint is rebuilt from the current list, never an old one
+
+**Decision.** Adding a value to a `CHECK (col IN (…))` means dropping and
+recreating the constraint with **every** value the column already legally
+holds — which is the union of the original list and everything later
+migrations added, not the list in the file that created it. `npm run
+migrate:check` enforces this by applying migrations twice: once to an empty
+database, and once to one carrying a row for every value legal at each step.
+
+**Why.** This is written down because it already caused an outage. Migration
+006 added `'umpire'` by rebuilding the constraint from 001's list, which
+predates `'unknown_sms'` being added in 002. Every fresh database accepted it.
+The live one held rows using that value, rejected the new constraint, and —
+because migrations run on boot — never started.
+
+The class of bug is invisible to a fresh-database test by construction: a
+narrowed constraint only fails where the older data lives. That is why the
+second pass exists rather than a single "do the migrations run" check.
+
 ---
 
 ## 3. Deliberately not built
