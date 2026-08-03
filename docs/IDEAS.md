@@ -67,16 +67,30 @@ Small builds that close a loop the system already promises.
 
 ---
 
-## 3. Brackets (§5.6)
+## 3. Brackets (§5.6) — built, with one thing missing
 
-Sunday depends on it, and it is not built. Blocked on §13 Q4 — how the director
-actually builds the playoff schedule today — because the answer decides whether
-this is "populate slots from standings" or "let him type it in and just publish
-it". Ask before designing.
+The map is drawn: `/bracket/[divisionId]` shows every playoff game from the
+start, with the empty spots naming what will fill them. Seeds resolve from live
+standings, winners and losers propagate on approval, and the director can pin
+any slot by hand.
 
-The engine already produces ranked standings with reasoning, so seeding is
-mostly presentation. The manual override on every slot (§5.6) matters more than
-the automation.
+**What is still missing: there is no way to set a bracket up from a screen.**
+Slots are created by the demo seed. A director with a real playoff schedule
+would have to have it imported with `bracket_round` and `bracket_position` set,
+and the slot rules written directly into `bracket_slot`. Two ways out, and §13
+Q4 decides which — how does he build the playoff schedule today?
+
+- If he draws it himself: a builder screen. Pick a round, add a game, and say
+  where each side comes from. More work, but it matches a director who already
+  has a shape in his head.
+- If he wants it generated: "8 teams, one pool, single elimination with a bronze
+  game" produces the whole structure, then he adjusts. Faster, but wrong for any
+  division that does not fit a standard shape — and this tournament has seven
+  divisions with different sizes.
+
+Either way the schedule importer should learn to read a playoff row whose team
+column says "Winner Game 12" or "1st Pool A" as a slot rule rather than a team
+name, because that is what those spreadsheets actually contain today.
 
 ---
 
