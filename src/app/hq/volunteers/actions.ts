@@ -14,11 +14,13 @@ import {
   setVolunteerStatus,
   unassign,
 } from '@/server/volunteers';
-import type { ShiftRole } from '@/domain/volunteers';
+import { ROLE_ORDER, type ShiftRole } from '@/domain/volunteers';
 import { localWallClock } from '@/domain/time';
 import type { SaveResult } from '../../_components/AutoSave';
 
-const ROLES: ShiftRole[] = ['diamond', 'canteen', 'bbq', 'auction', 'gate', 'setup', 'floating'];
+// Derived rather than repeated, so a role added to the domain cannot be one the
+// form offers and the action then rejects as "not a kind of shift".
+const ROLES: readonly ShiftRole[] = ROLE_ORDER;
 
 async function requireHq() {
   const staff = await currentStaff();
@@ -125,6 +127,7 @@ export async function createShiftAction(formData: FormData): Promise<void> {
       role,
       diamondId: text(formData, 'diamondId') || null,
       locationId: text(formData, 'locationId') || null,
+      site: text(formData, 'site'),
       place: text(formData, 'place'),
       startsAt: startsAt!,
       endsAt: endsAt!,

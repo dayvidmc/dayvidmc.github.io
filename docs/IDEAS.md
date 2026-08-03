@@ -49,6 +49,13 @@ posting, and the demo now has real ones for the first time.
 **So the remaining piece is a cron that turns `gamesNeedingNudge()` into queued
 messages** — which now has somebody to address them to.
 
+**And it should address the site supervisor, not the diamond volunteer.** The
+signed sheet reaches a supervisor covering two or three diamonds; that is who
+texts it in. `diamond_posting` now resolves a supervisor to every diamond at
+their site, so `gamesNeedingNudge()` will already find the right phone — but
+the message wording needs to name the game, because a supervisor covering three
+diamonds cannot be assumed to know which one is being asked about.
+
 ### Still missing: webhook idempotency
 
 Twilio retries a webhook that times out or returns non-2xx. Today a retry
@@ -248,6 +255,37 @@ Recorded so they do not get re-proposed every year.
 - **Anything that replaces RAMP.** §2.
 - **Inventory tracking for concessions.** §8 — do not impose it on volunteers
   who did not ask.
+
+---
+
+## 12. What the four late modules left behind
+
+Tickets, supervisors, donations and the small ones are built. Four things they
+made visible and did not finish:
+
+**A receipt for a donation is a sentence on a page, not an email.** The donate
+page promises one will follow and nothing sends it. The notification queue
+exists and the donor's address is stored, so this is a template and a call —
+but until it is written, that promise is being made and not kept, which is
+worse than not promising. Either send it or change the wording.
+
+**A charitable receipt is a different thing again.** §8A.4 is still unresolved:
+who issues it, and under whose registration number. A donation to a tournament
+that gives everything to CHEO is not automatically receiptable by the
+tournament. Committee question, not a technical one, and the wording on the
+donate page deliberately says "a receipt" rather than "a tax receipt" until it
+is answered.
+
+**Ticket counts are recorded and nothing reconciles them.** `tickets_per_team`
+times the number of teams is how many went out; `ticket_count` summed is how
+many came back. The two are never put next to each other on a screen. That is a
+ten-line report and the number it produces is what next year's print run is
+decided on.
+
+**The Gold Glove draw has no public page.** It is recorded, verifiable and
+visible only inside HQ. The point of storing the seed is that somebody who wants
+to satisfy themselves the draw was straight can be shown it — and the people
+most likely to want that are not the people with a PIN.
 
 ---
 

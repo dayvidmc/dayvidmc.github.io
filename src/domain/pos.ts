@@ -54,7 +54,23 @@ export function isMarkedDown(item: MenuItem): boolean {
   return sellingPrice(item) < item.priceCents;
 }
 
-export type TenderKind = 'cash' | 'card';
+/**
+ * How a basket was settled.
+ *
+ * `ticket` is the one that is not money. Every team's package includes tickets
+ * good for a bag of chips and a drink, or a hot dog at a field with a barbecue.
+ * They have to be rung through, and rung through as their own thing:
+ *
+ *   - as **cash**, they inflate the raised figure by food that was given away;
+ *   - as **nothing**, the stock that left the counter vanishes from the books.
+ *
+ * Either way the number read out at the cheque presentation is wrong, which is
+ * the one number this whole system exists to get right. So a ticket sale
+ * records the food at its real price and settles it against a tender that is
+ * worth nothing — the lines are the cost, the tender is the reason no money
+ * arrived.
+ */
+export type TenderKind = 'cash' | 'card' | 'ticket';
 
 /** Canada withdrew the penny in 2012: cash totals settle to the nearest 5¢. */
 export const CASH_ROUNDING_INCREMENT = 5;
@@ -92,7 +108,14 @@ export function cashRoundingAdjustment(cents: number): number {
   return roundCashToNickel(cents) - cents;
 }
 
-/** What a basket actually costs, given how it is being paid for. */
+/**
+ * What a basket actually costs, given how it is being paid for.
+ *
+ * Only cash rounds. A card is charged to the cent, and a ticket settles at the
+ * exact value of the food so that what left the counter is recorded at what it
+ * would have sold for — round a ticket to the nearest nickel and the giveaway
+ * total drifts by a cent a time against nothing at all.
+ */
 export function amountDue(subtotalCents: number, tender: TenderKind): number {
   return tender === 'cash' ? roundCashToNickel(subtotalCents) : subtotalCents;
 }

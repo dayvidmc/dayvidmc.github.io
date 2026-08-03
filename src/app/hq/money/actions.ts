@@ -12,7 +12,8 @@ import {
   recordCashMovement,
   recordPurchase,
 } from '@/server/fundraising';
-import type { Stream } from '@/domain/fundraising';
+import { recordManualDonation, voidDonation } from '@/server/donations';
+import type { Movement, Stream } from '@/domain/fundraising';
 
 /**
  * The money screens.
@@ -101,7 +102,9 @@ export async function recordCashAction(formData: FormData): Promise<void> {
   const witnessedBy = String(formData.get('witnessedBy') ?? '').trim() || null;
   const notes = String(formData.get('notes') ?? '').trim() || null;
 
-  if (!['float_out', 'takings_in', 'bank_deposit'].includes(kind)) return;
+  if (!['float_out', 'takings_in', 'bank_deposit', 'overnight_out', 'overnight_back'].includes(kind)) {
+    return;
+  }
   if (!source || amountCents === null || amountCents <= 0) {
     redirect('/hq/money/cash?error=bad_amount');
   }
@@ -109,7 +112,7 @@ export async function recordCashAction(formData: FormData): Promise<void> {
   await recordCashMovement(
     staff.tournamentId,
     {
-      kind: kind as 'float_out' | 'takings_in' | 'bank_deposit',
+      kind: kind as Movement['kind'],
       source,
       amountCents: amountCents!,
       countedBy,
@@ -234,4 +237,65 @@ export async function reimburseAction(formData: FormData): Promise<void> {
   await markReimbursed(staff!.tournamentId, id, staff!.name, staff!.role);
   revalidatePath('/hq/money/purchases');
   redirect('/hq/money/purchases?saved=1');
+}
+
+// --- Donations ----------------------------------------------------------------
+
+/**
+ * A gift handed over in person: cash in an envelope, a cheque, an e-transfer.
+ *
+ * Open to the treasurer as well as HQ, because this is her job. The public
+ * donate page writes its own rows through the payment webhook and never comes
+ * through here.
+ */
+export async function recordDonationAction(formData: FormData): Promise<void> {
+  const staff = await currentStaff();
+  if (!canAccessHq(staff)) redirect('/signin');
+
+  const amountCents = toCents(formData.get('amount'));
+  if (amountCents === null || amountCents <= 0) redirect('/hq/money/donations?error=amount');
+
+  const method = String(formData.get('method') ?? 'cash');
+  if (!['cash', 'cheque', 'etransfer', 'other'].includes(method)) {
+    redirect('/hq/money/donations?error=method');
+  }
+
+  const result = await recordManualDonation(
+    staff!.tournamentId,
+    {
+      amountCents: amountCents!,
+      donorName: String(formData.get('donorName') ?? ''),
+      donorEmail: String(formData.get('donorEmail') ?? ''),
+      message: String(formData.get('message') ?? ''),
+      showPublicly: formData.get('showPublicly') === 'on',
+      method: method as 'cash' | 'cheque' | 'etransfer' | 'other',
+    },
+    staff!.name,
+    staff!.role,
+  );
+
+  if (!result.ok) redirect(`/hq/money/donations?error=${result.error}`);
+  revalidatePath('/hq/money/donations');
+  revalidatePath('/hq/money');
+  redirect('/hq/money/donations?saved=1');
+}
+
+/** A gift refunded or charged back. Kept on the record, marked as gone. */
+export async function voidDonationAction(formData: FormData): Promise<void> {
+  const staff = await currentStaff();
+  if (!canAccessHq(staff)) redirect('/signin');
+
+  const id = String(formData.get('id') ?? '');
+  if (!id) return;
+
+  await voidDonation(
+    staff!.tournamentId,
+    id,
+    String(formData.get('reason') ?? ''),
+    staff!.name,
+    staff!.role,
+  );
+  revalidatePath('/hq/money/donations');
+  revalidatePath('/hq/money');
+  redirect('/hq/money/donations?saved=1');
 }

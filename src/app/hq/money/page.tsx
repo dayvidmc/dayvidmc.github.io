@@ -68,6 +68,7 @@ export default async function MoneyPage({
         <a className="btn" href="/hq/entries" style={{ flex: 1 }}>Entries</a>
         <a className="btn" href="/hq/money/purchases" style={{ flex: 1 }}>What it cost</a>
         <a className="btn" href="/hq/sponsors" style={{ flex: 1 }}>Sponsors</a>
+        <a className="btn" href="/hq/money/donations" style={{ flex: 1 }}>Donations</a>
       </div>
 
       {params.error === 'director_only' && (
@@ -118,6 +119,14 @@ export default async function MoneyPage({
         </div>
       )}
 
+      {summary.donationsCountedTwice && (
+        <div className="notice error">
+          <strong>Donations may be counted twice.</strong> There are real gifts recorded{' '}
+          <a href="/hq/money/donations">on the donations screen</a> and a hand-typed donation figure
+          below. Both are in the total. Remove whichever is the duplicate.
+        </div>
+      )}
+
       {summary.owed.totalCents > 0 && (
         <a className="notice warn" href="/hq/money/purchases" style={{ display: 'block' }}>
           <strong>{money(summary.owed.totalCents)}</strong> owed back to{' '}
@@ -131,6 +140,23 @@ export default async function MoneyPage({
           {money(summary.donatedStockCents)} of that was sold at no cost to the tournament, because
           somebody donated the stock. <a href="/hq/money/gifts">Who gave what</a>.
         </div>
+      )}
+
+      {summary.ticketRedeemedCents > 0 && (
+        <div className="notice info">
+          {money(summary.ticketRedeemedCents)} of food went out against the tickets in the team
+          packages, priced at what it would have sold for. None of that counts as taken — nobody
+          paid — but what it cost to buy is still in the cost column, which is the honest way round:
+          the tournament bought that food and gave it away.
+        </div>
+      )}
+
+      {cash.overnightHolders.length > 0 && (
+        <a className="notice warn" href="/hq/money/cash" style={{ display: 'block' }}>
+          {money(cash.overnightHeldCents)} went home with{' '}
+          {cash.overnightHolders.map((held) => held.who).join(', ')} and has not been recorded coming
+          back. →
+        </a>
       )}
 
       {cash.openSources.length > 0 && (

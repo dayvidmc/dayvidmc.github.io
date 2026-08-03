@@ -14,6 +14,8 @@ const KIND_LABEL: Record<string, string> = {
   float_out: 'Float out',
   takings_in: 'Takings in',
   bank_deposit: 'To the bank',
+  overnight_out: 'Home overnight',
+  overnight_back: 'Brought back',
 };
 
 /**
@@ -78,6 +80,23 @@ export default async function CashPage({
         </div>
       )}
 
+      {position.overnightHolders.length > 0 && (
+        <div className="notice warn">
+          <strong>{money(position.overnightHeldCents)} is not at the field.</strong>{' '}
+          {position.overnightHolders.length === 1
+            ? `${position.overnightHolders[0]!.who} has had it since ` +
+              `${formatDateFriendly(toWallClock(position.overnightHolders[0]!.since))}.`
+            : `${position.overnightHolders
+                .map(
+                  (held) =>
+                    `${held.who} ${money(held.amountCents)} since ` +
+                    `${formatDateFriendly(toWallClock(held.since))}`,
+                )
+                .join(' · ')}.`}{' '}
+          Record it coming back on Sunday morning, or going to the bank.
+        </div>
+      )}
+
       {position.unwitnessed.length > 0 && (
         <div className="notice warn">
           {position.unwitnessed.length} count
@@ -95,7 +114,14 @@ export default async function CashPage({
           <option value="float_out">Float handed out</option>
           <option value="takings_in">Takings counted in</option>
           <option value="bank_deposit">Taken to the bank</option>
+          <option value="overnight_out">Gone home with somebody overnight</option>
+          <option value="overnight_back">Brought back in</option>
         </select>
+        <p className="hint">
+          Cash going home on the Saturday night is normal — the banks are shut and the field is not
+          a safe. What is not normal is nobody having written down who has it. For those two, put
+          the <strong>person&rsquo;s name</strong> in the box below rather than a place.
+        </p>
 
         <label htmlFor="source">Where from or to</label>
         <input

@@ -1,4 +1,5 @@
 import { currentTournament, listDivisions } from '@/server/repo';
+import { RaisedSoFar } from './_components/RaisedSoFar';
 
 // Nothing here is prerenderable: it is all live tournament state.
 export const dynamic = 'force-dynamic';
@@ -27,6 +28,8 @@ export default async function HomePage() {
       <p className="sub">
         {tournament.starts_on} to {tournament.ends_on} · 100% of proceeds to CHEO Cardiology
       </p>
+
+      <RaisedSoFar />
 
       <h2>Games</h2>
       <div className="tiles" style={{ marginBottom: 24 }}>

@@ -73,7 +73,7 @@ export async function volunteers(tournamentId: string): Promise<VolunteerRow[]> 
     where: string | null;
   }>(
     `SELECT a.volunteer_id, s.id AS shift_id, s.role, s.starts_at, s.ends_at,
-            COALESCE(d.name, l.name, s.place) AS where
+            COALESCE(d.name, l.name, s.site, s.place) AS where
        FROM volunteer_assignment a
        JOIN volunteer_shift s ON s.id = a.shift_id
        LEFT JOIN diamond d ON d.id = s.diamond_id
@@ -125,7 +125,7 @@ export async function shiftsFor(tournamentId: string): Promise<Shift[]> {
     notes: string | null;
   }>(
     `SELECT s.id, s.role, s.starts_at, s.ends_at, s.needed, s.notes,
-            COALESCE(d.name, l.name, s.place) AS where
+            COALESCE(d.name, l.name, s.site, s.place) AS where
        FROM volunteer_shift s
        LEFT JOIN diamond d ON d.id = s.diamond_id
        LEFT JOIN concession_location l ON l.id = s.location_id
@@ -355,6 +355,7 @@ export async function createShift(
     role: ShiftRole;
     diamondId: string | null;
     locationId: string | null;
+    site: string;
     place: string;
     startsAt: Date;
     endsAt: Date;
@@ -367,15 +368,23 @@ export async function createShift(
   if (input.role === 'diamond' && !input.diamondId) return { ok: false, error: 'needs_diamond' };
   if (input.endsAt <= input.startsAt) return { ok: false, error: 'backwards' };
 
+  const site = input.site.trim().slice(0, 160) || null;
+  // A supervisor shift that names no site covers no diamonds, so a score texted
+  // in from any of them is not recognised. The database refuses this too; the
+  // check is here so the coordinator gets a sentence rather than a stack trace.
+  if (input.role === 'site_supervisor' && !site) return { ok: false, error: 'needs_site' };
+
   await query(
     `INSERT INTO volunteer_shift
-       (tournament_id, role, diamond_id, location_id, place, starts_at, ends_at, needed, notes)
-     VALUES ($1,$2,$3,$4,$5,$6::timestamp,$7::timestamp,$8,$9)`,
+       (tournament_id, role, diamond_id, location_id, site, place,
+        starts_at, ends_at, needed, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7::timestamp,$8::timestamp,$9,$10)`,
     [
       tournamentId,
       input.role,
       input.diamondId,
       input.locationId,
+      site,
       input.place.trim().slice(0, 160) || null,
       toSqlTimestamp(input.startsAt),
       toSqlTimestamp(input.endsAt),
@@ -390,9 +399,37 @@ export async function createShift(
     actorRole,
     kind: 'volunteer.shift_created',
     subjectType: 'volunteer_shift',
-    payload: { role: input.role, needed: input.needed },
+    payload: { role: input.role, needed: input.needed, site },
   });
   return { ok: true };
+}
+
+/**
+ * The sites, as the diamonds name them.
+ *
+ * Free text rather than a table, because a site is a place with a name — but
+ * the supervisor form must offer the same spellings the diamonds use, or a
+ * supervisor covers nothing and nobody can see why.
+ */
+export async function sites(tournamentId: string): Promise<string[]> {
+  const rows = await query<{ site: string }>(
+    `SELECT DISTINCT site FROM diamond
+      WHERE tournament_id = $1 AND site IS NOT NULL AND site <> ''
+      ORDER BY site`,
+    [tournamentId],
+  );
+  return rows.map((row) => row.site);
+}
+
+/** How many diamonds a supervisor at this site would be answering for. */
+export async function diamondsPerSite(tournamentId: string): Promise<Map<string, number>> {
+  const rows = await query<{ site: string; n: string }>(
+    `SELECT site, count(*) AS n FROM diamond
+      WHERE tournament_id = $1 AND site IS NOT NULL AND site <> ''
+      GROUP BY site`,
+    [tournamentId],
+  );
+  return new Map(rows.map((row) => [row.site, Number(row.n)]));
 }
 
 export async function deleteShift(tournamentId: string, id: string): Promise<void> {
@@ -423,7 +460,7 @@ export async function assign(
     if (shift.rows.length === 0) return { ok: false, error: 'not_found' };
 
     const existing = await client.query<{ where: string | null; role: ShiftRole }>(
-      `SELECT COALESCE(d.name, l.name, s.place) AS where, s.role
+      `SELECT COALESCE(d.name, l.name, s.site, s.place) AS where, s.role
          FROM volunteer_assignment a
          JOIN volunteer_shift s ON s.id = a.shift_id
          LEFT JOIN diamond d ON d.id = s.diamond_id
@@ -531,7 +568,7 @@ export async function volunteerByToken(token: string): Promise<VolunteerView | n
     notes: string | null;
   }>(
     `SELECT s.id AS shift_id, s.role, s.starts_at, s.ends_at, a.confirmed_at, s.notes,
-            COALESCE(d.name, l.name, s.place) AS where
+            COALESCE(d.name, l.name, s.site, s.place) AS where
        FROM volunteer_assignment a
        JOIN volunteer_shift s ON s.id = a.shift_id
        LEFT JOIN diamond d ON d.id = s.diamond_id

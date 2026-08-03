@@ -54,6 +54,9 @@ export type EventKind =
   | 'volunteer.assigned'
   | 'volunteer.no_show'
   | 'volunteer.shift_created'
+  | 'gold_glove.drawn'
+  | 'donation.received'
+  | 'donation.settings_changed'
   | 'staff.signed_in';
 
 export interface EventInput {

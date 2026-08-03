@@ -3,6 +3,7 @@ import { query, queryOne, transaction } from '@/db/client';
 import { recordEvent, recordEventIn } from './events';
 import { currentProvider } from './payments/provider';
 import type { PaymentEvent } from './payments/provider';
+import { confirmDonationFromWebhook } from './donations';
 import {
   amountDue,
   capacity,
@@ -797,6 +798,13 @@ export async function applyPaymentEvent(
     };
 
     if (!event.succeeded) return note(false, 'session completed without payment');
+
+    // A donation has no entry behind it. It is the only kind that does not, so
+    // it forks here rather than pretending to be an entry with no team.
+    if (event.kind === 'donation') {
+      const gift = await confirmDonationFromWebhook(client, event);
+      return note(gift.ok, gift.reason);
+    }
 
     const entry = await client.query<{ id: string; tournament_id: string; team_name: string }>(
       'SELECT id, tournament_id, team_name FROM entry WHERE id = $1',

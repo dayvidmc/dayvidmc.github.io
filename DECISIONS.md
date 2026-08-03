@@ -742,6 +742,177 @@ Somebody already on the list is skipped and named, never overwritten. A second
 paste of the same sheet is the normal way this gets used and must not flatten a
 phone number since corrected by hand.
 
+### 2.44 A concession ticket is a tender, not a discount and not a cash sale
+
+**Decision.** `pos_tender.kind` gains `'ticket'`. A ticket sale records the food
+at what it would have sold for and settles against a tender worth nothing. The
+till has a third button next to Cash and Card.
+
+**Why.** Every team's package includes tickets good for a bag of chips and a
+drink, or a hot dog at a field with a barbecue. The till knew two tenders, so a
+volunteer had two wrong choices:
+
+- **Ring it as cash** and the raised figure is inflated by food that was given
+  away, and the drawer count at close is short by exactly that amount.
+- **Ring it as zero** and the stock that left the counter vanishes from the
+  books, so the per-item report says nobody ate a hot dog all Saturday.
+
+Either corrupts the number read out at a cheque presentation, which is the one
+number this whole system exists to get right. So the lines carry the cost and
+the tender carries the reason no money arrived. `ticket_count` is stored as well
+as the value, because the useful question in November is "how many of the ones
+we printed came back", and a figure in cents does not answer it.
+
+A ticket never rounds to the nearest nickel. There is no cash to round.
+
+### 2.45 A site supervisor covers every diamond at their site
+
+**Decision.** `volunteer_shift` gains a `site_supervisor` role and a `site`
+column, and `diamond_posting` gains a third arm joining a supervisor to every
+diamond whose `site` matches theirs. A supervisor shift without a site is
+refused by a CHECK constraint.
+
+**Why.** The volunteers module was built on a wrong assumption: that scores come
+from somebody rostered at one diamond. They do not. The signed scoresheet goes
+to a **site supervisor** — one per site, covering its two or three diamonds, in
+shifts — and *they* text it in. Building the fastest score path in the system
+around the wrong person is not a cosmetic error.
+
+The candidate set widens rather than becoming ambiguous: a supervisor covering
+three diamonds gets the games at all three, and the team names in their text
+pick out which one. That is the same disambiguation the parser already does.
+
+The site is free text matching `diamond.site`, because a site is a place with a
+name rather than a row in a table. That makes a typo silent, so the shift form
+offers the existing spellings, prints how many diamonds each covers, and says
+in red when a supervisor's site matches no diamond at all — a supervisor
+covering nothing is otherwise indistinguishable from one covering everything.
+
+Coverage gained `criticalGaps`, counted separately from `urgent`. `urgent` is
+"what must I solve in the next hour". A missing supervisor is worth knowing
+three weeks out, because it is a site whose results nobody will text in.
+
+### 2.46 A donation is written down before the money moves, and counts for nothing until it arrives
+
+**Decision.** The `donation` row is created when the donor presses the button,
+with `confirmed_at` null. The webhook sets `confirmed_at` and the provider's
+payment id. Only confirmed, unvoided rows count anywhere.
+
+**Why.** The donor's name and their answer to "may we thank you by name" have to
+survive a round trip to somebody else's payment page, and no provider carries
+arbitrary fields back reliably enough to bet a gift on. So the row goes down
+first.
+
+The consequence is rows that never complete, and those are shown on the HQ
+screen rather than hidden. A treasurer reconciling a provider statement needs to
+be able to see that a row exists and adds nothing — otherwise the first
+explanation reached for is that the software lost a payment.
+
+`external_ref` is unique. A webhook retry — and they all retry — finds it taken
+and stops. Double-booking a gift is the failure hardest to notice and worst to
+explain to the person who gave it.
+
+### 2.47 Nobody is thanked by name who did not ask to be
+
+**Decision.** `show_publicly` defaults to false, the form asks, and consent is
+only stored when a name was actually given.
+
+**Why.** A name on a public page that its owner did not offer is not a bug that
+can be taken back. Some gifts are in memory of somebody and some donors would
+rather nobody knew; both are ordinary, and the default has to be the safe one.
+
+The donate page says so out loud — "an anonymous gift counts exactly the same" —
+because a checkbox that looks like the price of being thanked is a checkbox
+people tick without meaning to.
+
+### 2.48 A public total is never negative, and a bar never runs past its end
+
+**Decision.** `publicProgress()` returns a null total when the net raised figure
+is zero or below, and caps the progress bar at 100%.
+
+**Why.** Costs can be booked before the revenue that answers them — trophies
+bought in June, food bought on the Friday — so the net figure genuinely can sit
+below zero for a while. "-$1,200 raised" on a page a grandparent is reading at a
+diamond is worse than an empty space, so the component renders the ask without
+the number.
+
+The cap is the same instinct in the other direction. Beating last year is the
+good outcome and the words say so; a bar drawn past its own end just looks like
+a bug, and a page that looks broken is not one anybody gives money through.
+
+### 2.49 Cash that goes home with somebody is recorded, because that protects them
+
+**Decision.** `cash_movement.kind` gains `overnight_out` and `overnight_back`.
+`cashPosition()` reports who is holding how much and since when. It does not
+change what is banked.
+
+**Why.** Saturday night's takings go home with somebody, because the banks are
+shut and a park is not a safe. That is normal and it is not going to stop being
+normal. What is not normal is nobody having written down who has it — and the
+person that protects most is the volunteer driving home with four thousand
+dollars of a children's hospital's money in a bag.
+
+It deliberately does not move `onHandCents`. The cash is still counted in and
+still not banked; taking it home changes where it sleeps, not what it is.
+
+A partial return is handled, because banking half of it on the way in is a real
+thing people do, and a double-recorded return cannot drive a holder negative.
+
+### 2.50 The Gold Glove draw is recorded, and cannot be quietly re-run
+
+**Decision.** `gold_glove_draw` stores the winner, the pool size and the seed,
+and carries the append-only trigger. Every draw stays on the record; a second
+one is listed alongside the first rather than replacing it, and the screen says
+out loud when there has been more than one.
+
+**Why.** The prize carries the name of the person the weekend is for, and the
+winner is a child. Two properties matter and neither is convenience.
+
+**It can be shown to have been fair.** The pool size and the random value are
+both stored, so the same draw re-derives to the same person. A draw that cannot
+be checked is one somebody can doubt out loud, in front of a family.
+
+**It cannot quietly be run again.** Redrawing until a nicer name comes up is the
+failure being guarded against, and the honest defence is a record of every draw
+rather than a rule nobody can see.
+
+`verify()` is careful about its wording when the rosters have changed since:
+that is not the same as the draw having been unfair, and a screen that implies
+it was would be doing real damage over a data change.
+
+### 2.51a Append-only stops UPDATE and DELETE, not TRUNCATE
+
+**Decision.** Noted rather than fixed: `prevent_mutation()` is a row or
+statement trigger on UPDATE and DELETE. `TRUNCATE` fires neither, so anybody
+with ownership of the table can still empty it.
+
+**Why it is noted.** Because the append-only guarantee is load-bearing — it is
+what makes the audit trail an answer to a coach at 8pm on a Sunday — and
+overstating it is worse than the gap itself. The honest scope is: **no
+application code path can rewrite history**, which is what the trigger was for.
+It is not a defence against somebody with database credentials, and nothing in a
+database ever is.
+
+Found while trying to reset a Gold Glove draw between verification runs, which
+the trigger correctly refused. A `TRUNCATE` trigger could be added; it would
+stop an accident and not an intention, and it would also break the reset that
+found it. Left alone deliberately.
+
+### 2.51 An unfinished bracket produces a blank, not a guess
+
+**Decision.** `championships()` reports a champion only when the last bracket
+round holds exactly one game, it has an approved score, and that score is not a
+tie. Everything else reports what it is waiting on.
+
+**Why.** The engraving list is read down a phone to a trophy shop on the Sunday
+afternoon, from memory and a stack of scoresheets, at the end of three days. A
+child's team name cut wrong into a trophy cannot be fixed afterwards.
+
+A plausible wrong answer is worse than an obvious blank here, so a last round
+with two games in it is reported as having no single final rather than having
+one of them picked. A tied final is a real state to be in for twenty minutes and
+is not a champion.
+
 ---
 
 ## 3. Deliberately not built

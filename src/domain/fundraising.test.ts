@@ -4,6 +4,8 @@ import {
   concessionsTotal,
   manualTotals,
   owedToVolunteers,
+  publicMoney,
+  publicProgress,
   summariseGifts,
   summariseRaised,
   type Gift,
@@ -191,6 +193,79 @@ describe('where the cash is', () => {
     const position = cashPosition([move({ kind: 'takings_in', witnessedBy: '   ' })]);
     expect(position.unwitnessed).toHaveLength(1);
   });
+
+  it('names who has the money at their house', () => {
+    // Saturday night. Somebody takes it home, and that is normal — what is not
+    // normal is nobody having written down who.
+    const position = cashPosition([
+      move({ kind: 'takings_in', amountCents: 400_000 }),
+      move({ kind: 'overnight_out', source: 'Bev', amountCents: 400_000 }),
+    ]);
+    expect(position.overnightHeldCents).toBe(400_000);
+    expect(position.overnightHolders).toEqual([
+      { who: 'Bev', amountCents: 400_000, since: new Date('2027-07-24T08:00:00Z') },
+    ]);
+  });
+
+  it('clears somebody once they bring it back', () => {
+    const position = cashPosition([
+      move({ kind: 'overnight_out', source: 'Bev', amountCents: 400_000 }),
+      move({ kind: 'overnight_back', source: 'Bev', amountCents: 400_000 }),
+    ]);
+    expect(position.overnightHeldCents).toBe(0);
+    expect(position.overnightHolders).toEqual([]);
+  });
+
+  it('still shows what is left when only part comes back', () => {
+    // Banking half of it on the way in is a real thing people do.
+    const position = cashPosition([
+      move({ kind: 'overnight_out', source: 'Bev', amountCents: 400_000 }),
+      move({ kind: 'overnight_back', source: 'Bev', amountCents: 150_000 }),
+    ]);
+    expect(position.overnightHeldCents).toBe(250_000);
+  });
+
+  it('dates a holder from their oldest unreturned trip', () => {
+    const position = cashPosition([
+      move({
+        kind: 'overnight_out', source: 'Bev', amountCents: 100_000,
+        occurredAt: new Date('2027-07-24T22:00:00Z'),
+      }),
+      move({
+        kind: 'overnight_out', source: 'Bev', amountCents: 200_000,
+        occurredAt: new Date('2027-07-25T22:00:00Z'),
+      }),
+    ]);
+    expect(position.overnightHolders[0]!.since).toEqual(new Date('2027-07-24T22:00:00Z'));
+    expect(position.overnightHolders[0]!.amountCents).toBe(300_000);
+  });
+
+  it('does not let cash at somebody\'s house change what is banked', () => {
+    // It is still counted in and still not banked. Taking it home moves where
+    // it sleeps, not what it is.
+    const position = cashPosition([
+      move({ kind: 'takings_in', amountCents: 400_000 }),
+      move({ kind: 'overnight_out', source: 'Bev', amountCents: 400_000 }),
+    ]);
+    expect(position.onHandCents).toBe(400_000);
+    expect(position.bankedCents).toBe(0);
+  });
+
+  it('wants a second name on cash going home too', () => {
+    const position = cashPosition([
+      move({ kind: 'overnight_out', source: 'Bev', amountCents: 400_000, witnessedBy: null }),
+    ]);
+    expect(position.unwitnessed).toHaveLength(1);
+  });
+
+  it('does not go negative if a return is recorded twice', () => {
+    const position = cashPosition([
+      move({ kind: 'overnight_out', source: 'Bev', amountCents: 100_000 }),
+      move({ kind: 'overnight_back', source: 'Bev', amountCents: 100_000 }),
+      move({ kind: 'overnight_back', source: 'Bev', amountCents: 100_000 }),
+    ]);
+    expect(position.overnightHeldCents).toBe(0);
+  });
 });
 
 describe('gifts in kind', () => {
@@ -321,5 +396,126 @@ describe('costs that arrive as a stack of receipts', () => {
     const total = concessionsTotal([line(50000, null)], 500, 12000);
     expect(total.takenCents).toBe(49500);
     expect(total.raisedCents).toBe(37500);
+  });
+});
+
+
+describe('food handed over against a team ticket', () => {
+  const line = (takenCents: number, unitCostCents: number | null, quantity = 1) => ({
+    itemName: 'Hot dog',
+    quantity,
+    takenCents,
+    unitCostCents,
+    donatedBy: null,
+  });
+
+  it('does not count a ticket redemption as money taken', () => {
+    // The failure this prevents: the raised figure inflated by the value of
+    // food that was given away, read out at a cheque presentation.
+    const total = concessionsTotal([line(50000, 100, 100)], 0, 0, 8000);
+    expect(total.takenCents).toBe(42000);
+    expect(total.ticketRedeemedCents).toBe(8000);
+  });
+
+  it('still counts what that food cost', () => {
+    // The other half. A hot dog given against a ticket cost what it cost.
+    const total = concessionsTotal([line(50000, 100, 100)], 0, 0, 8000);
+    expect(total.costCents).toBe(10000);
+    expect(total.raisedCents).toBe(42000 - 10000);
+  });
+
+  it('is zero when no tickets came back', () => {
+    expect(concessionsTotal([line(50000, 100, 100)]).ticketRedeemedCents).toBe(0);
+  });
+
+  it('comes off alongside refunds, not instead of them', () => {
+    const total = concessionsTotal([line(50000, null)], 1000, 0, 8000);
+    expect(total.takenCents).toBe(41000);
+  });
+
+  it('rolls up across streams', () => {
+    const summary = summariseRaised([
+      concessionsTotal([line(50000, 100, 100)], 0, 0, 8000),
+      ...manualTotals([{ stream: 'auction', amountCents: 20000, costCents: 0 }]),
+    ]);
+    expect(summary.ticketRedeemedCents).toBe(8000);
+    expect(summary.takenCents).toBe(42000 + 20000);
+  });
+});
+
+describe('the number a stranger sees', () => {
+  const LAST_YEAR = 4_500_000; // $45,000
+
+  it('shows nothing at all rather than a negative total', () => {
+    // Trophies bought in June, food bought on the Friday. The net figure really
+    // can be below zero for a while, and "-$1,200 raised" on a page a
+    // grandparent is reading is worse than an empty space.
+    const progress = publicProgress(-120_000, LAST_YEAR);
+    expect(progress.raisedCents).toBeNull();
+    expect(progress.message).toBe('nothing_yet');
+  });
+
+  it('shows nothing at zero either', () => {
+    expect(publicProgress(0, LAST_YEAR).raisedCents).toBeNull();
+  });
+
+  it('reports how far along last year it is', () => {
+    const progress = publicProgress(2_250_000, LAST_YEAR);
+    expect(progress.percent).toBe(50);
+    expect(progress.aheadCents).toBe(-2_250_000);
+    expect(progress.message).toBe('under_way');
+  });
+
+  it('calls it close in the last tenth', () => {
+    expect(publicProgress(4_100_000, LAST_YEAR).message).toBe('close');
+  });
+
+  it('says so once it is past last year', () => {
+    const progress = publicProgress(4_600_000, LAST_YEAR);
+    expect(progress.aheadCents).toBe(100_000);
+    expect(progress.message).toBe('ahead');
+  });
+
+  it('caps the bar at its own end', () => {
+    // A bar drawn past 100% looks like a bug, and the words already say the
+    // good news.
+    expect(publicProgress(9_000_000, LAST_YEAR).percent).toBe(100);
+  });
+
+  it('still prints a total when nobody recorded last year', () => {
+    const progress = publicProgress(1_000_000, 0);
+    expect(progress.raisedCents).toBe(1_000_000);
+    expect(progress.targetCents).toBeNull();
+    expect(progress.percent).toBe(0);
+    expect(progress.message).toBe('under_way');
+  });
+
+  it('exactly matching last year counts as ahead, not short', () => {
+    expect(publicProgress(LAST_YEAR, LAST_YEAR).message).toBe('ahead');
+  });
+});
+
+describe('a figure on a public page', () => {
+  it('groups the thousands, because $45000.00 is a number people have to parse', () => {
+    expect(publicMoney(4_500_000)).toBe('$45,000');
+    expect(publicMoney(53_600_000)).toBe('$536,000');
+  });
+
+  it('drops the cents, which say nothing on a fundraising total', () => {
+    expect(publicMoney(1_276_985)).toBe('$12,769');
+  });
+
+  it('rounds down, so a charity total is never overstated', () => {
+    expect(publicMoney(1_999)).toBe('$19');
+    expect(publicMoney(2_000)).toBe('$20');
+  });
+
+  it('never prints a negative', () => {
+    expect(publicMoney(-5_000)).toBe('$0');
+  });
+
+  it('handles small amounts without pretending they are bigger', () => {
+    expect(publicMoney(0)).toBe('$0');
+    expect(publicMoney(100)).toBe('$1');
   });
 });

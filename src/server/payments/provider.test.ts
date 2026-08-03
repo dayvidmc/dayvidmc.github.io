@@ -119,8 +119,15 @@ describe('webhook verification', () => {
   });
 
   it('refuses an event whose kind is not one of ours', () => {
-    const body = completed({ metadata: { entry_id: 'entry-1', kind: 'donation' } });
+    const body = completed({ metadata: { entry_id: 'entry-1', kind: 'merchandise' } });
     expect(provider.verifyWebhook(body, sign(body)).ok).toBe(false);
+  });
+
+  it('accepts a donation, which carries no entry of its own', () => {
+    const body = completed({ metadata: { entry_id: 'donation', kind: 'donation' } });
+    const result = provider.verifyWebhook(body, sign(body));
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.event?.kind).toBe('donation');
   });
 
   it('reports an unpaid session as not succeeded rather than dropping it', () => {

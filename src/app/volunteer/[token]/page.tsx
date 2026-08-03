@@ -114,6 +114,16 @@ export default async function VolunteerPage({
               </div>
             )}
 
+            {booking.role === 'site_supervisor' && (
+              <div className="notice info" style={{ marginTop: 10, marginBottom: 0 }}>
+                <strong>You can text the scores in, for any diamond at {booking.where}.</strong> As
+                each signed sheet reaches you, text the result to the tournament number —
+                &ldquo;Kanata 7 Nepean 4&rdquo; is enough, and you do not need to say which diamond.
+                It goes straight onto the board. Keep the paper; the text is what makes the standings
+                move, and the sheet is what settles an argument later.
+              </div>
+            )}
+
             {booking.confirmed ? (
               <p className="hint" style={{ marginTop: 10 }}>Confirmed — thank you.</p>
             ) : (

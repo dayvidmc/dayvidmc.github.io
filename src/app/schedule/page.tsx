@@ -1,5 +1,6 @@
 import { query } from '@/db/client';
 import { currentTournament } from '@/server/repo';
+import { RaisedSoFar } from '../_components/RaisedSoFar';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +60,8 @@ export default async function SchedulePage() {
           ? `${liveTotal} game${liveTotal === 1 ? '' : 's'} on now across the tournament.`
           : 'No games in progress right now.'}
       </p>
+
+      <RaisedSoFar compact />
 
       {divisions.length === 0 && <div className="empty">No divisions yet.</div>}
 

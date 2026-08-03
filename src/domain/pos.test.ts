@@ -102,6 +102,13 @@ describe('Canadian nickel rounding', () => {
     expect(amountDue(703, 'cash')).toBe(705);
     expect(amountDue(703, 'card')).toBe(703);
   });
+
+  it('never rounds a ticket, because nothing is being handed over', () => {
+    // A ticket settles at the exact value of the food. Rounding it would drift
+    // the giveaway total by a cent a time against no cash at all.
+    expect(amountDue(702, 'ticket')).toBe(702);
+    expect(amountDue(703, 'ticket')).toBe(703);
+  });
 });
 
 describe('change', () => {

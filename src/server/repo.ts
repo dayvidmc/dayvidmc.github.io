@@ -20,13 +20,24 @@ export interface Tournament {
   day_end_time: string;
   /** Whether umpires may file scores (§5.2 path 4). Off unless turned on. */
   umpire_score_entry: boolean;
+  /** What one concession ticket is good for, in the committee's own words. */
+  ticket_covers: string | null;
+  /** How many go in a team's package, so "N of M came back" is answerable. */
+  tickets_per_team: number;
+  /** Last year's figure, so "more than last year" is measurable. */
+  previous_year_raised_cents: number;
+  /** Whether the public pages ask for a donation at all. Off by default. */
+  donations_open: boolean;
+  donation_message: string | null;
 }
 
 /** The tournament in play. There is one; scoping is for cloning years cleanly. */
 export async function currentTournament(): Promise<Tournament | null> {
   return queryOne<Tournament>(
     `SELECT id, name, year, time_zone, starts_on::text, ends_on::text,
-            day_start_time::text, day_end_time::text, umpire_score_entry
+            day_start_time::text, day_end_time::text, umpire_score_entry,
+            ticket_covers, tickets_per_team, previous_year_raised_cents,
+            donations_open, donation_message
        FROM tournament ORDER BY year DESC LIMIT 1`,
   );
 }

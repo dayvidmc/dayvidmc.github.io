@@ -218,10 +218,12 @@ export interface IncomingOrder {
     lineTotalCents: number;
   }[];
   tenders: {
-    kind: 'cash' | 'card' | 'other';
+    kind: 'cash' | 'card' | 'ticket' | 'other';
     amountCents: number;
     tenderedCents: number | null;
     changeCents: number | null;
+    /** Tickets only: how many came across the counter. */
+    ticketCount?: number | null;
     squarePaymentId: string | null;
     squareStatus: string | null;
   }[];
@@ -287,14 +289,15 @@ export async function syncOrders(
           await client.query(
             `INSERT INTO pos_tender
                (order_id, kind, amount_cents, tendered_cents, change_cents,
-                square_payment_id, square_status)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+                ticket_count, square_payment_id, square_status)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
             [
               order.id,
               tender.kind,
               tender.amountCents,
               tender.tenderedCents,
               tender.changeCents,
+              tender.ticketCount ?? null,
               tender.squarePaymentId,
               tender.squareStatus,
             ],
@@ -416,21 +419,33 @@ export interface LocationSales {
   orders: number;
   cash_cents: number;
   card_cents: number;
+  /** Food handed over against a team's tickets. Not money — see below. */
+  ticket_cents: number;
+  tickets_taken: number;
   refunds_cents: number;
   net_cents: number;
 }
 
-/** Per-site takings, for the director's dashboard next to auction and entry fees. */
+/**
+ * Per-site takings, for the director's dashboard next to auction and entry fees.
+ *
+ * `net_cents` deliberately excludes ticket tenders. A ticket is food that left
+ * the counter without money arriving, so counting it as takings would report a
+ * stand as having earned what it in fact gave away — it is broken out on its own
+ * instead, which is also the honest way to see which stand the tickets land on.
+ */
 export async function salesByLocation(tournamentId: string): Promise<LocationSales[]> {
   return query<LocationSales>(
     `SELECT l.id AS location_id, l.name AS location_name,
             COUNT(DISTINCT o.id)::int AS orders,
             COALESCE(SUM(t.amount_cents) FILTER (WHERE t.kind = 'cash'), 0)::int AS cash_cents,
             COALESCE(SUM(t.amount_cents) FILTER (WHERE t.kind = 'card'), 0)::int AS card_cents,
+            COALESCE(SUM(t.amount_cents) FILTER (WHERE t.kind = 'ticket'), 0)::int AS ticket_cents,
+            COALESCE(SUM(t.ticket_count) FILTER (WHERE t.kind = 'ticket'), 0)::int AS tickets_taken,
             COALESCE((SELECT sum(r.amount_cents) FROM pos_refund r
                         JOIN pos_order ro ON ro.id = r.order_id
                        WHERE ro.location_id = l.id), 0)::int AS refunds_cents,
-            (COALESCE(SUM(t.amount_cents), 0)
+            (COALESCE(SUM(t.amount_cents) FILTER (WHERE t.kind <> 'ticket'), 0)
              - COALESCE((SELECT sum(r.amount_cents) FROM pos_refund r
                            JOIN pos_order ro ON ro.id = r.order_id
                           WHERE ro.location_id = l.id), 0))::int AS net_cents

@@ -25,34 +25,55 @@
 import { minutesBetween } from './time';
 
 export type ShiftRole =
+  | 'site_supervisor'
   | 'diamond'
+  | 'grounds'
   | 'canteen'
   | 'bbq'
   | 'auction'
   | 'gate'
+  | 'pickup'
   | 'setup'
   | 'floating';
 
 export const ROLE_LABEL: Record<ShiftRole, string> = {
+  site_supervisor: 'Site supervisor',
   diamond: 'At a diamond',
+  grounds: 'Grounds — lining and raking',
   canteen: 'Canteen',
   bbq: 'BBQ',
   auction: 'Auction table',
   gate: 'Gate and welcome',
+  pickup: 'Pickups and running',
   setup: 'Setup and teardown',
   floating: 'Wherever needed',
 };
 
-/** The order a coordinator cares about them, most consequential first. */
+/**
+ * The order a coordinator cares about them, most consequential first.
+ *
+ * Site supervisor leads because it is the only role whose absence stops scores
+ * arriving: the signed sheet reaches the supervisor and the supervisor texts it
+ * in. An empty canteen shift is a queue; an empty supervisor shift is a site
+ * whose results nobody has.
+ */
 export const ROLE_ORDER: ShiftRole[] = [
+  'site_supervisor',
   'diamond',
+  'grounds',
   'canteen',
   'bbq',
   'gate',
   'auction',
+  'pickup',
   'setup',
   'floating',
 ];
+
+/** Roles whose absence stops something, rather than slowing it. */
+export function isCritical(role: ShiftRole): boolean {
+  return role === 'site_supervisor' || role === 'diamond';
+}
 
 export interface Shift {
   id: string;
@@ -140,6 +161,15 @@ export interface CoverageSummary {
   unconfirmed: number;
   /** Gaps in shifts that have started or start within the hour. */
   urgent: number;
+  /**
+   * Gaps in roles whose absence stops something rather than slowing it.
+   *
+   * Counted separately from `urgent` because it answers a different question.
+   * `urgent` is "what do I have to solve in the next hour"; this is "is there a
+   * site whose scores nobody is going to text in", which can be true three days
+   * out and is worth knowing then rather than at 9:05 on the Saturday.
+   */
+  criticalGaps: number;
 }
 
 export function summarise(rows: readonly ShiftCoverage[]): CoverageSummary {
@@ -152,6 +182,9 @@ export function summarise(rows: readonly ShiftCoverage[]): CoverageSummary {
     unconfirmed: rows.reduce((sum, row) => sum + row.unconfirmed, 0),
     urgent: rows.filter(
       (row) => (row.gap === 'empty' || row.gap === 'short') && row.minutesAway <= 60,
+    ).length,
+    criticalGaps: rows.filter(
+      (row) => (row.gap === 'empty' || row.gap === 'short') && isCritical(row.shift.role),
     ).length,
   };
 }

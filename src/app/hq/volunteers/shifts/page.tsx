@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff } from '@/server/auth';
 import { currentTournament, listDiamonds } from '@/server/repo';
 import { listLocations } from '@/server/concessions';
-import { shiftsFor } from '@/server/volunteers';
+import { diamondsPerSite, shiftsFor, sites } from '@/server/volunteers';
 import { ROLE_LABEL, ROLE_ORDER } from '@/domain/volunteers';
 import { formatDate, formatDateFriendly, formatTimeFriendly } from '@/domain/time';
 import { createShiftAction, deleteShiftAction } from '../actions';
@@ -14,6 +14,8 @@ const ERROR: Record<string, string> = {
   bad_time: 'That date and time did not read.',
   bad_needed: 'A shift needs at least one person, and fifty is plenty.',
   needs_diamond: 'A diamond shift has to say which diamond — the posting is the whole point of it.',
+  needs_site:
+    'A site supervisor shift has to say which site. Without one they cover no diamonds, so a score they text in is not recognised.',
   backwards: 'A shift cannot end before it starts.',
 };
 
@@ -37,10 +39,12 @@ export default async function ShiftsPage({
   if (!tournament) return <div className="notice info">No tournament set up yet.</div>;
 
   const params = await searchParams;
-  const [shifts, diamonds, locations] = await Promise.all([
+  const [shifts, diamonds, locations, siteNames, perSite] = await Promise.all([
     shiftsFor(tournament.id),
     listDiamonds(tournament.id),
     listLocations(tournament.id),
+    sites(tournament.id),
+    diamondsPerSite(tournament.id),
   ]);
 
   const byDay = new Map<string, typeof shifts>();
@@ -78,10 +82,30 @@ export default async function ShiftsPage({
           ))}
         </select>
         <p className="hint">
-          A <strong>diamond</strong> shift is the one with teeth: whoever is on it can text a score
-          in from their phone and have it land on the right game, which is the fastest route a score
-          has into this system.
+          Two of these carry the score path. A <strong>site supervisor</strong> covers every diamond
+          at their site — that is who the signed sheets reach, and whoever is on it can text a score
+          in from their own phone and have it land on the right game. A <strong>diamond</strong>{' '}
+          shift does the same for one diamond.
         </p>
+
+        <label htmlFor="site">Which site — for a supervisor</label>
+        <input
+          id="site" name="site" type="text" list="site-names" maxLength={160}
+          placeholder="e.g. Walter Baker"
+        />
+        <datalist id="site-names">
+          {siteNames.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
+        {siteNames.length > 0 && (
+          <p className="hint">
+            {siteNames
+              .map((name) => `${name} (${perSite.get(name) ?? 0} diamond${(perSite.get(name) ?? 0) === 1 ? '' : 's'})`)
+              .join(' · ')}
+            . The spelling has to match the diamonds, or the supervisor covers nothing.
+          </p>
+        )}
 
         <label htmlFor="diamondId">Which diamond</label>
         <select id="diamondId" name="diamondId" defaultValue="">
@@ -160,7 +184,17 @@ export default async function ShiftsPage({
                     <div className="meta">
                       {formatTimeFriendly(shift.startsAt)} to {formatTimeFriendly(shift.endsAt)} ·{' '}
                       {shift.needed} needed · {shift.assigned.length} on it
+                      {shift.role === 'site_supervisor' &&
+                        ` · covers ${perSite.get(shift.where) ?? 0} diamond${
+                          (perSite.get(shift.where) ?? 0) === 1 ? '' : 's'
+                        }`}
                     </div>
+                    {shift.role === 'site_supervisor' && (perSite.get(shift.where) ?? 0) === 0 && (
+                      <div className="meta" style={{ color: 'var(--bad, #b00)' }}>
+                        No diamond is at a site spelled that way, so nothing this person texts in
+                        will be recognised.
+                      </div>
+                    )}
                   </div>
                   {shift.assigned.length === 0 && (
                     <form action={deleteShiftAction}>

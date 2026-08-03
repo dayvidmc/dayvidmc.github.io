@@ -93,6 +93,17 @@ export default async function VolunteersPage({
         </div>
       )}
 
+      {summary.criticalGaps > 0 && (
+        <div className="notice warn">
+          <strong>
+            {summary.criticalGaps} supervisor or diamond shift
+            {summary.criticalGaps === 1 ? ' is' : 's are'} short.
+          </strong>{' '}
+          These are the ones scores come in through — a site with no supervisor on it is a site whose
+          results nobody is going to text in, whether that is on Saturday or three weeks out.
+        </div>
+      )}
+
       {summary.emptyShifts > 0 && (
         <div className="notice warn">
           {summary.emptyShifts} shift{summary.emptyShifts === 1 ? ' has' : 's have'} nobody on{' '}

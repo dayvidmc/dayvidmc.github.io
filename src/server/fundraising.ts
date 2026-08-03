@@ -2,6 +2,7 @@ import { query, queryOne } from '@/db/client';
 import { recordEvent } from './events';
 import { auctionRaisedCents } from './auction';
 import { entriesTakenCents } from './registration';
+import { donationsTakenCents } from './donations';
 import {
   cashPosition,
   concessionsTotal,
@@ -197,6 +198,25 @@ export async function markReimbursed(
   });
 }
 
+/**
+ * Value of food handed over against a team's tickets.
+ *
+ * Computed from the order lines rather than from the tender, because the
+ * tender carries no money — the whole point of a ticket is that nothing was
+ * paid. The lines are what tell us what was actually given away.
+ */
+export async function ticketRedeemedCents(tournamentId: string): Promise<number> {
+  const row = await queryOne<{ total: string | null }>(
+    `SELECT COALESCE(SUM(ol.line_total_cents), 0)::text AS total
+       FROM pos_order_line ol
+       JOIN pos_order o ON o.id = ol.order_id
+      WHERE o.tournament_id = $1 AND o.status = 'complete'
+        AND EXISTS (SELECT 1 FROM pos_tender t WHERE t.order_id = o.id AND t.kind = 'ticket')`,
+    [tournamentId],
+  );
+  return Number(row?.total ?? 0);
+}
+
 /** Refunds are per order, so they come off the canteen stream as a whole. */
 export async function concessionRefunds(tournamentId: string): Promise<number> {
   const rows = await query<{ n: string }>(
@@ -216,19 +236,24 @@ export interface RaisedNow extends RaisedSummary {
   auctionCountedTwice: boolean;
   /** A hand-typed entry-fee figure sitting alongside real entries. */
   entriesCountedTwice: boolean;
+  /** A hand-typed donation figure sitting alongside real donations. */
+  donationsCountedTwice: boolean;
   /** What volunteers are still out of pocket for. */
   owed: ReturnType<typeof owedToVolunteers>;
 }
 
 export async function raisedSoFar(tournamentId: string): Promise<RaisedNow> {
-  const [lines, entries, refunds, auctionCents, entryCents, shops] = await Promise.all([
-    soldLines(tournamentId),
-    revenueEntries(tournamentId),
-    concessionRefunds(tournamentId),
-    auctionRaisedCents(tournamentId),
-    entriesTakenCents(tournamentId),
-    purchases(tournamentId),
-  ]);
+  const [lines, entries, refunds, auctionCents, entryCents, shops, ticketCents, giftCents] =
+    await Promise.all([
+      soldLines(tournamentId),
+      revenueEntries(tournamentId),
+      concessionRefunds(tournamentId),
+      auctionRaisedCents(tournamentId),
+      entriesTakenCents(tournamentId),
+      purchases(tournamentId),
+      ticketRedeemedCents(tournamentId),
+      donationsTakenCents(tournamentId),
+    ]);
 
   const purchaseCents = shops.reduce((sum, shop) => sum + shop.amountCents, 0);
 
@@ -252,8 +277,13 @@ export async function raisedSoFar(tournamentId: string): Promise<RaisedNow> {
     manual.push({ stream: 'registration', amountCents: entryCents, costCents: 0 });
   }
 
+  // Donations taken through the donate button, same arrangement again.
+  if (giftCents > 0) {
+    manual.push({ stream: 'donation', amountCents: giftCents, costCents: 0 });
+  }
+
   const summary = summariseRaised([
-    concessionsTotal(lines, refunds, purchaseCents),
+    concessionsTotal(lines, refunds, purchaseCents, ticketCents),
     ...manualTotals(manual),
   ]);
 
@@ -273,6 +303,8 @@ export async function raisedSoFar(tournamentId: string): Promise<RaisedNow> {
     entriesCountedTwice:
       entryCents !== 0 &&
       entries.some((row) => row.stream === 'registration' && row.amount_cents > 0),
+    donationsCountedTwice:
+      giftCents > 0 && entries.some((row) => row.stream === 'donation' && row.amount_cents > 0),
   };
 }
 

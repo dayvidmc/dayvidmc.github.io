@@ -147,6 +147,7 @@ export default async function TillPage({
         registerSessionId={session.id}
         deviceLabel={session.device_label}
         squareApplicationId={process.env.SQUARE_APPLICATION_ID ?? null}
+        ticketCovers={tournament.ticket_covers}
         menu={menu.map((item) => ({
           id: item.id,
           name: item.name,

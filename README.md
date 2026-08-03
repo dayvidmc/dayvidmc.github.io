@@ -45,6 +45,11 @@ intake paths that feed it.
 | Silent auction: lots, printable bid sheets, a fast close, winners, payment | §7.3 | Built, tested — reports itself into the money total |
 | Team entries: a timed opening, a queue, caps and waitlists, deposits and balances | §8A/E | Built, tested — thirteen divisions grouped by age group, refund terms stated before payment; e-transfer and cheque work out of the box, card needs a merchant account |
 | Volunteers: the list, shifts, coverage gaps, their own link | §6 | Built, tested — a diamond shift is also what makes score intake recognise that phone |
+| Volunteers: site supervisors covering a whole site | §6 | Built, tested — this is who the signed sheets actually reach, and their phone is recognised for every diamond at their site |
+| Concession tickets from the team packages | §8 | Built, tested — a third tender, so food given away is neither counted as takings nor lost from the books |
+| Donations: a public page, a live total against last year | §8A | Built, tested — off until the committee turns it on; nobody is thanked by name who did not ask to be |
+| Cash that goes home overnight | §8A | Built, tested — who has it and since when, because that protects the volunteer as much as the money |
+| Trophies: the engraving list, and the Gold Glove draw | — | Built, tested — the draw records its pool size and seed so it can be shown to have been straight |
 | Append-only audit trail | §9 | Built, enforced by the database |
 
 ## What is deliberately not here
@@ -111,7 +116,7 @@ It is meant for the Phase 0 debrief — it is much easier to ask a director "is
 this the board you want?" than to describe one.
 
 ```bash
-npm test          # 200 unit tests, no database needed
+npm test          # 400+ unit tests, no database needed
 npm run typecheck
 npm run build
 

@@ -55,16 +55,17 @@ interface QueuedOrder {
     lineTotalCents: number;
   }[];
   tenders: {
-    kind: 'cash' | 'card' | 'other';
+    kind: 'cash' | 'card' | 'ticket' | 'other';
     amountCents: number;
     tenderedCents: number | null;
     changeCents: number | null;
+    ticketCount: number | null;
     squarePaymentId: string | null;
     squareStatus: string | null;
   }[];
 }
 
-type Mode = 'sell' | 'cash' | 'card' | 'done';
+type Mode = 'sell' | 'cash' | 'card' | 'ticket' | 'done';
 
 function readQueue(): QueuedOrder[] {
   if (typeof window === 'undefined') return [];
@@ -94,6 +95,7 @@ export function Till({
   registerSessionId,
   deviceLabel,
   squareApplicationId,
+  ticketCovers,
 }: {
   locationId: string;
   locationName: string;
@@ -102,11 +104,14 @@ export function Till({
   registerSessionId: string | null;
   deviceLabel: string | null;
   squareApplicationId: string | null;
+  /** What one ticket is good for, in the words the committee uses. */
+  ticketCovers: string | null;
 }) {
   const [lines, setLines] = useState<CartLine[]>([]);
   const [mode, setMode] = useState<Mode>('sell');
   const [cartOpen, setCartOpen] = useState(false);
   const [tenderedInput, setTenderedInput] = useState('');
+  const [ticketCount, setTicketCount] = useState(1);
   const [lastChange, setLastChange] = useState<number | null>(null);
   const [queued, setQueued] = useState(0);
   const [online, setOnline] = useState(true);
@@ -212,6 +217,7 @@ export function Till({
 
       setLines([]);
       setTenderedInput('');
+      setTicketCount(1);
       setCartOpen(false);
       setMode('done');
     },
@@ -319,6 +325,7 @@ export function Till({
                 amountCents: cashTotal,
                 tenderedCents: tendered,
                 changeCents: change,
+                ticketCount: null,
                 squarePaymentId: null,
                 squareStatus: null,
               },
@@ -384,6 +391,7 @@ export function Till({
                 amountCents: cardTotal,
                 tenderedCents: null,
                 changeCents: null,
+                ticketCount: null,
                 squarePaymentId: null,
                 squareStatus: 'confirmed_by_volunteer',
               },
@@ -393,6 +401,74 @@ export function Till({
           }
         >
           Card approved — record {formatMoney(cardTotal)}
+        </button>
+        <button className="wide" onClick={() => setMode('sell')} style={{ marginTop: 10 }}>
+          Back
+        </button>
+      </div>
+    );
+  }
+
+  // --- Tickets ----------------------------------------------------------------
+
+  if (mode === 'ticket') {
+    return (
+      <div>
+        <SyncBanner online={online} queued={queued} error={syncError} />
+        <div className="till-total-row">
+          <span>Worth</span>
+          <strong>{formatMoney(cardTotal)}</strong>
+        </div>
+        <p className="hint" style={{ marginTop: 0 }}>
+          No money changes hands. The food is still recorded at what it would have sold for, so the
+          stock adds up at the end of the day and the raised figure does not count food that was
+          given away.
+        </p>
+
+        {ticketCovers && <div className="notice info">One ticket covers {ticketCovers}.</div>}
+
+        <label htmlFor="ticketCount">How many tickets</label>
+        <div className="quick-cash">
+          {[1, 2, 3, 4].map((count) => (
+            <button
+              key={count}
+              onClick={() => setTicketCount(count)}
+              style={count === ticketCount ? { fontWeight: 700, outline: '2px solid currentColor' } : undefined}
+            >
+              {count}
+            </button>
+          ))}
+        </div>
+        <input
+          id="ticketCount"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={50}
+          value={ticketCount}
+          onChange={(e) => setTicketCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+          style={{ fontSize: 32, textAlign: 'right', minHeight: 64 }}
+        />
+
+        <button
+          className="primary wide till-big"
+          onClick={() =>
+            complete(
+              {
+                kind: 'ticket',
+                amountCents: cardTotal,
+                tenderedCents: null,
+                changeCents: null,
+                ticketCount,
+                squarePaymentId: null,
+                squareStatus: null,
+              },
+              cardTotal,
+              0,
+            )
+          }
+        >
+          Take {ticketCount} ticket{ticketCount === 1 ? '' : 's'}
         </button>
         <button className="wide" onClick={() => setMode('sell')} style={{ marginTop: 10 }}>
           Back
@@ -487,6 +563,10 @@ export function Till({
               Cash {formatMoney(cashTotal)}
             </button>
             <button onClick={() => setMode('card')}>Card {formatMoney(cardTotal)}</button>
+            {/* Third, not hidden behind a menu. A queue of ten with three
+                ticket-holders in it is a normal Saturday, and a volunteer who
+                cannot find this button rings it as cash. */}
+            <button onClick={() => setMode('ticket')}>Ticket</button>
           </div>
         </div>
       )}

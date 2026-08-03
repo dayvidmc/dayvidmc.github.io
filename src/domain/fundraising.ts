@@ -50,6 +50,11 @@ export interface StreamTotal {
   costIncomplete: boolean;
   /** What was sold at zero cost because somebody donated the stock. */
   donatedStockCents: number;
+  /**
+   * Food handed over against a team's tickets. Real cost, no money taken —
+   * so it is subtracted from `takenCents` and left in `costCents`.
+   */
+  ticketRedeemedCents: number;
 }
 
 export interface SoldLine {
@@ -125,6 +130,7 @@ export function concessionsTotal(
   lines: readonly SoldLine[],
   refundsCents = 0,
   purchasesCents = 0,
+  ticketRedeemedCents = 0,
 ): StreamTotal {
   let takenCents = 0;
   let costCents = 0;
@@ -157,13 +163,21 @@ export function concessionsTotal(
   // still be told her figure was a ceiling.
   const total = costCents + purchasesCents;
 
+  // Food handed over against a ticket from a team's package. The lines are
+  // real — that hot dog cost what it cost — but no money changed hands, so it
+  // must come off what was *taken*. Counting it as revenue inflates the figure
+  // read out at a cheque presentation by the value of food that was given
+  // away, which is the worst failure this screen has.
+  const taken = takenCents - refundsCents - ticketRedeemedCents;
+
   return {
     stream: 'concessions',
-    takenCents: takenCents - refundsCents,
+    takenCents: taken,
     costCents: total,
-    raisedCents: takenCents - refundsCents - total,
+    raisedCents: taken - total,
     costIncomplete: costIncomplete && purchasesCents === 0,
     donatedStockCents,
+    ticketRedeemedCents,
   };
 }
 
@@ -184,6 +198,7 @@ export function manualTotals(entries: readonly ManualEntry[]): StreamTotal[] {
       raisedCents: 0,
       costIncomplete: false,
       donatedStockCents: 0,
+      ticketRedeemedCents: 0,
     };
     existing.takenCents += entry.amountCents;
     existing.costCents += entry.costCents;
@@ -202,6 +217,8 @@ export interface RaisedSummary {
   /** True when any stream's cost is incomplete, so the total is a ceiling. */
   costIncomplete: boolean;
   donatedStockCents: number;
+  /** Food given against team tickets, across every stream. */
+  ticketRedeemedCents: number;
 }
 
 export function summariseRaised(totals: readonly StreamTotal[]): RaisedSummary {
@@ -216,18 +233,94 @@ export function summariseRaised(totals: readonly StreamTotal[]): RaisedSummary {
     raisedCents: streams.reduce((n, s) => n + s.raisedCents, 0),
     costIncomplete: streams.some((s) => s.costIncomplete),
     donatedStockCents: streams.reduce((n, s) => n + s.donatedStockCents, 0),
+    ticketRedeemedCents: streams.reduce((n, s) => n + (s.ticketRedeemedCents ?? 0), 0),
+  };
+}
+
+// --- The number a stranger sees ----------------------------------------------
+
+/**
+ * A figure for a public page: grouped, and without cents.
+ *
+ * `formatMoney` is built for a till, where the cents are the whole point and
+ * a total is rarely four digits. A fundraising total is the opposite on both
+ * counts — "$45000.00" is a number somebody has to stop and parse, and the
+ * eighty-five cents on the end of it says nothing to anybody.
+ *
+ * Rounds **down**, so the figure printed is never more than what was raised.
+ * Overstating a charity total by ninety-nine cents is still overstating it.
+ */
+export function publicMoney(cents: number): string {
+  const dollars = Math.floor(Math.max(0, cents) / 100);
+  return `$${dollars.toLocaleString('en-CA')}`;
+}
+
+export interface PublicProgress {
+  /** What to print. Null when there is nothing honest to print yet. */
+  raisedCents: number | null;
+  /** Last year's figure, or null when nobody has recorded one. */
+  targetCents: number | null;
+  /** 0–100, for a bar. Capped, because a bar past its own end reads as broken. */
+  percent: number;
+  /** Positive once this year is past last year's. */
+  aheadCents: number | null;
+  /** Twenty-nine years of it. Null when nobody has recorded that either. */
+  message: 'ahead' | 'close' | 'under_way' | 'nothing_yet';
+}
+
+/**
+ * The running total for a public page, and how it compares to last year.
+ *
+ * Two decisions in here are about not lying to somebody standing at a diamond.
+ *
+ * **A negative total is not shown at all.** Costs can be booked before the
+ * revenue that answers them — trophies bought in June, food bought on the
+ * Friday — so the net figure genuinely can be below zero for a while. Printing
+ * "-$1,200 raised" on a page a grandparent is reading is worse than printing
+ * nothing, so this returns null and the component renders nothing.
+ *
+ * **The bar caps at 100%.** Beating last year is the good outcome and the words
+ * say so; a bar drawn past its own end just looks like a bug.
+ */
+export function publicProgress(
+  raisedCents: number,
+  previousYearCents: number,
+): PublicProgress {
+  const target = previousYearCents > 0 ? previousYearCents : null;
+
+  if (raisedCents <= 0) {
+    return { raisedCents: null, targetCents: target, percent: 0, aheadCents: null, message: 'nothing_yet' };
+  }
+
+  const ahead = target === null ? null : raisedCents - target;
+  const percent = target === null ? 0 : Math.min(100, Math.round((raisedCents / target) * 100));
+
+  return {
+    raisedCents,
+    targetCents: target,
+    percent,
+    aheadCents: ahead,
+    message:
+      ahead === null ? 'under_way' : ahead >= 0 ? 'ahead' : percent >= 90 ? 'close' : 'under_way',
   };
 }
 
 // --- Where the cash is ------------------------------------------------------
 
 export interface Movement {
-  kind: 'float_out' | 'takings_in' | 'bank_deposit';
+  kind: 'float_out' | 'takings_in' | 'bank_deposit' | 'overnight_out' | 'overnight_back';
   source: string;
   amountCents: number;
   countedBy: string;
   witnessedBy: string | null;
   occurredAt: Date;
+}
+
+/** Somebody who took the weekend's cash home and has not brought it back. */
+export interface OvernightHolder {
+  who: string;
+  amountCents: number;
+  since: Date;
 }
 
 export interface CashPosition {
@@ -242,6 +335,17 @@ export interface CashPosition {
   unwitnessed: Movement[];
   /** Places money went out to and has not come back from. */
   openSources: string[];
+  /**
+   * Cash that went home with somebody on the Saturday night and has not come
+   * back.
+   *
+   * The largest sum this weekend ever holds in one place, in a private house,
+   * on behalf of a children's hospital. It is normal and it is not going to
+   * stop being normal — the failure is nobody having written down who has it.
+   * Recording it protects the volunteer at least as much as the money.
+   */
+  overnightHeldCents: number;
+  overnightHolders: OvernightHolder[];
 }
 
 /**
@@ -259,6 +363,8 @@ export function cashPosition(movements: readonly Movement[]): CashPosition {
 
   const outBySource = new Map<string, number>();
   const inBySource = new Map<string, number>();
+  // Net cash still at somebody's house, and when it left, per person.
+  const overnight = new Map<string, { who: string; amountCents: number; since: Date }>();
 
   for (const movement of movements) {
     const key = movement.source.trim().toLowerCase();
@@ -274,6 +380,26 @@ export function cashPosition(movements: readonly Movement[]): CashPosition {
       case 'bank_deposit':
         bankedCents += movement.amountCents;
         break;
+      case 'overnight_out': {
+        const held = overnight.get(key);
+        overnight.set(key, {
+          who: movement.source,
+          amountCents: (held?.amountCents ?? 0) + movement.amountCents,
+          // The oldest unreturned trip is the one worth naming: "since
+          // Saturday night" reads differently from "since an hour ago".
+          since: held && held.since < movement.occurredAt ? held.since : movement.occurredAt,
+        });
+        break;
+      }
+      case 'overnight_back': {
+        const held = overnight.get(key);
+        if (held) {
+          const remaining = held.amountCents - movement.amountCents;
+          if (remaining > 0) overnight.set(key, { ...held, amountCents: remaining });
+          else overnight.delete(key);
+        }
+        break;
+      }
     }
   }
 
@@ -299,6 +425,8 @@ export function cashPosition(movements: readonly Movement[]): CashPosition {
       (m) => m.kind !== 'float_out' && (m.witnessedBy === null || m.witnessedBy.trim() === ''),
     ),
     openSources: openSources.sort(),
+    overnightHeldCents: [...overnight.values()].reduce((n, held) => n + held.amountCents, 0),
+    overnightHolders: [...overnight.values()].sort((a, b) => b.amountCents - a.amountCents),
   };
 }
 

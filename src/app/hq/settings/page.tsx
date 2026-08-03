@@ -172,6 +172,42 @@ export default async function SettingsPage() {
         />
       </fieldset>
 
+      <fieldset disabled={!editable}>
+        <legend>Concession tickets</legend>
+        <AutoSaveField
+          save={saveTournamentField} field="ticket_covers" label="One ticket covers"
+          defaultValue={tournament.ticket_covers ?? ''}
+          hint="In the words you would use at the counter — e.g. “a bag of chips and a drink, or a hot dog”. Shown on the till when a volunteer takes a ticket, so a fourteen-year-old does not have to guess."
+        />
+        <AutoSaveField
+          save={saveTournamentField} field="tickets_per_team" label="Tickets in a team's package"
+          type="number"
+          defaultValue={String(tournament.tickets_per_team)}
+          hint="Only used to say how many of the ones you printed came back, which is what next year's print run is decided on. Zero if you would rather not track it."
+        />
+      </fieldset>
+
+      <fieldset disabled={!editable}>
+        <legend>Donations</legend>
+        <AutoSaveField
+          save={saveTournamentField} field="previous_year_raised_cents" label="Raised last year"
+          defaultValue={(tournament.previous_year_raised_cents / 100).toFixed(2)}
+          hint="In dollars. Shown publicly as the figure this year is measured against — the thing that makes a running total mean something to somebody scrolling a bracket."
+        />
+        <AutoSaveToggle
+          save={saveTournamentField}
+          field="donations_open"
+          label="Ask for donations on the public pages"
+          defaultChecked={tournament.donations_open}
+          hint="Off by default, on purpose. Asking families who have already paid an entry fee is the committee's decision, not a default to inherit. When it is on, the schedule, standings and bracket pages carry a donate button and a running total."
+        />
+        <AutoSaveField
+          save={saveTournamentField} field="donation_message" label="What the donate page says"
+          defaultValue={tournament.donation_message ?? ''}
+          hint="Optional. A sentence in your own words about where the money goes. Left blank, the page says what it knows: every dollar goes to CHEO Cardiology."
+        />
+      </fieldset>
+
       <h2>Before the weekend</h2>
       <div className="card">
         {checks.map((check) => (

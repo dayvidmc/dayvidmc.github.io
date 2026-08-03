@@ -1,4 +1,5 @@
 import { currentTournament } from '@/server/repo';
+import { RaisedSoFar } from '../_components/RaisedSoFar';
 import { divisionsWithBrackets } from '@/server/brackets';
 
 export const dynamic = 'force-dynamic';
@@ -22,6 +23,8 @@ export default async function BracketIndexPage() {
       <p className="sub">
         Every bracket is drawn from the start. Empty spots say what will fill them.
       </p>
+
+      <RaisedSoFar compact />
 
       {divisions.length === 0 ? (
         <div className="empty">

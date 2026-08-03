@@ -97,8 +97,16 @@ function validate(raw: unknown): string | null {
 
   let tendered = 0;
   for (const tender of order.tenders as Record<string, unknown>[]) {
-    if (!['cash', 'card', 'other'].includes(tender.kind as string)) return 'bad tender kind';
+    if (!['cash', 'card', 'ticket', 'other'].includes(tender.kind as string)) return 'bad tender kind';
     if (!cents(tender.amountCents)) return 'tender amount invalid';
+    // A ticket tender with no count is a giveaway nobody can total in November,
+    // and the database refuses it — better to say so than to fail the batch.
+    if (tender.kind === 'ticket') {
+      const count = tender.ticketCount;
+      if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > 50) {
+        return 'ticket tender needs a count between 1 and 50';
+      }
+    }
     tendered += tender.amountCents as number;
   }
 

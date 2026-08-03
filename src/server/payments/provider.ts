@@ -28,7 +28,8 @@ export interface CheckoutRequest {
   description: string;
   /** Ours, not the provider's: the entry reference and which leg is being paid. */
   reference: string;
-  kind: 'deposit' | 'balance';
+  /** A donation has no entry behind it, which is the only thing that differs. */
+  kind: 'deposit' | 'balance' | 'donation';
   entryId: string;
   email?: string;
   successUrl: string;
@@ -49,7 +50,7 @@ export interface PaymentEvent {
   eventId: string;
   eventType: string;
   entryId: string;
-  kind: 'deposit' | 'balance';
+  kind: 'deposit' | 'balance' | 'donation';
   amountCents: number;
   /** The provider's payment id, stored so a refund can be issued against it. */
   externalRef: string;
@@ -252,7 +253,10 @@ export class StripeProvider implements PaymentProvider {
     const kind = metadata.kind;
     const amount = Number(session.amount_total);
 
-    if (!entryId || (kind !== 'deposit' && kind !== 'balance') || !Number.isInteger(amount)) {
+    // A donation carries no entry, so `entry_id` is the literal 'donation'
+    // rather than a uuid. Everything else must name the entry it belongs to.
+    const known = kind === 'deposit' || kind === 'balance' || kind === 'donation';
+    if (!entryId || !known || !Number.isInteger(amount)) {
       return { ok: false, error: 'Event is missing the entry it belongs to.' };
     }
 

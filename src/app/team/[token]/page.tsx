@@ -1,10 +1,11 @@
 import { notFound } from 'next/navigation';
 import { teamByAccessToken } from '@/server/auth';
-import { gamesForTeam, standingsForDivision } from '@/server/repo';
+import { currentTournament, gamesForTeam, standingsForDivision } from '@/server/repo';
 import { rosterFor, teamRegistration } from '@/server/rosters';
 import { rosterIssues } from '@/domain/roster';
 import { formatDateFriendly, formatTimeFriendly, toWallClock } from '@/domain/time';
 import { AutoSaveField } from '../../_components/AutoSave';
+import { RaisedSoFar } from '../../_components/RaisedSoFar';
 import { addPlayerAction, pasteRosterAction, removePlayerAction, savePlayer } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -29,11 +30,12 @@ export default async function TeamPage({
   const team = await teamByAccessToken(token);
   if (!team) notFound();
 
-  const [games, pools, roster, registration] = await Promise.all([
+  const [games, pools, roster, registration, tournament] = await Promise.all([
     gamesForTeam(team.id),
     standingsForDivision(team.division_id),
     rosterFor(team.id),
     teamRegistration(team.id),
+    currentTournament(),
   ]);
 
   const locked = registration?.roster_locked_at != null;
@@ -76,6 +78,19 @@ export default async function TeamPage({
           </a>
         </div>
       )}
+
+      {tournament && tournament.tickets_per_team > 0 && (
+        <div className="notice info">
+          <strong>
+            {tournament.tickets_per_team} concession ticket
+            {tournament.tickets_per_team === 1 ? '' : 's'} came with your entry.
+          </strong>{' '}
+          {tournament.ticket_covers ? `Each one is good for ${tournament.ticket_covers}. ` : ''}
+          Hand them in at any stand — the volunteer knows what to do with them.
+        </div>
+      )}
+
+      <RaisedSoFar compact />
 
       <h2>Games</h2>
       {games.length === 0 && <div className="empty">No games scheduled yet.</div>}

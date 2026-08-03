@@ -310,3 +310,109 @@ export async function publishBracket(
     );
   });
 }
+
+// --- The engraving list -------------------------------------------------------
+
+export interface Championship {
+  divisionId: string;
+  divisionName: string;
+  /** Null while the final has not been played or is still tied. */
+  championName: string | null;
+  runnerUpName: string | null;
+  /** Why there is no champion yet, in words somebody can act on. */
+  waitingOn: string | null;
+  finalPlayedAt: Date | null;
+}
+
+/**
+ * Who won each division, in the order an engraver would want it.
+ *
+ * This exists because of a job that happens on the Sunday afternoon: somebody
+ * writes thirteen division names and thirteen team names onto a piece of paper
+ * and reads it down a phone to a trophy shop, from memory and from a stack of
+ * scoresheets, at the end of three days. Getting a child's team name wrong on a
+ * trophy is not a thing that can be fixed afterwards.
+ *
+ * The final is the highest bracket round in a division. A round that has more
+ * than one game in it is not a final, so those divisions report as unfinished
+ * rather than picking one of the games — a plausible wrong answer here is worse
+ * than an obvious blank.
+ */
+export async function championships(tournamentId: string): Promise<Championship[]> {
+  const rows = await query<{
+    division_id: string;
+    division_name: string;
+    games_in_round: number;
+    home_team_name: string | null;
+    away_team_name: string | null;
+    home_runs: number | null;
+    away_runs: number | null;
+    scheduled_start: Date | null;
+  }>(
+    `WITH finals AS (
+       SELECT g.division_id, max(g.bracket_round) AS last_round
+         FROM game g
+        WHERE g.tournament_id = $1 AND g.bracket_round IS NOT NULL AND g.cancelled_at IS NULL
+        GROUP BY g.division_id
+     )
+     SELECT d.id AS division_id, d.name AS division_name,
+            COALESCE(counted.n, 0)::int AS games_in_round,
+            ht.name AS home_team_name, aw.name AS away_team_name,
+            a.home_runs, a.away_runs, g.scheduled_start
+       FROM division d
+       LEFT JOIN finals f ON f.division_id = d.id
+       LEFT JOIN LATERAL (
+         SELECT count(*) AS n FROM game x
+          WHERE x.division_id = d.id AND x.bracket_round = f.last_round
+            AND x.cancelled_at IS NULL
+       ) counted ON true
+       LEFT JOIN LATERAL (
+         SELECT * FROM game x
+          WHERE x.division_id = d.id AND x.bracket_round = f.last_round
+            AND x.cancelled_at IS NULL
+          ORDER BY x.bracket_position LIMIT 1
+       ) g ON true
+       LEFT JOIN team ht ON ht.id = g.home_team_id
+       LEFT JOIN team aw ON aw.id = g.away_team_id
+       LEFT JOIN approved_score a ON a.game_id = g.id
+      WHERE d.tournament_id = $1
+      ORDER BY d.sort_order, d.name`,
+    [tournamentId],
+  );
+
+  return rows.map((row): Championship => {
+    const base = {
+      divisionId: row.division_id,
+      divisionName: row.division_name,
+      finalPlayedAt: row.scheduled_start,
+    };
+
+    if (row.games_in_round === 0) {
+      return { ...base, championName: null, runnerUpName: null, waitingOn: 'No playoff bracket.' };
+    }
+    if (row.games_in_round > 1) {
+      return {
+        ...base,
+        championName: null,
+        runnerUpName: null,
+        waitingOn: `${row.games_in_round} games in the last round — this bracket has no single final.`,
+      };
+    }
+    if (row.home_runs === null || row.away_runs === null) {
+      return { ...base, championName: null, runnerUpName: null, waitingOn: 'Final not played yet.' };
+    }
+    if (row.home_runs === row.away_runs) {
+      // A tied final is a real state to be in for twenty minutes. It is not a
+      // champion, and guessing one here would put a name on a trophy.
+      return { ...base, championName: null, runnerUpName: null, waitingOn: 'Final is tied.' };
+    }
+
+    const homeWon = row.home_runs > row.away_runs;
+    return {
+      ...base,
+      championName: (homeWon ? row.home_team_name : row.away_team_name) ?? null,
+      runnerUpName: (homeWon ? row.away_team_name : row.home_team_name) ?? null,
+      waitingOn: null,
+    };
+  });
+}

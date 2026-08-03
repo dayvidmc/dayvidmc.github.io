@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { currentProvider } from '@/server/payments/provider';
 import { applyPaymentEvent } from '@/server/registration';
 import { entryByReference } from '@/server/registration';
+import { donationById } from '@/server/donations';
 import { amountDue, normaliseReference } from '@/domain/registration';
 
 /**
@@ -20,10 +21,28 @@ import { amountDue, normaliseReference } from '@/domain/registration';
 
 export const dynamic = 'force-dynamic';
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Where to send them back to.
+ *
+ * The forwarded host rather than `request.url`, for the same reason the rest of
+ * the payment flow uses it: behind a proxy the URL this process sees is the
+ * internal one, and a redirect to it lands the coach on a host their browser
+ * cannot reach. That is a blank page at the end of paying.
+ */
+function origin(request: Request): string {
+  const forwarded = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+  if (!forwarded) return new URL(request.url).origin;
+  const proto = request.headers.get('x-forwarded-proto') ?? new URL(request.url).protocol.replace(':', '');
+  return `${proto}://${forwarded}`;
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const reference = normaliseReference(url.searchParams.get('reference') ?? '');
+  const raw = url.searchParams.get('reference') ?? '';
   const kind = url.searchParams.get('kind');
+  const back = origin(request);
 
   if (process.env.DEMO_MODE !== 'true') {
     return new NextResponse('not available', { status: 404 });
@@ -34,6 +53,37 @@ export async function GET(request: Request) {
     return new NextResponse('not available', { status: 404 });
   }
 
+  // A donation carries its own id rather than an entry reference, because there
+  // is no entry behind it. Handled before the reference is normalised — a uuid
+  // put through the entry-reference tidier comes out as something else.
+  if (kind === 'donation') {
+    if (!UUID.test(raw)) return new NextResponse('bad request', { status: 400 });
+
+    const gift = await donationById(raw);
+    if (!gift) return new NextResponse('not found', { status: 404 });
+
+    if (gift.confirmedAt === null) {
+      await applyPaymentEvent(
+        'dry-run',
+        {
+          eventId: `dryrun_donation_${gift.id}`,
+          eventType: 'checkout.session.completed',
+          entryId: gift.id,
+          kind: 'donation',
+          // Recomputed from the row rather than read off the URL, exactly as it
+          // is for a real payment.
+          amountCents: gift.amountCents,
+          externalRef: `dryrun_donation_${gift.id}`,
+          succeeded: true,
+        },
+        { rehearsal: true, donation: gift.id },
+      );
+    }
+
+    return NextResponse.redirect(new URL(`/donate?thanks=${gift.id}`, back), 303);
+  }
+
+  const reference = normaliseReference(raw);
   if (!reference || (kind !== 'deposit' && kind !== 'balance')) {
     return new NextResponse('bad request', { status: 400 });
   }
@@ -65,5 +115,5 @@ export async function GET(request: Request) {
     );
   }
 
-  return NextResponse.redirect(new URL(`/enter/${entry.reference}?paid=1`, request.url));
+  return NextResponse.redirect(new URL(`/enter/${entry.reference}?paid=1`, back), 303);
 }

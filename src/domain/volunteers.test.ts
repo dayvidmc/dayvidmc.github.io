@@ -143,6 +143,31 @@ describe('the summary a coordinator reads first', () => {
     expect(summary.peopleStanding).toBe(1);
   });
 
+  it('counts a gap in a role whose absence stops something, however far off', () => {
+    // A canteen shift with nobody on it in three days is a queue. A supervisor
+    // shift with nobody on it in three days is a site whose scores nobody is
+    // going to text in, and it is worth knowing now rather than on the morning.
+    const rows = coverage(
+      [
+        shift('canteen', '2027-07-26T09:00:00', '2027-07-26T13:00:00', 1, [], 'canteen'),
+        shift('super', '2027-07-26T09:00:00', '2027-07-26T13:00:00', 1, [], 'site_supervisor'),
+      ],
+      now,
+    );
+    const summary = summarise(rows);
+    expect(summary.emptyShifts).toBe(2);
+    expect(summary.urgent).toBe(0);
+    expect(summary.criticalGaps).toBe(1);
+  });
+
+  it('does not count a covered supervisor shift as a gap', () => {
+    const rows = coverage(
+      [shift('super', '2027-07-26T09:00:00', '2027-07-26T13:00:00', 1, [{ name: 'A' }], 'site_supervisor')],
+      now,
+    );
+    expect(summarise(rows).criticalGaps).toBe(0);
+  });
+
   it('has nothing to report for an empty tournament', () => {
     expect(summarise(coverage([], now))).toEqual({
       shifts: 0,
@@ -152,6 +177,7 @@ describe('the summary a coordinator reads first', () => {
       shortShifts: 0,
       unconfirmed: 0,
       urgent: 0,
+      criticalGaps: 0,
     });
   });
 });

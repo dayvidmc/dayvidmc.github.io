@@ -9,6 +9,7 @@ import { applyRuleEdit, parseDivisionRules } from '@/domain/divisionRules';
 import { approveScore, recordProposal, setDispute } from '@/server/repo';
 import { localWallClock, toSqlTimestamp } from '@/domain/time';
 import { looksLikeEmail, normalisePhone } from '@/domain/contact';
+import { parseMoney } from '@/domain/pos';
 import type { SaveResult } from '../_components/AutoSave';
 
 /**
@@ -166,7 +167,16 @@ export async function saveTeamField(
 const TOURNAMENT_FIELDS = new Set(['name', 'starts_on', 'ends_on', 'day_start_time', 'day_end_time']);
 
 /** Settings that are a yes/no rather than a value, so "" is a legal answer. */
-const TOURNAMENT_FLAGS = new Set(['umpire_score_entry']);
+const TOURNAMENT_FLAGS = new Set(['umpire_score_entry', 'donations_open']);
+
+/** Settings where blank is a real answer meaning "nothing to say". */
+const TOURNAMENT_OPTIONAL_TEXT = new Set(['ticket_covers', 'donation_message']);
+
+/** Settings that are a whole number. Blank means zero, not an error. */
+const TOURNAMENT_COUNTS = new Set(['tickets_per_team']);
+
+/** Settings typed in dollars and stored in cents, like every other amount here. */
+const TOURNAMENT_MONEY = new Set(['previous_year_raised_cents']);
 
 export async function saveTournamentField(field: string, value: string): Promise<SaveResult> {
   const staff = await currentStaff();
@@ -187,6 +197,38 @@ export async function saveTournamentField(field: string, value: string): Promise
       payload: { setting: field, value: value === 'true' },
     });
     revalidatePath('/hq/settings');
+    return { ok: true };
+  }
+
+  if (TOURNAMENT_OPTIONAL_TEXT.has(field)) {
+    await query(`UPDATE tournament SET ${field} = $2 WHERE id = $1`, [
+      staff!.tournamentId,
+      value.trim().slice(0, 500) || null,
+    ]);
+    revalidatePath('/hq/settings');
+    revalidatePath('/donate');
+    return { ok: true };
+  }
+
+  if (TOURNAMENT_COUNTS.has(field)) {
+    const count = Number(value.trim() || '0');
+    if (!Number.isInteger(count) || count < 0 || count > 10_000) {
+      return { ok: false, error: 'A whole number, zero or more.' };
+    }
+    await query(`UPDATE tournament SET ${field} = $2 WHERE id = $1`, [staff!.tournamentId, count]);
+    revalidatePath('/hq/settings');
+    return { ok: true };
+  }
+
+  if (TOURNAMENT_MONEY.has(field)) {
+    // Typed in dollars because that is how a treasurer says it; stored in cents
+    // because every other amount in this system is.
+    const cents = parseMoney(value);
+    if (cents === null || cents < 0) return { ok: false, error: 'An amount, like 45000.' };
+    await query(`UPDATE tournament SET ${field} = $2 WHERE id = $1`, [staff!.tournamentId, cents]);
+    revalidatePath('/hq/settings');
+    revalidatePath('/donate');
+    revalidatePath('/');
     return { ok: true };
   }
 

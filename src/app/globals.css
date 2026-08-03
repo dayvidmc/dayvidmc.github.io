@@ -929,6 +929,14 @@ legend {
   font-variant-numeric: tabular-nums;
 }
 
+/* Cash and card carry an amount; the ticket button carries a word. Letting it
+   take an equal third squeezes "Cash $12.35" onto two lines on a 360px phone,
+   so it gets only the width it needs. */
+.till-bar-actions button:last-child:nth-child(3) {
+  flex: 0 0 auto;
+  padding-inline: 14px;
+}
+
 .cart-list {
   margin-top: 16px;
   background: var(--surface);
@@ -1166,4 +1174,126 @@ legend {
   .bid-sheet-foot {
     color: #333;
   }
+}
+
+/* --- The running total ------------------------------------------------------
+   Sits on public pages above the fold. It is a link, not a card with a button
+   inside it: a thumb reaching for a number on a phone should not have to find
+   the small target. */
+
+.raised {
+  display: block;
+  background: var(--green-bg);
+  border: 1px solid var(--green);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.raised:hover,
+.raised:focus-visible {
+  background: var(--surface);
+}
+
+.raised-label {
+  font-size: 14px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.raised-amount {
+  font-size: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  color: var(--green);
+}
+
+.raised-bar {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--surface);
+  border: 1px solid var(--green);
+  overflow: hidden;
+  margin: 10px 0 4px;
+}
+
+.raised-bar span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+
+.raised-cta {
+  margin-top: 10px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+/* One gift on the donate page's thank-you list. */
+.donor {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.donor:last-child {
+  border-bottom: none;
+}
+
+/* Preset donation amounts. Radios, styled as the tap targets they need to be —
+   a real radio underneath so it works with a keyboard and a screen reader. */
+
+.amounts {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  gap: 10px;
+}
+
+.amounts legend {
+  font-size: 15px;
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+.amounts label {
+  margin: 0;
+  position: relative;
+}
+
+.amounts label input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.amounts label span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  font-size: 19px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.amounts label input:checked + span {
+  border-color: var(--green);
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+/* The focus ring has to move to the box, since the input itself is invisible. */
+.amounts label input:focus-visible + span {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
 }

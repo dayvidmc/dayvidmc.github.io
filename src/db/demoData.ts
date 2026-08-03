@@ -229,13 +229,23 @@ export async function seedDemo(): Promise<DemoResult> {
 
   const tournamentId = await transaction(async (client) => {
     const inserted = await client.query<{ id: string }>(
-      `INSERT INTO tournament (name, year, starts_on, ends_on)
-       VALUES ($1, $2, $3, $4) RETURNING id`,
+      `INSERT INTO tournament
+         (name, year, starts_on, ends_on,
+          ticket_covers, tickets_per_team,
+          previous_year_raised_cents, donations_open, donation_message)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8) RETURNING id`,
       [
         '30th Annual Scott Tokessy Memorial Gold Glove Tournament',
         now.getUTCFullYear(),
         yesterday,
         tomorrow,
+        'a bag of chips and a drink, or a hot dog at a field with a barbecue',
+        20,
+        // Last year's real figure, which is what "more than last year" means.
+        4_500_000,
+        'Twenty-nine years of this tournament have raised over $536,000 for CHEO Cardiology, ' +
+          'and last year alone raised $45,000. Every dollar given here goes there — nothing is ' +
+          'taken out for running the weekend. That is what the entry fees and the canteen are for.',
       ],
     );
     const id = inserted.rows[0]!.id;
@@ -446,6 +456,7 @@ export async function seedDemo(): Promise<DemoResult> {
   await seedEntries(tournamentId);
   await seedPurchasesAndSponsors(tournamentId);
   await seedVolunteers(tournamentId, base);
+  await seedDonations(tournamentId);
 
   const [division] = await query<{ id: string }>(
     "SELECT id FROM division WHERE name = 'Major A'",
@@ -676,6 +687,38 @@ async function seedConcessionSales(tournamentId: string, base: Date): Promise<vo
         [order!.id, card ? 'card' : 'cash', total, tendered, tendered === null ? null : tendered - total],
       );
     }
+
+    // And the tickets from the team packages, coming back across the counter.
+    // A ticket sale records the food at what it would have sold for and settles
+    // against a tender that is worth nothing — so the stock adds up and the
+    // raised figure does not count food that was given away.
+    const hotDog = byName.get('Hot dog');
+    const pop = byName.get('Pop');
+    if (hotDog && pop) {
+      const tickets = stand.name === 'Tokessy BBQ' ? 64 : 28;
+      const total = (hotDog.price_cents + pop.price_cents) * tickets;
+      const [order] = await query<{ id: string }>(
+        `INSERT INTO pos_order
+           (id, tournament_id, location_id, sold_by, sold_at, subtotal_cents, total_cents, status)
+         VALUES (gen_random_uuid(), $1, $2, 'Concession Volunteer', $3::timestamptz, $4, $4, 'complete')
+         RETURNING id`,
+        [tournamentId, stand.id, toSqlTimestamp(addMinutes(base, -120)), total],
+      );
+
+      for (const item of [hotDog, pop]) {
+        await query(
+          `INSERT INTO pos_order_line (order_id, item_id, name, unit_price_cents, quantity, line_total_cents)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [order!.id, item.id, item.name, item.price_cents, tickets, item.price_cents * tickets],
+        );
+      }
+
+      await query(
+        `INSERT INTO pos_tender (order_id, kind, amount_cents, ticket_count)
+         VALUES ($1,'ticket',$2,$3)`,
+        [order!.id, total, tickets],
+      );
+    }
   }
 }
 
@@ -795,6 +838,7 @@ async function seedVolunteers(tournamentId: string, base: Date): Promise<void> {
     role: string,
     diamond: string | null,
     stand: string | null,
+    site: string | null,
     place: string | null,
     from: string,
     to: string,
@@ -802,25 +846,34 @@ async function seedVolunteers(tournamentId: string, base: Date): Promise<void> {
     on: string[],
     confirmed: boolean,
   ][] = [
-    ['diamond', 'Tokessy', null, null, '08:30', '13:00', 1, ['Ray Deschamps'], true],
-    ['diamond', 'Deevy Pines 1', null, null, '08:30', '13:00', 1, ['Noor Haddad'], false],
+    // A site supervisor covers every diamond at their site. Deevy Pines has two,
+    // so Dana's phone is recognised for a score texted from either — this is the
+    // path the signed sheets actually take.
+    ['site_supervisor', null, null, 'Deevy Pines', null, '08:00', '14:00', 1, ['Dana Whitfield'], true],
+    // Walter Baker has nobody supervising it. That is a site whose results
+    // nobody is going to text in, and the coverage board says so out loud.
+    ['site_supervisor', null, null, 'Walter Baker', null, '08:00', '14:00', 1, [], false],
+    ['diamond', 'Tokessy', null, null, null, '08:30', '13:00', 1, ['Ray Deschamps'], true],
+    ['diamond', 'Deevy Pines 1', null, null, null, '08:30', '13:00', 1, ['Noor Haddad'], false],
     // Nobody at all, and games are on. This is the top of the board.
-    ['diamond', 'Mike Channing', null, null, '08:30', '13:00', 1, [], false],
-    ['canteen', null, 'Tokessy BBQ', null, '10:00', '15:00', 3, ['Marion Ellis', 'Priya Raman'], true],
-    ['bbq', null, null, 'Main field grill', '11:00', '15:00', 2, ['Tom Reilly'], false],
-    ['gate', null, null, 'Main gate', '08:00', '12:00', 2, ['Jen Okafor'], true],
-    ['auction', null, null, 'Auction table', '15:00', '20:00', 2, ['Alice Barrett'], true],
-    ['setup', null, null, 'Main field', '07:00', '09:00', 4, ['Chris Lalonde'], true],
+    ['diamond', 'Mike Channing', null, null, null, '08:30', '13:00', 1, [], false],
+    // Lining and raking, before anybody arrives. Short, as it is every year.
+    ['grounds', null, null, 'Tokessy', null, '06:30', '08:00', 3, ['Chris Lalonde'], true],
+    ['canteen', null, 'Tokessy BBQ', null, null, '10:00', '15:00', 3, ['Marion Ellis', 'Priya Raman'], true],
+    ['bbq', null, null, null, 'Main field grill', '11:00', '15:00', 2, ['Tom Reilly'], false],
+    ['gate', null, null, null, 'Main gate', '08:00', '12:00', 2, ['Jen Okafor'], true],
+    ['auction', null, null, null, 'Auction table', '15:00', '20:00', 2, ['Alice Barrett'], true],
+    ['setup', null, null, null, 'Main field', '07:00', '09:00', 4, [], true],
   ];
 
-  for (const [role, diamond, stand, place, from, to, needed, on, confirmed] of shifts) {
+  for (const [role, diamond, stand, site, place, from, to, needed, on, confirmed] of shifts) {
     const [shift] = await query<{ id: string }>(
       `INSERT INTO volunteer_shift
-         (tournament_id, role, diamond_id, location_id, place, starts_at, ends_at, needed)
-       VALUES ($1,$2,$3,$4,$5, ($6 || ' ' || $7)::timestamp, ($6 || ' ' || $8)::timestamp, $9)
+         (tournament_id, role, diamond_id, location_id, site, place, starts_at, ends_at, needed)
+       VALUES ($1,$2,$3,$4,$5,$6, ($7 || ' ' || $8)::timestamp, ($7 || ' ' || $9)::timestamp, $10)
        RETURNING id`,
       [tournamentId, role, diamond ? diamondId(diamond) : null, stand ? standId(stand) : null,
-        place, day, from, to, needed],
+        site, place, day, from, to, needed],
     );
 
     for (const name of on) {
@@ -1166,6 +1219,10 @@ async function seedFundraising(tournamentId: string): Promise<void> {
     // One count with a single name on it, which the screen calls out.
     ['takings_in', 'Gate donations box', 34_000, 'HQ Desk 1', null],
     ['bank_deposit', 'Bank', 100_000, 'Tournament Director', 'Concession Lead'],
+    // Friday night's takings went home with the treasurer, because the banks
+    // are shut and a park is not a safe. It has not been recorded coming back,
+    // which is exactly the state the screen exists to make visible.
+    ['overnight_out', 'Bev Tokessy', 62_500, 'Tournament Director', 'Concession Lead'],
   ];
 
   for (const [kind, source, amount, by, witness] of cash) {
@@ -1298,4 +1355,46 @@ export async function seedBracket(tournamentId: string, base: Date): Promise<voi
   // onto the games keeps the stored matchup and the drawn bracket identical —
   // two sources of truth here is how the wrong team ends up advancing.
   await materialiseBracket(tournamentId, division.id);
+}
+
+/**
+ * A handful of donations, in every state the screens have to cope with.
+ *
+ * One named and happy to be thanked, one anonymous, one in memory of somebody,
+ * one cash in an envelope at the gate — and one that was started on the payment
+ * page and never finished, because that row exists in real life and a treasurer
+ * matching a provider statement needs to see it counts for nothing.
+ */
+async function seedDonations(tournamentId: string): Promise<void> {
+  const gifts: [
+    amount: number,
+    name: string | null,
+    email: string | null,
+    message: string | null,
+    show: boolean,
+    method: string,
+    confirmed: boolean,
+  ][] = [
+    [10_000, 'The Barrett family', 'barretts@example.com', 'For the cardiology ward. Thank you all.', true, 'card', true],
+    [2_500, null, null, null, false, 'card', true],
+    [25_000, 'Kanata Home Hardware', 'giving@example.com', 'In memory of Scott.', true, 'card', true],
+    [5_000, 'A grandparent at Deevy Pines', null, null, true, 'cash', true],
+    // Opened the payment page on a phone with one bar and never came back.
+    [5_000, 'Someone', null, null, false, 'card', false],
+  ];
+
+  for (const [amount, name, email, message, show, method, confirmed] of gifts) {
+    await query(
+      `INSERT INTO donation
+         (tournament_id, amount_cents, donor_name, donor_email, message, show_publicly,
+          method, external_ref, confirmed_at, recorded_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8, CASE WHEN $9 THEN now() END, $10)`,
+      [
+        tournamentId, amount, name, email, message, show, method,
+        confirmed && method === 'card' ? `demo_${amount}_${name ?? 'anon'}` : null,
+        confirmed,
+        method === 'card' ? 'public donate page' : 'Tournament Director',
+      ],
+    );
+  }
 }
