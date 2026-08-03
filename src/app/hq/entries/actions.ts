@@ -132,7 +132,11 @@ export async function saveWindowAction(formData: FormData): Promise<void> {
 
   const days = Number(text(formData, 'balanceDueDays'));
   const deposit = cents(text(formData, 'defaultDeposit'));
-  if (text(formData, 'defaultDeposit').trim() && deposit === null) {
+  const defaultFee = cents(text(formData, 'defaultFee'));
+  if (
+    (text(formData, 'defaultDeposit').trim() && deposit === null) ||
+    (text(formData, 'defaultFee').trim() && defaultFee === null)
+  ) {
     redirect('/hq/entries/settings?error=bad_amount');
   }
 
@@ -140,6 +144,12 @@ export async function saveWindowAction(formData: FormData): Promise<void> {
   if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
     redirect('/hq/entries/settings?error=bad_due_date');
   }
+
+  const refundCutoff = text(formData, 'refundCutoffDate').trim();
+  if (refundCutoff && !/^\d{4}-\d{2}-\d{2}$/.test(refundCutoff)) {
+    redirect('/hq/entries/settings?error=bad_refund_date');
+  }
+  const maxRoster = Number(text(formData, 'maxRosterSize'));
 
   // "Rookie, Mosquito , Peewee,," is what somebody actually types.
   const ageGroups = text(formData, 'ageGroups')
@@ -156,8 +166,12 @@ export async function saveWindowAction(formData: FormData): Promise<void> {
       chequePayableTo: text(formData, 'chequePayableTo').trim() || null,
       chequeMailTo: text(formData, 'chequeMailTo').trim() || null,
       balanceDueDate: dueDate || null,
+      refundCutoffDate: refundCutoff || null,
+      refundPolicyNote: text(formData, 'refundPolicyNote').trim().slice(0, 400) || null,
       ageGroups,
+      ...(Number.isInteger(maxRoster) && maxRoster >= 9 ? { maxRosterSize: maxRoster } : {}),
       ...(Number.isInteger(days) && days > 0 ? { balanceDueDays: days } : {}),
+      ...(defaultFee === null ? {} : { defaultEntryFeeCents: defaultFee }),
       ...(deposit === null ? {} : { defaultDepositCents: deposit }),
     },
     staff.name,

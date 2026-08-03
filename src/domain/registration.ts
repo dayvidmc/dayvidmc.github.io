@@ -308,6 +308,54 @@ export function balanceDueOn(
   return due;
 }
 
+/**
+ * How to name a team's division on a screen that already knows its age group.
+ *
+ * "Major · Major A" is noise, and on a board of ninety entries it is ninety
+ * lines of it. The age group only earns its place when it is not already the
+ * first word of the division's own name — which it is for every division this
+ * tournament runs, but not necessarily for one somebody adds later.
+ */
+export function divisionLabel(
+  ageGroup: string | null,
+  divisionName: string,
+): string {
+  if (!ageGroup) return divisionName;
+  const starts = divisionName.toLowerCase().startsWith(ageGroup.toLowerCase());
+  return starts ? divisionName : `${ageGroup} · ${divisionName}`;
+}
+
+// --- Getting your money back -------------------------------------------------
+
+export type RefundStance =
+  /** No policy stated. Say nothing rather than invent terms. */
+  | { phase: 'unstated' }
+  /** Before the cutoff. A withdrawal is refunded. */
+  | { phase: 'refundable'; cutoff: Date; daysLeft: number }
+  /** After it. The deposit paid for the place somebody else was turned away from. */
+  | { phase: 'final'; cutoff: Date };
+
+/**
+ * Whether a team that withdrew today would get its deposit back.
+ *
+ * The cutoff day itself is still refundable — "non-refundable after 1 May"
+ * means the 1st is the last day you can pull out, which is how anybody reading
+ * a poster would take it. Being stricter than the sentence a coach was shown is
+ * not a rule, it is a surprise.
+ */
+export function refundStance(cutoff: Date | null, today: Date): RefundStance {
+  if (!cutoff) return { phase: 'unstated' };
+
+  // Compared as calendar days, not as instants. The cutoff is a date on a
+  // poster, and a coach withdrawing at 11pm on the 1st has not missed the 1st.
+  const day = (date: Date) =>
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  const left = Math.round((day(cutoff) - day(today)) / 86_400_000);
+
+  if (left < 0) return { phase: 'final', cutoff };
+  return { phase: 'refundable', cutoff, daysLeft: left };
+}
+
 /** What a card checkout should be for, given what is already paid. */
 export function amountDue(fees: Fees, payments: readonly Payment[], kind: 'deposit' | 'balance'): number {
   const state = owing(fees, payments);

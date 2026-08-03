@@ -53,7 +53,11 @@ export interface EntrySettings {
   /** When set, every accepted team's balance is due on this date instead. */
   balanceDueDate: string | null;
   defaultDepositCents: number;
+  defaultEntryFeeCents: number;
   ageGroups: string[];
+  refundCutoffDate: string | null;
+  refundPolicyNote: string | null;
+  maxRosterSize: number;
 }
 
 interface SettingsRow {
@@ -65,14 +69,19 @@ interface SettingsRow {
   balance_due_days: number;
   balance_due_date: string | null;
   default_deposit_cents: number;
+  default_entry_fee_cents: number;
   age_groups: string[];
+  refund_cutoff_date: string | null;
+  refund_policy_note: string | null;
+  max_roster_size: number;
 }
 
 export async function entrySettings(tournamentId: string): Promise<EntrySettings> {
   const row = await queryOne<SettingsRow>(
     `SELECT entries_open_at, entries_close_at, etransfer_address,
             cheque_payable_to, cheque_mail_to, balance_due_days,
-            balance_due_date::text AS balance_due_date, default_deposit_cents, age_groups
+            balance_due_date::text AS balance_due_date, default_deposit_cents, default_entry_fee_cents, age_groups,
+            refund_cutoff_date::text AS refund_cutoff_date, refund_policy_note, max_roster_size
        FROM tournament WHERE id = $1`,
     [tournamentId],
   );
@@ -89,7 +98,11 @@ export async function entrySettings(tournamentId: string): Promise<EntrySettings
     balanceDueDays: row?.balance_due_days ?? 14,
     balanceDueDate: row?.balance_due_date ?? null,
     defaultDepositCents: row?.default_deposit_cents ?? 10000,
+    defaultEntryFeeCents: row?.default_entry_fee_cents ?? 0,
     ageGroups: row?.age_groups ?? [],
+    refundCutoffDate: row?.refund_cutoff_date ?? null,
+    refundPolicyNote: row?.refund_policy_note ?? null,
+    maxRosterSize: row?.max_roster_size ?? 14,
   };
 }
 
@@ -105,29 +118,61 @@ export async function currentWindow(tournamentId: string): Promise<WindowState> 
 export interface EntryDivision {
   id: string;
   name: string;
+  ageGroup: string | null;
   sortOrder: number;
   entryFeeCents: number;
   depositCents: number;
   teamCap: number | null;
 }
 
+/**
+ * The divisions, gathered under their age group.
+ *
+ * Thirteen divisions in a flat list is a list nobody reads. Every screen that
+ * shows all of them groups them the way a director reads a wall chart —
+ * youngest age group first, strongest tier first inside it — so "which of the
+ * thirteen am I looking at" is answered by position rather than by reading.
+ *
+ * A division with no age group set lands in a group of its own at the end
+ * rather than being hidden, because a division nobody can see is a division
+ * nobody sets a fee on.
+ */
+export function byAgeGroup<T extends { ageGroup: string | null }>(
+  divisions: readonly T[],
+): { ageGroup: string | null; divisions: T[] }[] {
+  const groups: { ageGroup: string | null; divisions: T[] }[] = [];
+  for (const division of divisions) {
+    const existing = groups.find((group) => group.ageGroup === division.ageGroup);
+    if (existing) existing.divisions.push(division);
+    else groups.push({ ageGroup: division.ageGroup, divisions: [division] });
+  }
+  // Anything unfiled goes last, so a half-configured tournament still reads
+  // top to bottom.
+  return [
+    ...groups.filter((group) => group.ageGroup !== null),
+    ...groups.filter((group) => group.ageGroup === null),
+  ];
+}
+
 export async function entryDivisions(tournamentId: string): Promise<EntryDivision[]> {
   const rows = await query<{
     id: string;
     name: string;
+    age_group: string | null;
     sort_order: number;
     entry_fee_cents: number;
     deposit_cents: number;
     team_cap: number | null;
   }>(
-    `SELECT id, name, sort_order, entry_fee_cents, deposit_cents, team_cap
-       FROM division WHERE tournament_id = $1 ORDER BY sort_order, name`,
+    `SELECT id, name, age_group, sort_order, entry_fee_cents, deposit_cents, team_cap
+       FROM division WHERE tournament_id = $1 ORDER BY sort_order, group_order, name`,
     [tournamentId],
   );
 
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
+    ageGroup: row.age_group,
     sortOrder: row.sort_order,
     entryFeeCents: row.entry_fee_cents,
     depositCents: row.deposit_cents,
@@ -813,7 +858,11 @@ export async function saveEntrySettings(
     balanceDueDays: number;
     balanceDueDate: string | null;
     defaultDepositCents: number;
+    defaultEntryFeeCents: number;
     ageGroups: string[];
+    refundCutoffDate: string | null;
+    refundPolicyNote: string | null;
+    maxRosterSize: number;
   }>,
   actor: string,
   actorRole: string,
@@ -827,7 +876,11 @@ export async function saveEntrySettings(
     balanceDueDays: 'balance_due_days',
     balanceDueDate: 'balance_due_date',
     defaultDepositCents: 'default_deposit_cents',
+    defaultEntryFeeCents: 'default_entry_fee_cents',
     ageGroups: 'age_groups',
+    refundCutoffDate: 'refund_cutoff_date',
+    refundPolicyNote: 'refund_policy_note',
+    maxRosterSize: 'max_roster_size',
   };
 
   const sets: string[] = [];
@@ -841,10 +894,24 @@ export async function saveEntrySettings(
 
   await query(`UPDATE tournament SET ${sets.join(', ')} WHERE id = $1`, values);
 
-  // Applying one deposit across seven divisions is what the director actually
-  // wants; the clamp keeps the "deposit inside the fee" rule that the database
-  // enforces, so a division with no fee set yet is left alone rather than
-  // failing the whole save.
+  // Applying one fee and one deposit across thirteen divisions is what the
+  // director actually wants — the answer is "similar across age groups", and
+  // typing the same figure thirteen times is thirteen chances to mistype it.
+  //
+  // Order matters: the fee goes first, and each update clamps so the database's
+  // "deposit inside the fee" rule still holds. Lowering the fee below a
+  // division's deposit drags the deposit down with it rather than failing the
+  // whole save on a constraint the director cannot see.
+  if (patch.defaultEntryFeeCents !== undefined && patch.defaultEntryFeeCents > 0) {
+    await query(
+      `UPDATE division
+          SET entry_fee_cents = $2,
+              deposit_cents = LEAST(deposit_cents, $2)
+        WHERE tournament_id = $1`,
+      [tournamentId, patch.defaultEntryFeeCents],
+    );
+  }
+
   if (patch.defaultDepositCents !== undefined) {
     await query(
       `UPDATE division SET deposit_cents = LEAST($2, entry_fee_cents)

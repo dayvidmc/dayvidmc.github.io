@@ -1,7 +1,7 @@
 import { currentTournament } from '@/server/repo';
-import { board, currentWindow, entryDivisions, entrySettings } from '@/server/registration';
-import { untilPhrase } from '@/domain/registration';
-import { formatDateFriendly, formatTimeFriendly } from '@/domain/time';
+import { board, byAgeGroup, currentWindow, entryDivisions, entrySettings } from '@/server/registration';
+import { refundStance, untilPhrase } from '@/domain/registration';
+import { formatDateFriendly, formatTimeFriendly, toWallClock } from '@/domain/time';
 import { findEntryAction, submitEntryAction } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -47,6 +47,11 @@ export default async function EnterPage({
   ]);
 
   const capacityFor = new Map(standing.divisions.map((d) => [d.divisionId, d]));
+  const grouped = byAgeGroup(divisions);
+  const refunds = refundStance(
+    settings.refundCutoffDate ? new Date(`${settings.refundCutoffDate}T00:00:00`) : null,
+    toWallClock(new Date()),
+  );
   const problems = params.problems ? params.problems.split('|').filter(Boolean) : [];
 
   return (
@@ -120,48 +125,74 @@ export default async function EnterPage({
       {divisions.length === 0 ? (
         <div className="empty">No divisions set up yet.</div>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Division</th>
-              <th style={{ textAlign: 'right' }}>Entry</th>
-              <th style={{ textAlign: 'right' }}>Deposit</th>
-              <th style={{ textAlign: 'right' }}>Places</th>
-            </tr>
-          </thead>
-          <tbody>
-            {divisions.map((division) => {
-              const room = capacityFor.get(division.id);
-              return (
-                <tr key={division.id}>
-                  <td className="team">{division.name}</td>
-                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {division.entryFeeCents ? money(division.entryFeeCents) : '—'}
-                  </td>
-                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {division.depositCents ? money(division.depositCents) : '—'}
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    {/* "8 of 8" reads as full to anybody scanning this. It has
-                        to say how many are left, in those words. */}
-                    {room?.cap == null
-                      ? 'open'
-                      : room.full
-                        ? 'full'
-                        : `${room.placesLeft} left`}
-                  </td>
+        grouped.map((group) => (
+          <div key={group.ageGroup ?? 'other'} style={{ marginBottom: 18 }}>
+            <h3 style={{ fontSize: 17, margin: '0 0 6px' }}>{group.ageGroup ?? 'Other'}</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Division</th>
+                  <th style={{ textAlign: 'right' }}>Entry</th>
+                  <th style={{ textAlign: 'right' }}>Deposit</th>
+                  <th style={{ textAlign: 'right' }}>Places</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {group.divisions.map((division) => {
+                  const room = capacityFor.get(division.id);
+                  return (
+                    <tr key={division.id}>
+                      <td className="team">{division.name}</td>
+                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                        {division.entryFeeCents ? money(division.entryFeeCents) : '—'}
+                      </td>
+                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                        {division.depositCents ? money(division.depositCents) : '—'}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        {/* "8 of 8" reads as full to anybody scanning this. It
+                            has to say how many are left, in those words. */}
+                        {room?.cap == null
+                          ? 'open'
+                          : room.full
+                            ? 'full'
+                            : `${room.placesLeft} left`}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ))
       )}
 
       <p className="sub">
         The deposit holds your place in the queue. The balance is due once the tournament has
-        confirmed you are in — you will be told the date, and it is {settings.balanceDueDays} days
-        from confirmation.
+        confirmed you are in
+        {settings.balanceDueDate
+          ? `, by ${formatDateFriendly(new Date(`${settings.balanceDueDate}T12:00:00`))}`
+          : `, ${settings.balanceDueDays} days from confirmation`}
+        .
       </p>
+
+      {/* Stated before anybody pays, not after. Terms a coach finds out about
+          when they want their money back are not terms. */}
+      {refunds.phase !== 'unstated' && (
+        <div className={`notice ${refunds.phase === 'final' ? 'warn' : 'info'}`}>
+          <strong>
+            {refunds.phase === 'final'
+              ? 'Deposits are no longer refundable.'
+              : `Deposits are refundable until ${formatDateFriendly(refunds.cutoff)}.`}
+          </strong>{' '}
+          {refunds.phase === 'refundable' && refunds.daysLeft <= 14 && (
+            <>
+              That is {refunds.daysLeft === 0 ? 'today' : `in ${refunds.daysLeft} days`}.{' '}
+            </>
+          )}
+          {settings.refundPolicyNote}
+        </div>
+      )}
 
       {/* --- The form -------------------------------------------------------- */}
 
@@ -195,16 +226,22 @@ export default async function EnterPage({
               <option value="" disabled>
                 Choose one
               </option>
-              {divisions.map((division) => {
-                const room = capacityFor.get(division.id);
-                return (
-                  <option key={division.id} value={division.id}>
-                    {division.name}
-                    {division.entryFeeCents ? ` — ${money(division.entryFeeCents)}` : ''}
-                    {room?.full ? ' (full — waitlist)' : ''}
-                  </option>
-                );
-              })}
+              {/* Grouped, because thirteen options in one list is a list nobody
+                  reads to the bottom of. */}
+              {grouped.map((group) => (
+                <optgroup key={group.ageGroup ?? 'other'} label={group.ageGroup ?? 'Other'}>
+                  {group.divisions.map((division) => {
+                    const room = capacityFor.get(division.id);
+                    return (
+                      <option key={division.id} value={division.id}>
+                        {division.name}
+                        {division.entryFeeCents ? ` — ${money(division.entryFeeCents)}` : ''}
+                        {room?.full ? ' (full — waitlist)' : ''}
+                      </option>
+                    );
+                  })}
+                </optgroup>
+              ))}
             </select>
             <p className="hint">
               A full division still takes entries. They go on the waitlist in the order they arrive,
@@ -244,9 +281,12 @@ export default async function EnterPage({
             <div className="row">
               <div>
                 <label htmlFor="alternateName">Second contact</label>
+                {/* Placeholders in this pair sit in a half-width field on a
+                    phone, so they have to be short. "a manager or assistant
+                    coach" truncated to "a manager or ass". */}
                 <input
                   id="alternateName" name="alternateName" type="text" maxLength={120}
-                  placeholder="a manager or assistant coach"
+                  placeholder="Jo Tremblay"
                 />
               </div>
               <div>

@@ -2,7 +2,13 @@ import { notFound, redirect } from 'next/navigation';
 import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
 import { currentTournament } from '@/server/repo';
 import { board, entryById } from '@/server/registration';
-import { STATUS_LABEL, claimOutstanding, owing, queueFor } from '@/domain/registration';
+import {
+  STATUS_LABEL,
+  claimOutstanding,
+  divisionLabel,
+  owing,
+  queueFor,
+} from '@/domain/registration';
 import { formatPhone } from '@/domain/contact';
 import { formatDateFriendly, formatTimeFriendly } from '@/domain/time';
 import { decideAction, recordPaymentAction } from '../actions';
@@ -81,8 +87,8 @@ export default async function EntryPage({
     <>
       <h1>{entry.teamName}</h1>
       <p className="sub">
-        {entry.ageGroup ? `${entry.ageGroup} · ` : ''}
-        {entry.divisionName} · {STATUS_LABEL[entry.status]} · reference{' '}
+        {divisionLabel(entry.ageGroup, entry.divisionName)} · {STATUS_LABEL[entry.status]} ·{' '}
+        reference{' '}
         <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{entry.reference}</strong>
       </p>
 

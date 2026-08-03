@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildRecords, cappedMargin, completedGameCounts } from './records';
-import { computeStandings, coinFlipKey, distinctReasoning } from './tiebreak';
+import { computeStandings, coinFlipKey, distinctReasoning, poolBalance } from './tiebreak';
 import type { GameResult } from './types';
 
 const NAMES: Record<string, string> = {
@@ -364,5 +364,62 @@ describe('reasoning is always present when a tiebreak happened', () => {
         expect(step.reasoning.endsWith('.')).toBe(true);
       }
     }
+  });
+});
+
+
+describe('a pool where rain took some games away', () => {
+  const games = (list: [string, string, number, number][]): GameResult[] =>
+    list.map(([home, away, homeRuns, awayRuns], i) => ({
+      gameId: `G${i}`,
+      divisionId: 'div',
+      poolId: null,
+      gameType: 'round_robin',
+      resultKind: 'played' as const,
+      homeTeamId: home,
+      awayTeamId: away,
+      homeRuns,
+      awayRuns,
+      forfeitedBy: null,
+    }));
+
+  it('says nothing when everybody played the same number', () => {
+    const records = buildRecords(['a', 'b', 'c'], games([
+      ['a', 'b', 5, 3], ['b', 'c', 4, 2], ['c', 'a', 1, 0],
+    ]));
+    expect(poolBalance(records).uneven).toBe(false);
+  });
+
+  it('flags the pool and names who is short', () => {
+    // 'c' lost a game to the weather.
+    const records = buildRecords(['a', 'b', 'c'], games([
+      ['a', 'b', 5, 3], ['a', 'c', 4, 2], ['b', 'c', 1, 0],
+    ]).slice(0, 2));
+    const balance = poolBalance(records);
+    expect(balance.uneven).toBe(true);
+    expect(balance.most).toBe(2);
+    expect(balance.fewest).toBe(1);
+    expect(balance.shortOfGames.map((s) => s.teamId).sort()).toEqual(['b', 'c']);
+  });
+
+  it('orders the short teams by how short they are', () => {
+    const records = buildRecords(['a', 'b', 'c'], games([
+      ['a', 'b', 5, 3], ['a', 'c', 4, 2], ['b', 'c', 1, 0], ['a', 'b', 2, 1],
+    ]));
+    // a: 3, b: 3, c: 2 — only c is short.
+    const balance = poolBalance(records);
+    expect(balance.shortOfGames.map((s) => s.teamId)).toEqual(['c']);
+  });
+
+  it('does not pick a winner or switch to points per game', () => {
+    // The tournament decides on the day. This function reports, it does not
+    // rule — anything else would quietly reseed a pool nobody looked at.
+    const records = buildRecords(['a', 'b'], games([['a', 'b', 5, 3]]).slice(0, 1));
+    const balance = poolBalance(records);
+    expect(Object.keys(balance).sort()).toEqual(['fewest', 'most', 'shortOfGames', 'uneven']);
+  });
+
+  it('handles an empty pool without dividing by anything', () => {
+    expect(poolBalance(new Map()).uneven).toBe(false);
   });
 });

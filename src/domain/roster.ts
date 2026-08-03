@@ -40,10 +40,20 @@ export interface Player {
 export const MINIMUM_TO_FIELD = 9;
 /** Below this a team has no substitutes, which is worth mentioning once. */
 export const COMFORTABLE_ROSTER = 11;
+/**
+ * The tournament's ceiling, when nobody has set one.
+ *
+ * A warning rather than a hard stop. A roster arriving with fifteen names on it
+ * is a conversation with a coach, not a crash — but it is a conversation
+ * somebody has to be prompted to have, because nobody counts to fourteen by
+ * eye on a Friday night.
+ */
+export const DEFAULT_MAX_ROSTER = 14;
 
 export type RosterIssueKind =
   | 'cannot_field'
   | 'no_substitutes'
+  | 'over_maximum'
   | 'duplicate_jersey'
   | 'missing_jersey'
   | 'no_roster';
@@ -55,7 +65,10 @@ export interface RosterIssue {
   message: string;
 }
 
-export function rosterIssues(players: readonly Player[]): RosterIssue[] {
+export function rosterIssues(
+  players: readonly Player[],
+  maxRoster: number = DEFAULT_MAX_ROSTER,
+): RosterIssue[] {
   const issues: RosterIssue[] = [];
   const counted = players.filter((p) => !p.isAffiliate).length;
   // Affiliates are called up from a younger team for one weekend and do play,
@@ -83,6 +96,19 @@ export function rosterIssues(players: readonly Player[]): RosterIssue[] {
       kind: 'no_substitutes',
       severity: 'note',
       message: `${available} players, so no substitutes. Fine, but one injury is a forfeit.`,
+    });
+  }
+
+  // Counted on the team's own players. An affiliate called up for the weekend
+  // is not one of the fourteen a team registered, and counting them as such
+  // would flag exactly the team that was already short.
+  if (counted > maxRoster) {
+    issues.push({
+      kind: 'over_maximum',
+      severity: 'note',
+      message:
+        `${counted} players, and the maximum is ${maxRoster}. ` +
+        'Somebody has to tell the coach which names come off before the first game.',
     });
   }
 

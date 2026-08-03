@@ -50,6 +50,24 @@ export default async function StandingsPage({
             </div>
           )}
 
+          {/* Ranking is on total points, which is only fair when everybody has
+              had the same number of chances. Say so rather than let a coach
+              read a seeding off a table the weather partly wrote. */}
+          {pool.balance.uneven && (
+            <div className="notice warn">
+              <strong>Not everybody has played the same number of games.</strong>{' '}
+              {pool.balance.shortOfGames
+                .map(
+                  (short) =>
+                    `${pool.teamNames[short.teamId] ?? 'A team'} has played ${short.played}`,
+                )
+                .join('; ')}
+              , against {pool.balance.most} for the rest. These places are ordered on total points,
+              so this table is not a seeding until the tournament has decided how to handle the
+              difference.
+            </div>
+          )}
+
           <table>
             <thead>
               <tr>

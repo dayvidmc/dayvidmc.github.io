@@ -38,6 +38,33 @@ const DIAMONDS: [string, string][] = [
   ['March Central', 'March Central'],
 ];
 
+/**
+ * The thirteen divisions the tournament actually runs.
+ *
+ * Four age groups, and a second axis that is *not* purely a skill tier —
+ * Girls sits beside All Star, A and B rather than under them. That is why the
+ * age group is its own column and the tier stays part of the name, which is
+ * what goes on a scoreboard.
+ *
+ * Ordered as a director reads a wall chart: youngest first, and within an age
+ * group the strongest tier first.
+ */
+const DIVISIONS: [ageGroup: string, tier: string, groupOrder: number][] = [
+  ['Rookie', 'A', 0],
+  ['Rookie', 'B', 1],
+  ['Minor', 'All Star', 0],
+  ['Minor', 'A', 1],
+  ['Minor', 'B', 2],
+  ['Minor', 'Girls', 3],
+  ['Major', 'All Star', 0],
+  ['Major', 'A', 1],
+  ['Major', 'B', 2],
+  ['Major', 'Girls', 3],
+  ['Junior', 'A', 0],
+  ['Junior', 'B', 1],
+  ['Junior', 'Girls', 2],
+];
+
 type Role =
   | 'director' | 'hq' | 'volunteer_coordinator' | 'auction_lead'
   | 'concession_lead' | 'concession_volunteer';
@@ -113,47 +140,47 @@ const TODAY: {
   text?: string;
 }[] = [
   {
-    gameId: 'RK-01', division: 'Rookie', diamond: 'Tokessy',
+    gameId: 'RK-01', division: 'Rookie A', diamond: 'Tokessy',
     home: 'Kanata Rookie', away: 'Stittsville Rookie',
     offset: -250, intent: 'approved', score: [8, 4],
   },
   {
-    gameId: 'RK-02', division: 'Rookie', diamond: 'Kinsmen',
+    gameId: 'RK-02', division: 'Rookie A', diamond: 'Kinsmen',
     home: 'Barrhaven Rookie', away: 'Nepean Rookie',
     offset: -250, intent: 'approved', score: [3, 3],
   },
   {
-    gameId: 'RK-03', division: 'Rookie', diamond: 'Mike Channing',
+    gameId: 'RK-03', division: 'Rookie A', diamond: 'Mike Channing',
     home: 'Orleans Rookie', away: 'Gloucester Rookie',
     offset: -190, intent: 'overdue',
   },
   {
-    gameId: 'RK-04', division: 'Rookie', diamond: 'March Central',
+    gameId: 'RK-04', division: 'Rookie A', diamond: 'March Central',
     home: 'Manotick Rookie', away: 'Riverside Rookie',
     offset: -160, intent: 'pending', score: [6, 2], text: 'Manotick 6 Riverside 2',
   },
   {
-    gameId: 'MN-01', division: 'Minor', diamond: 'Walter Baker West',
+    gameId: 'MN-01', division: 'Minor A', diamond: 'Walter Baker West',
     home: 'Kanata Minor', away: 'Orleans Minor',
     offset: -235, intent: 'disputed', score: [4, 4],
   },
   {
-    gameId: 'MN-02', division: 'Minor', diamond: 'Roland Michener',
+    gameId: 'MN-02', division: 'Minor A', diamond: 'Roland Michener',
     home: 'Nepean Minor', away: 'Stittsville Minor',
     offset: -175, intent: 'pending_low', text: '5-2 i think, ask the other scorekeeper',
   },
   {
-    gameId: 'MN-03', division: 'Minor', diamond: 'Deevy Pines 1',
+    gameId: 'MN-03', division: 'Minor A', diamond: 'Deevy Pines 1',
     home: 'Barrhaven Minor', away: 'Gloucester Minor',
     offset: -25, intent: 'live',
   },
   {
-    gameId: 'MN-04', division: 'Minor', diamond: 'Deevy Pines 2',
+    gameId: 'MN-04', division: 'Minor A', diamond: 'Deevy Pines 2',
     home: 'Manotick Minor', away: 'Riverside Minor',
     offset: 95, intent: 'upcoming',
   },
   {
-    gameId: 'MN-05', division: 'Minor', diamond: 'Tokessy',
+    gameId: 'MN-05', division: 'Minor A', diamond: 'Tokessy',
     home: 'Kanata Minor B', away: 'Orleans Minor B',
     offset: 160, intent: 'upcoming',
   },
@@ -213,11 +240,13 @@ export async function seedDemo(): Promise<DemoResult> {
     );
     const id = inserted.rows[0]!.id;
 
-    for (const [index, name] of ['Rookie', 'Minor', 'Major A'].entries()) {
+    for (const [index, [ageGroup, tier, groupOrder]] of DIVISIONS.entries()) {
       await client.query(
-        `INSERT INTO division (tournament_id, name, sort_order, rules, rules_reviewed)
-         VALUES ($1, $2, $3, $4::jsonb, false)`,
-        [id, name, index, JSON.stringify(MAJOR_2026_RULES)],
+        `INSERT INTO division (tournament_id, name, age_group, sort_order, group_order,
+                               rules, rules_reviewed)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, false)`,
+        [id, `${ageGroup} ${tier}`, ageGroup, index, groupOrder,
+          JSON.stringify(MAJOR_2026_RULES)],
       );
     }
     for (const [name, site] of DIAMONDS) {
@@ -277,7 +306,9 @@ export async function seedDemo(): Promise<DemoResult> {
   }
 
   const parsed = importSchedule(rows.join('\n'), {
-    rulesByDivision: { Rookie: MAJOR_2026_RULES, Minor: MAJOR_2026_RULES, 'Major A': MAJOR_2026_RULES },
+    rulesByDivision: Object.fromEntries(
+      DIVISIONS.map(([ageGroup, tier]) => [`${ageGroup} ${tier}`, MAJOR_2026_RULES]),
+    ),
   });
 
   if (!parsed.importable) {
@@ -727,7 +758,13 @@ async function seedEntries(tournamentId: string): Promise<void> {
             cheque_mail_to = 'PO Box 1247, Kanata ON K2K 0B1',
             balance_due_days = 14,
             default_deposit_cents = 10000,
-            age_groups = ARRAY['Rookie','Mosquito','Peewee','Bantam','Midget']
+            default_entry_fee_cents = 70000,
+            age_groups = ARRAY['Rookie','Minor','Major','Junior'],
+            refund_cutoff_date = current_date + 45,
+            refund_policy_note = 'Withdraw after that date and the deposit stays with the '
+                                 || 'tournament, because a place was held for you that somebody '
+                                 || 'else was turned away from.',
+            max_roster_size = 14
       WHERE id = $1`,
     [tournamentId],
   );
@@ -764,21 +801,21 @@ async function seedEntries(tournamentId: string): Promise<void> {
     notes: string | null,
   ][] = [
     ['TK-3F7K-9QB2', 'Gloucester Major A', 'Gloucester Baseball', 'Major A', 'Dana Whitfield',
-      'dana.whitfield@example.com', '+16135550101', 'Bantam', 1, 'accepted', null],
+      'dana.whitfield@example.com', '+16135550101', 'Major', 1, 'accepted', null],
     ['TK-8HJP-4RT6', 'Orleans Major A', 'Orleans Minor Baseball', 'Major A', 'Marcus Bell',
-      'marcus.bell@example.com', '+16135550102', 'Bantam', 3, 'accepted',
+      'marcus.bell@example.com', '+16135550102', 'Major', 3, 'accepted',
       'We cannot play before noon on the Friday — half the team is at a school trip.'],
     ['TK-2WQD-7NCV', 'Barrhaven Bandits', 'Barrhaven Baseball', 'Major A', 'Priya Raman',
-      'priya.raman@example.com', '+16135550103', 'Bantam', 4, 'submitted', null],
+      'priya.raman@example.com', '+16135550103', 'Major', 4, 'submitted', null],
     ['TK-6ZXK-3MPT', 'West Carleton Wolves', 'West Carleton Baseball', 'Major A', 'Tom Reilly',
-      'tom.reilly@example.com', null, 'Bantam', 9, 'submitted',
+      'tom.reilly@example.com', null, 'Major', 9, 'submitted',
       'Played in 2019 as West Carleton Red. Same club, new name.'],
     ['TK-9BRT-2KHW', 'Almonte Thunder', 'Mississippi Mills Baseball', 'Major A', 'Jen Okafor',
-      'jen.okafor@example.com', '+16135550105', 'Bantam', 22, 'submitted', null],
-    ['TK-4NMC-8VQJ', 'Manotick Minor', 'Rideau Baseball', 'Minor', 'Ray Deschamps',
-      'ray.deschamps@example.com', '+16135550106', 'Peewee', 6, 'accepted', null],
-    ['TK-7TQV-5DKZ', 'Cumberland Colts', 'Cumberland Baseball', 'Minor', 'Ellen Novak',
-      'ellen.novak@example.com', '+16135550107', 'Peewee', 40, 'waitlisted', null],
+      'jen.okafor@example.com', '+16135550105', 'Major', 22, 'submitted', null],
+    ['TK-4NMC-8VQJ', 'Manotick Minor', 'Rideau Baseball', 'Minor A', 'Ray Deschamps',
+      'ray.deschamps@example.com', '+16135550106', 'Minor', 6, 'accepted', null],
+    ['TK-7TQV-5DKZ', 'Cumberland Colts', 'Cumberland Baseball', 'Minor A', 'Ellen Novak',
+      'ellen.novak@example.com', '+16135550107', 'Minor', 40, 'waitlisted', null],
   ];
 
   const created = new Map<string, string>();

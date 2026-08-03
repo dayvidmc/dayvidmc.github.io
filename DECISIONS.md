@@ -517,6 +517,80 @@ pools and bracket slots pointing at it, not a change to that trigger.
 The browser checks assert the deletion fails, so this cannot be quietly
 "fixed".
 
+### 2.30 Thirteen divisions, grouped by age group everywhere
+
+**Decision.** `division.age_group` holds Rookie / Minor / Major / Junior, and
+every screen that shows all the divisions groups by it. The tier stays part of
+the division's own name.
+
+**Why.** The real shape is thirteen — Rookie A/B; Minor All Star/A/B/Girls;
+Major All Star/A/B/Girls; Junior A/B/Girls. Thirteen rows of anything is a list
+nobody reads to the bottom of, and the question a director asks of that table is
+"is this age group full", not "what is the thirteenth row".
+
+Note that the second axis is **not** a skill tier. Girls sits beside All Star, A
+and B rather than under them, which is why it is not modelled as one — an
+`enum('all_star','a','b')` with a gender stream jammed into it would be wrong
+about the tournament in a way that got harder to unpick every year.
+
+`divisionLabel()` drops the age group when the division's name already begins
+with it, so a card says "Major A" and not "Major · Major A" ninety times.
+
+### 2.31 One fee and one deposit, set once for all thirteen
+
+**Decision.** `tournament.default_entry_fee_cents` and `default_deposit_cents`
+are what the director sets; saving them writes every division. Per-division
+figures still work, for the exceptions.
+
+**Why.** The fee is similar across age groups. Typing the same number thirteen
+times is thirteen chances to mistype it, and the mistyped one is not discovered
+until a coach pays the wrong amount.
+
+Lowering the tournament-wide fee below a division's deposit drags the deposit
+down with it rather than failing on the CHECK that keeps a deposit inside its
+fee. A director cannot see that constraint, and a save that fails without
+explanation is worse than one that does the obviously-intended thing.
+
+### 2.32 An uneven pool is reported, not resolved
+
+**Decision.** `poolBalance()` says whether everybody in a pool has played the
+same number of games and names who is short. The standings screen shows it and
+states that the table is not a seeding. Nothing switches to points-per-game.
+
+**Why.** Rain here can mean games are **dropped**, not just compressed, and the
+table ranks on total points — which is only fair when everybody has had the same
+number of chances. The tournament's stated answer is that the tournament team
+decides on the day, and that is the right answer: no rule survives "we lost
+Saturday morning on two diamonds".
+
+So the software's job is to stop a coach reading a seeding off a table the
+weather partly wrote. Quietly switching to points-per-game would be a different
+and equally unilateral answer, arrived at by nobody.
+
+### 2.33 Refund terms are stated before the money, or not at all
+
+**Decision.** `refund_cutoff_date` and a free-text note, shown on the entry page
+and again directly above the payment options. With no cutoff set, both pages say
+nothing about refunds.
+
+**Why.** Terms somebody finds out about when they want their money back are not
+terms. And a default — "non-refundable", say — would be inventing a policy on a
+committee's behalf about other people's money, which is worse than silence.
+
+The cutoff day itself is refundable: "non-refundable after 1 May" means the 1st
+is the last day, which is how anybody reading a poster takes it. Being stricter
+than the sentence the coach was shown is a surprise, not a rule.
+
+### 2.34 A roster over the maximum is a warning, not a wall
+
+**Decision.** `max_roster_size`, 14 by default, produces a note on the roster
+screen. Affiliates called up for the weekend are not counted against it.
+
+**Why.** A roster arriving with fifteen names is a conversation with a coach,
+not a crash — but nobody counts to fourteen by eye on a Friday night, so it has
+to be said. Counting affiliates would flag exactly the team that was already
+short of players, which is the opposite of useful.
+
 ---
 
 ## 3. Deliberately not built

@@ -1,6 +1,6 @@
 import { query } from '@/db/client';
 import { buildRecords, completedGameCounts } from '@/domain/records';
-import { computeStandings, type StandingsRow } from '@/domain/tiebreak';
+import { computeStandings, poolBalance, type PoolBalance, type StandingsRow } from '@/domain/tiebreak';
 import type { GameResult } from '@/domain/types';
 
 /**
@@ -15,6 +15,15 @@ export interface PoolStandings {
   teamNames: Record<string, string>;
   gameCounts: Record<string, number>;
   awaitingCoinFlip: boolean;
+  /**
+   * Whether everybody in this pool has played the same number of games.
+   *
+   * Rain here can mean games are dropped rather than compressed, and the table
+   * ranks on total points — so an uneven pool is one where the order on screen
+   * is partly the weather. The tournament decides what to do about it; the
+   * table's job is to stop somebody reading a seeding off it by accident.
+   */
+  balance: PoolBalance;
 }
 
 /**
@@ -101,6 +110,7 @@ export async function standingsForDivision(divisionId: string): Promise<PoolStan
       teamNames,
       gameCounts: Object.fromEntries(counts),
       awaitingCoinFlip: rows.some((r) => r.awaitingCoinFlip),
+      balance: poolBalance(records),
     });
   }
 

@@ -26,7 +26,7 @@ intake paths that feed it.
 | HQ screen for texts nobody could place | §5.2 | Built |
 | HQ board with overdue clock | §5.3 | Built, tested |
 | Division rules config | §5.4 | Built — auto-saving editor with a live overdue-clock preview |
-| Standings and tiebreakers | §5.5 | Built, tested — the core deliverable |
+| Standings and tiebreakers | §5.5 | Built, tested — the core deliverable; flags a pool the weather made uneven rather than seeding it |
 | Game count tracking (financial) | §5.8 | Built, tested |
 | Team links, no login | §5.7 | Built |
 | Tile + PIN staff access | §10 | Built |
@@ -41,7 +41,7 @@ intake paths that feed it.
 | Outbound SMS: sender, retries, opt-outs, failure screen | §5.7 | Built, tested — **dry run by default**; needs a Twilio account to reach a phone |
 | Money raised: every stream, cost of goods, gifts in kind, cash control | §8A | Built, tested — the raffle is still recorded by hand |
 | Silent auction: lots, printable bid sheets, a fast close, winners, payment | §7.3 | Built, tested — reports itself into the money total |
-| Team entries: a timed opening, a queue, caps and waitlists, deposits and balances | §8A/E | Built, tested — age group and division both captured; e-transfer and cheque work out of the box, card needs a merchant account |
+| Team entries: a timed opening, a queue, caps and waitlists, deposits and balances | §8A/E | Built, tested — thirteen divisions grouped by age group, refund terms stated before payment; e-transfer and cheque work out of the box, card needs a merchant account |
 | Append-only audit trail | §9 | Built, enforced by the database |
 
 ## What is deliberately not here

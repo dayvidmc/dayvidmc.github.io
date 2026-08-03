@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff } from '@/server/auth';
 import { currentTournament } from '@/server/repo';
-import { board, currentWindow } from '@/server/registration';
-import { STATUS_LABEL, owing, untilPhrase } from '@/domain/registration';
+import { board, byAgeGroup, currentWindow, entryDivisions } from '@/server/registration';
+import { STATUS_LABEL, divisionLabel, owing, untilPhrase } from '@/domain/registration';
 import { formatDateFriendly, formatTimeFriendly } from '@/domain/time';
 
 export const dynamic = 'force-dynamic';
@@ -42,10 +42,17 @@ export default async function EntriesPage({
   if (!tournament) return <div className="notice info">No tournament set up yet.</div>;
 
   const params = await searchParams;
-  const [{ entries, divisions, chases, summary }, state] = await Promise.all([
+  const [{ entries, divisions, chases, summary }, state, allDivisions] = await Promise.all([
     board(tournament.id),
     currentWindow(tournament.id),
+    entryDivisions(tournament.id),
   ]);
+
+  // Thirteen rows of divisions is a wall of numbers. Grouped by age group it is
+  // four short tables, each of which answers "is this age group full" at a
+  // glance — which is the only question anybody asks of this table.
+  const roomFor = new Map(divisions.map((d) => [d.divisionId, d]));
+  const groups = byAgeGroup(allDivisions);
 
   const shown = params.division
     ? entries.filter((entry) => entry.divisionId === params.division)
@@ -138,45 +145,63 @@ export default async function EntriesPage({
       {/* --- How full each division is ---------------------------------------- */}
 
       <h2>Divisions</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Division</th>
-            <th style={{ textAlign: 'right' }}>In</th>
-            <th style={{ textAlign: 'right' }}>Waiting</th>
-            <th style={{ textAlign: 'right' }}>Places</th>
-          </tr>
-        </thead>
-        <tbody>
-          {divisions.map((division) => (
-            <tr key={division.divisionId}>
-              <td className="team">
-                <a href={`/hq/entries?division=${division.divisionId}`}>{division.divisionName}</a>
-                {division.oversubscribed && (
-                  <div className="meta" style={{ color: 'var(--red)' }}>
-                    more waiting than places
-                  </div>
-                )}
-                {division.waitlisted > 0 && (
-                  <div className="meta">
-                    {division.waitlisted} on the waitlist
-                  </div>
-                )}
-              </td>
-              <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                {division.accepted}
-                {division.cap === null ? '' : ` / ${division.cap}`}
-              </td>
-              <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                {division.waiting || '—'}
-              </td>
-              <td style={{ textAlign: 'right' }}>
-                {division.cap === null ? 'open' : division.full ? 'full' : division.placesLeft}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {groups.map((group) => {
+        const rows = group.divisions
+          .map((division) => roomFor.get(division.id))
+          .filter((room): room is NonNullable<typeof room> => room !== undefined);
+        const accepted = rows.reduce((sum, room) => sum + room.accepted, 0);
+        const waiting = rows.reduce((sum, room) => sum + room.waiting, 0);
+
+        return (
+          <div key={group.ageGroup ?? 'other'} style={{ marginBottom: 18 }}>
+            <h3 style={{ fontSize: 17, margin: '0 0 4px' }}>
+              {group.ageGroup ?? 'Other'}{' '}
+              <span style={{ fontWeight: 400, fontSize: 14, color: 'var(--muted)' }}>
+                {accepted} in{waiting > 0 ? `, ${waiting} waiting` : ''}
+              </span>
+            </h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Division</th>
+                  <th style={{ textAlign: 'right' }}>In</th>
+                  <th style={{ textAlign: 'right' }}>Waiting</th>
+                  <th style={{ textAlign: 'right' }}>Places</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((division) => (
+                  <tr key={division.divisionId}>
+                    <td className="team">
+                      <a href={`/hq/entries?division=${division.divisionId}`}>
+                        {division.divisionName}
+                      </a>
+                      {division.oversubscribed && (
+                        <div className="meta" style={{ color: 'var(--red)' }}>
+                          more waiting than places
+                        </div>
+                      )}
+                      {division.waitlisted > 0 && (
+                        <div className="meta">{division.waitlisted} on the waitlist</div>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {division.accepted}
+                      {division.cap === null ? '' : ` / ${division.cap}`}
+                    </td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {division.waiting || '—'}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {division.cap === null ? 'open' : division.full ? 'full' : division.placesLeft}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
 
       {params.division && (
         <p className="sub">
@@ -203,8 +228,7 @@ export default async function EntriesPage({
                     {index + 1}. {entry.teamName}
                   </div>
                   <div className="meta">
-                    {entry.ageGroup ? `${entry.ageGroup} · ` : ''}
-                    {entry.divisionName}
+                    {divisionLabel(entry.ageGroup, entry.divisionName)}
                     {entry.association ? ` · ${entry.association}` : ''} ·{' '}
                     {formatDateFriendly(entry.submittedAt)} {formatTimeFriendly(entry.submittedAt)}
                   </div>
@@ -255,8 +279,8 @@ export default async function EntriesPage({
                   <div>
                     <div className="teams" style={{ fontSize: 16 }}>{entry.teamName}</div>
                     <div className="meta">
-                      {entry.ageGroup ? `${entry.ageGroup} · ` : ''}
-                      {entry.divisionName} · {money(state.paidCents)} of {money(state.feeCents)}
+                      {divisionLabel(entry.ageGroup, entry.divisionName)} ·{' '}
+                      {money(state.paidCents)} of {money(state.feeCents)}
                       {state.outstandingCents > 0 && entry.status === 'accepted'
                         ? ` · ${money(state.outstandingCents)} owed`
                         : ''}

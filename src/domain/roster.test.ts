@@ -19,6 +19,44 @@ const player = (name: string, jersey: string | null = null, isAffiliate = false)
 const squad = (n: number, from = 1) =>
   Array.from({ length: n }, (_, i) => player(`Player ${from + i}`, String(from + i)));
 
+describe('a roster over the maximum', () => {
+  const squad = (n: number, affiliates = 0) =>
+    Array.from({ length: n + affiliates }, (_, i) => ({
+      id: String(i),
+      name: `Player ${i}`,
+      jersey: String(i + 1),
+      birthYear: null,
+      isAffiliate: i >= n,
+    }));
+
+  it('says nothing at the maximum', () => {
+    expect(rosterIssues(squad(14)).some((i) => i.kind === 'over_maximum')).toBe(false);
+  });
+
+  it('flags one over, and names the number', () => {
+    const issues = rosterIssues(squad(15));
+    const over = issues.find((i) => i.kind === 'over_maximum');
+    expect(over).toBeDefined();
+    expect(over!.message).toContain('15 players');
+    expect(over!.message).toContain('maximum is 14');
+  });
+
+  it('is a note, not a blocker — it is a conversation, not a crash', () => {
+    expect(rosterIssues(squad(15)).find((i) => i.kind === 'over_maximum')!.severity).toBe('note');
+  });
+
+  it('does not count affiliates against the maximum', () => {
+    // An affiliate called up for the weekend is not one of the fourteen the
+    // team registered. Counting them would flag the team that was short.
+    expect(rosterIssues(squad(14, 3)).some((i) => i.kind === 'over_maximum')).toBe(false);
+  });
+
+  it('honours a different maximum when the tournament sets one', () => {
+    expect(rosterIssues(squad(13), 12).some((i) => i.kind === 'over_maximum')).toBe(true);
+    expect(rosterIssues(squad(13), 20).some((i) => i.kind === 'over_maximum')).toBe(false);
+  });
+});
+
 describe('whether a team can take the field', () => {
   it('says nothing at all about a full roster', () => {
     expect(rosterIssues(squad(13))).toEqual([]);

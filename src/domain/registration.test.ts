@@ -4,12 +4,14 @@ import {
   capacity,
   chaseList,
   claimOutstanding,
+  divisionLabel,
   entryProblems,
   isOpen,
   normaliseReference,
   owing,
   queueFor,
   referenceFrom,
+  refundStance,
   summarise,
   untilPhrase,
   windowState,
@@ -226,6 +228,54 @@ describe('what an entry owes', () => {
   it('never charges a deposit larger than the fee itself', () => {
     // A misconfigured division must not take more than the team owes.
     expect(amountDue({ entryFeeCents: 10000, depositCents: 20000 }, [], 'deposit')).toBe(10000);
+  });
+});
+
+describe('naming a division without repeating the age group', () => {
+  it('drops the age group when the name already starts with it', () => {
+    // "Major · Major A" is noise, and on a board of ninety entries it is
+    // ninety lines of it.
+    expect(divisionLabel('Major', 'Major A')).toBe('Major A');
+    expect(divisionLabel('Minor', 'Minor All Star')).toBe('Minor All Star');
+    expect(divisionLabel('Rookie', 'Rookie B')).toBe('Rookie B');
+  });
+
+  it('keeps it when the name does not carry it', () => {
+    expect(divisionLabel('Major', 'Gold Glove Cup')).toBe('Major · Gold Glove Cup');
+  });
+
+  it('is case insensitive, since somebody will type "major"', () => {
+    expect(divisionLabel('major', 'Major A')).toBe('Major A');
+  });
+
+  it('falls back to the name alone when no age group is set', () => {
+    expect(divisionLabel(null, 'Major A')).toBe('Major A');
+  });
+});
+
+describe('whether a withdrawing team gets its deposit back', () => {
+  const cutoff = at('2027-05-01T00:00:00');
+
+  it('says nothing at all when no policy has been stated', () => {
+    // Inventing terms about somebody's money is worse than saying nothing.
+    expect(refundStance(null, at('2027-01-01T00:00:00'))).toEqual({ phase: 'unstated' });
+  });
+
+  it('is refundable well before the cutoff, and counts the days', () => {
+    const stance = refundStance(cutoff, at('2027-04-21T00:00:00'));
+    expect(stance.phase).toBe('refundable');
+    if (stance.phase === 'refundable') expect(stance.daysLeft).toBe(10);
+  });
+
+  it('is still refundable on the cutoff day itself', () => {
+    // "Non-refundable after 1 May" means the 1st is your last day. Being
+    // stricter than the sentence the coach was shown is a surprise, not a rule.
+    expect(refundStance(cutoff, at('2027-05-01T00:00:00')).phase).toBe('refundable');
+    expect(refundStance(cutoff, at('2027-05-01T23:00:00')).phase).toBe('refundable');
+  });
+
+  it('is final the day after', () => {
+    expect(refundStance(cutoff, at('2027-05-02T00:01:00')).phase).toBe('final');
   });
 });
 

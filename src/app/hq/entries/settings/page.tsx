@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
 import { currentTournament } from '@/server/repo';
-import { board, entryDivisions, entrySettings } from '@/server/registration';
+import { board, byAgeGroup, entryDivisions, entrySettings } from '@/server/registration';
 import { currentProvider } from '@/server/payments/provider';
 import { formatDate, formatTime } from '@/domain/time';
 import { saveFeesAction, saveWindowAction } from '../actions';
@@ -17,6 +17,7 @@ const ERROR: Record<string, string> = {
   bad_cap: 'A cap has to be a whole number of teams, or blank for no limit.',
   deposit_over_fee: 'A deposit cannot be more than the entry fee itself.',
   bad_due_date: 'That balance due date did not read.',
+  bad_refund_date: 'That refund cutoff date did not read.',
 };
 
 /**
@@ -50,6 +51,7 @@ export default async function EntrySettingsPage({
   const provider = currentProvider();
   const providerReady = provider.readiness();
   const capacityFor = new Map(room.map((d) => [d.divisionId, d]));
+  const groups = byAgeGroup(divisions);
 
   return (
     <>
@@ -77,7 +79,7 @@ export default async function EntrySettingsPage({
           ? 'Coaches can pay by card, and their entry updates by itself.'
           : provider.live
             ? `Configured but not usable — ${providerReady}`
-            : 'No provider is connected, so no card button appears. Set PAYMENT_PROVIDER=stripe with its keys to turn it on. e-Transfer and cheque work without it, and cost the tournament nothing.'}
+            : 'No card provider is connected, so coaches are not offered a card button. e-Transfer and cheque work without one, cost the tournament nothing, and are what most tournaments use — see docs/DEPLOY.md if the committee decides it wants cards as well.'}
       </div>
 
       {/* --- The window --------------------------------------------------------- */}
@@ -147,6 +149,39 @@ export default async function EntrySettingsPage({
           moves a deadline somebody has already been told.
         </p>
 
+        <h3 style={{ marginTop: 18, fontSize: 17 }}>Refunds</h3>
+
+        <label htmlFor="refundCutoffDate">Deposits are refundable up to and including</label>
+        <input
+          id="refundCutoffDate" name="refundCutoffDate" type="date"
+          defaultValue={settings.refundCutoffDate ?? ''} disabled={!director}
+        />
+        <p className="hint">
+          Shown on the coach&apos;s page <strong>before</strong> they pay, not after. Leave it blank
+          and the page says nothing about refunds at all, which is the honest thing to do with
+          somebody&apos;s money when no policy has been agreed.
+        </p>
+
+        <label htmlFor="refundPolicyNote">Anything to add</label>
+        <input
+          id="refundPolicyNote" name="refundPolicyNote" type="text" maxLength={400}
+          defaultValue={settings.refundPolicyNote ?? ''} disabled={!director}
+          placeholder="what a late withdrawal means for the balance, who to ring"
+        />
+
+        <h3 style={{ marginTop: 18, fontSize: 17 }}>Rosters</h3>
+
+        <label htmlFor="maxRosterSize">Maximum players on a roster</label>
+        <input
+          id="maxRosterSize" name="maxRosterSize" type="number" min={9} max={40}
+          defaultValue={settings.maxRosterSize} disabled={!director}
+        />
+        <p className="hint">
+          A warning on the roster screen, not a hard stop — a roster arriving with fifteen names is
+          a conversation with a coach, not a crash. Affiliates called up for the weekend are not
+          counted against it.
+        </p>
+
         <h3 style={{ marginTop: 18, fontSize: 17 }}>Age groups</h3>
 
         <label htmlFor="ageGroups">The age groups this tournament runs</label>
@@ -162,16 +197,34 @@ export default async function EntrySettingsPage({
           everybody entering.
         </p>
 
-        <h3 style={{ marginTop: 18, fontSize: 17 }}>Deposit</h3>
+        <h3 style={{ marginTop: 18, fontSize: 17 }}>Fee and deposit</h3>
 
-        <label htmlFor="defaultDeposit">The deposit, across every division</label>
-        <input
-          id="defaultDeposit" name="defaultDeposit" type="text" inputMode="decimal"
-          defaultValue={(settings.defaultDepositCents / 100).toFixed(2)} disabled={!director}
-        />
+        <div className="row">
+          <div>
+            <label htmlFor="defaultFee">Entry fee</label>
+            <input
+              id="defaultFee" name="defaultFee" type="text" inputMode="decimal"
+              defaultValue={
+                settings.defaultEntryFeeCents
+                  ? (settings.defaultEntryFeeCents / 100).toFixed(2)
+                  : ''
+              }
+              placeholder="700.00" disabled={!director}
+            />
+          </div>
+          <div>
+            <label htmlFor="defaultDeposit">Deposit</label>
+            <input
+              id="defaultDeposit" name="defaultDeposit" type="text" inputMode="decimal"
+              defaultValue={(settings.defaultDepositCents / 100).toFixed(2)} disabled={!director}
+            />
+          </div>
+        </div>
         <p className="hint">
-          Saving this sets every division that has an entry fee to this amount. A division can
-          still be given its own figure below afterwards; this is the one number to set first.
+          Saving these sets <strong>every one of the {divisions.length} divisions</strong> at once.
+          Set them here first, then change only the divisions that differ, further down — that is
+          thirteen fewer numbers to type and thirteen fewer chances to mistype one. Leave the fee
+          blank to leave every division as it is.
         </p>
 
         <h3 style={{ marginTop: 18, fontSize: 17 }}>Where money can be sent</h3>
@@ -213,7 +266,10 @@ export default async function EntrySettingsPage({
       {divisions.length === 0 ? (
         <div className="empty">No divisions set up yet.</div>
       ) : (
-        divisions.map((division) => {
+        groups.map((group) => (
+        <div key={group.ageGroup ?? 'other'}>
+        <h3 style={{ fontSize: 17, margin: '18px 0 6px' }}>{group.ageGroup ?? 'Other'}</h3>
+        {group.divisions.map((division) => {
           const room = capacityFor.get(division.id);
           return (
             <form key={division.id} action={saveFeesAction} className="card">
@@ -255,7 +311,9 @@ export default async function EntrySettingsPage({
               )}
             </form>
           );
-        })
+        })}
+        </div>
+        ))
       )}
 
       <p className="sub">

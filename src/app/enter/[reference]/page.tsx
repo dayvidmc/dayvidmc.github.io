@@ -2,8 +2,15 @@ import { notFound } from 'next/navigation';
 import { currentTournament } from '@/server/repo';
 import { entryByReference, entrySettings } from '@/server/registration';
 import { currentProvider } from '@/server/payments/provider';
-import { STATUS_LABEL, claimOutstanding, normaliseReference, owing } from '@/domain/registration';
-import { formatDateFriendly } from '@/domain/time';
+import {
+  STATUS_LABEL,
+  claimOutstanding,
+  divisionLabel,
+  normaliseReference,
+  owing,
+  refundStance,
+} from '@/domain/registration';
+import { formatDateFriendly, toWallClock } from '@/domain/time';
 import { claimEtransferAction, payAction } from '../actions';
 
 export const dynamic = 'force-dynamic';
@@ -57,6 +64,10 @@ export default async function EntryPage({
   // A claim that has since been matched is not still outstanding, and leaving
   // it on the screen tells a coach we are looking for money we already have.
   const pendingClaim = claimOutstanding(entry.etransferClaimedAt, entry.payments);
+  const refunds = refundStance(
+    settings.refundCutoffDate ? new Date(`${settings.refundCutoffDate}T00:00:00`) : null,
+    toWallClock(new Date()),
+  );
   const provider = currentProvider();
   const rehearsal = !provider.live && process.env.DEMO_MODE === 'true';
   // Offered when a real provider is ready, or in a demo where the whole flow
@@ -79,8 +90,7 @@ export default async function EntryPage({
     <>
       <h1>{entry.teamName}</h1>
       <p className="sub">
-        {entry.ageGroup ? `${entry.ageGroup} · ` : ''}
-        {entry.divisionName} · {tournament.name} · reference{' '}
+        {divisionLabel(entry.ageGroup, entry.divisionName)} · {tournament.name} · reference{' '}
         <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{entry.reference}</strong>
       </p>
 
@@ -201,6 +211,26 @@ export default async function EntryPage({
                 : state.outstandingCents,
             )}
           </h2>
+
+          {refunds.phase !== 'unstated' && (
+            <div className={`notice ${refunds.phase === 'final' ? 'warn' : 'info'}`}>
+              {refunds.phase === 'refundable' ? (
+                <>
+                  <strong>
+                    Change your mind before {formatDateFriendly(refunds.cutoff)} and the deposit
+                    comes back.
+                  </strong>{' '}
+                  {refunds.daysLeft <= 14 &&
+                    `That is ${refunds.daysLeft === 0 ? 'today' : `in ${refunds.daysLeft} days`}. `}
+                </>
+              ) : (
+                <>
+                  <strong>The deposit is no longer refundable.</strong>{' '}
+                </>
+              )}
+              {settings.refundPolicyNote}
+            </div>
+          )}
 
           {settings.etransferAddress && (
             <div className="card">

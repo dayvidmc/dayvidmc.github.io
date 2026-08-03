@@ -54,6 +54,50 @@ export function distinctReasoning(
   });
 }
 
+export interface PoolBalance {
+  /** True when teams in this pool have not played the same number of games. */
+  uneven: boolean;
+  fewest: number;
+  most: number;
+  /** Named so the screen can say who, not just that somebody. */
+  shortOfGames: { teamId: string; played: number }[];
+}
+
+/**
+ * Have all these teams played the same number of games?
+ *
+ * This matters because the standings rank on **total points**, which is only
+ * fair when everybody has had the same number of chances. Rain at this
+ * tournament can mean games are dropped rather than compressed, and when that
+ * happens a team with three games can sit above one with two on nothing but
+ * the weather.
+ *
+ * The tournament decides what to do about it on the day — that is the stated
+ * answer, and it is the right one, because no rule survives contact with "we
+ * lost the whole of Saturday morning on two diamonds". So this does not pick a
+ * winner and does not silently switch to points-per-game. It says the pool is
+ * uneven, names who is short, and leaves the seeding to a person.
+ */
+export function poolBalance(records: Map<string, TeamRecord>): PoolBalance {
+  const played = [...records.entries()].map(([teamId, record]) => ({
+    teamId,
+    played: record.gamesPlayed,
+  }));
+
+  if (played.length === 0) return { uneven: false, fewest: 0, most: 0, shortOfGames: [] };
+
+  const counts = played.map((entry) => entry.played);
+  const fewest = Math.min(...counts);
+  const most = Math.max(...counts);
+
+  return {
+    uneven: fewest !== most,
+    fewest,
+    most,
+    shortOfGames: played.filter((entry) => entry.played < most).sort((a, b) => a.played - b.played),
+  };
+}
+
 export interface TiebreakContext {
   records: Map<string, TeamRecord>;
   /** All round robin results in scope (one pool, normally). */
