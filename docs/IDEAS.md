@@ -9,42 +9,52 @@ debrief before anyone builds it.
 
 ---
 
-## 1. The messaging spine — this is the real gap
+## 1. The messaging spine — built, with the last link named
 
-Everything below in this section is one work item, and it is the difference
-between a demo and a tool.
+**The sending works.** `notification` rows are drained by a real sender with
+retries, exponential backoff, per-second rate limiting, STOP/START handling and
+a failure screen at `/hq/messages`. Score confirmations, schedule changes and
+bracket publications now leave the building.
 
-**Nothing sends a text.** Approving a score and moving a game write rows to
-`notification` with `status = 'queued'`, and no code ever reads them. The
-consequences run deeper than missing confirmations:
+Two things are still true and both matter.
 
-- **Score intake path 1 does not actually work.** The primary route is "system
-  texts the diamond volunteer when a game should be finishing, they reply."
-  There is no outbound, so nobody is ever asked. What works today is the
-  *reply* half of a conversation that never starts.
-- `gamesNeedingNudge()` is built and tested and called by nothing.
-- The rain button, bracket publishing and broadcasts all depend on the same
-  missing piece.
+### It is a dry run until somebody buys a number
 
-**What it needs.** A worker that claims queued rows with `FOR UPDATE SKIP
-LOCKED`, sends via Twilio, and writes back `sent`/`failed` with the provider id.
-Railway cron every 30 seconds is enough; it does not need to be clever.
+Without `SMS_PROVIDER=twilio` the console provider logs each message and marks
+it sent. That is the correct default — a stray credential must not be able to
+text ninety coaches during a rehearsal — but it means "sent" on screen does not
+mean "delivered" until a Twilio account exists. HQ → Texts says which of the
+three states you are in, in a coloured box, at the top.
 
-**One thing to check before building it.** A Twilio long code sends roughly one
-message per second. Ninety teams × two coaches is ~180 messages, so a
-bracket-publish broadcast would take three minutes to drain, and Saturday
-evening will have several bursts overlapping. Either use a Messaging Service
-with a toll-free or short code, or accept and design for the lag — but decide
-deliberately rather than discovering it at 7pm.
+**Decide the number type deliberately.** A long code sends about one message a
+second. Ninety teams × two coaches is ~180 messages, so a bracket-publish
+broadcast takes three minutes to drain and Saturday evening will have bursts
+overlapping. Either buy a Messaging Service with a toll-free or short code, or
+accept the lag knowingly — the rate limiter already spreads the send rather
+than losing half of it, which is the failure this would otherwise have been.
 
-**Also needed at the same time: webhook idempotency.** Twilio retries a webhook
-that times out or returns non-2xx. Today a retry would create a second
-`score_report` for the same message, and `score_report` is append-only so the
-duplicate cannot be cleaned up. Store Twilio's `MessageSid` with a unique
-constraint and no-op on conflict. This is a ten-line fix that gets much more
+### Score intake path 1 still does not start itself
+
+The spec's primary route is "the system texts the diamond volunteer when a game
+should be finishing, they reply". The *reply* half has always worked and the
+*sending* half now works — but **nothing creates the `score_request` message**,
+so the conversation still never starts.
+
+The chain is: `gamesNeedingNudge()` is built and tested and called by nothing →
+because it needs to know which volunteer is on which diamond → which is
+`diamond_shift` → which has no rows and no screen. Building the nudge scheduler
+before the shift screen would just queue messages addressed to nobody.
+
+**So the next item is the diamond shift screen** (§2 below), and then a cron
+that turns `gamesNeedingNudge()` into queued messages. In that order.
+
+### Still missing: webhook idempotency
+
+Twilio retries a webhook that times out or returns non-2xx. Today a retry
+creates a second `score_report` for the same message, and `score_report` is
+append-only, so the duplicate cannot be cleaned up. Store Twilio's `MessageSid`
+with a unique constraint and no-op on conflict. Ten lines, and much more
 expensive after the fact.
-
-**Effort:** a few days. **Do this first.**
 
 ---
 

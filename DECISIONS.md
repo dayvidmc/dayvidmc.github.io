@@ -287,6 +287,40 @@ The class of bug is invisible to a fresh-database test by construction: a
 narrowed constraint only fails where the older data lives. That is why the
 second pass exists rather than a single "do the migrations run" check.
 
+### 2.16 Texting is off by default, and a credential is not consent to send
+
+**Decision.** The SMS provider is the console one — messages logged, marked
+sent, nobody texted — unless `SMS_PROVIDER=twilio` is set explicitly. Having
+Twilio credentials in the environment is not enough.
+
+**Why.** The obvious design is "use Twilio if it is configured", and it is
+wrong. A rehearsal, a staging copy or a restored database backup would all pick
+up a stray credential and start texting ninety real coaches. Requiring a
+separate, explicit switch means turning sending on is always something somebody
+decided to do.
+
+The same reasoning puts the drain endpoint behind `SENDER_TOKEN` and closes it
+entirely when that is unset: an open endpoint that costs money per call is a
+gift to anyone who finds it.
+
+### 2.17 Consent is checked when a message is sent, not when it is queued
+
+**Decision.** `sms_opt_out` is consulted at send time. A message queued before
+somebody texted STOP is cancelled rather than delivered.
+
+**Why.** The queue can be minutes or hours behind. A coach who opts out on
+Saturday morning must not receive Friday night's backlog — that is precisely
+the complaint that STOP exists to prevent, and "it was already in the queue" is
+not a defence under CASL or to a carrier.
+
+Consent lives on the phone number rather than on `team`, because the person
+texting STOP may be a volunteer, an umpire, a coach's spouse using their phone,
+or a wrong number. None of those have a row in `team`.
+
+**Also decided:** the keyword match is strict — the whole message must be the
+word. "Stop the game, it's raining" is not an unsubscribe request, and reading
+it as one silences a coach for the rest of the weekend.
+
 ---
 
 ## 3. Deliberately not built

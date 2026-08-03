@@ -20,9 +20,13 @@ debrief (spec §12, Phase 0). Ideas are marked:
 
 Two facts shape almost everything below, so they are stated once here:
 
-1. **Nothing sends a text.** `notification` rows accumulate and no sender
-   drains them. Every idea that involves telling somebody something is blocked
-   on this. It is the single highest-value thing left.
+1. **Texts now send — but in dry run.** The sender, retries, rate limiting,
+   opt-outs and a failure screen are built. Without a Twilio account the
+   console provider logs each message and marks it sent, so ideas below that
+   involve telling somebody something work end to end *except* for the last
+   hop. One purchase away, not one build away. The exception is score intake
+   path 1, which still has nothing that *starts* the conversation — see
+   `docs/IDEAS.md` §1.
 2. **Umpires did not exist in this system** when this was written — no role, no
    table, no assignment, no page. That was the largest structural gap after
    messaging, and §4 has since been built: roster, crews with conflict checks,
@@ -451,8 +455,8 @@ producing a letter afterwards costs almost nothing and helps recruit next year.
 
 ## 7. Things that cut across everybody
 
-- **▲ The messaging spine.** Said once at the top and repeated here because
-  half of this document depends on it. Nothing sends.
+- **✓ The messaging spine.** Built. Half of this document depended on it. What
+  is left is a Twilio account and, for path 1, the diamond shift screen.
 - **▲ July sunlight.** Every screen here gets read on a phone, outdoors, at 2pm
   in July. Contrast that is fine on a desk is unreadable on a diamond. Worth a
   real pass, not a dark-mode toggle.
@@ -469,9 +473,8 @@ producing a letter afterwards costs almost nothing and helps recruit next year.
 
 ## 8. If only three things get built
 
-1. **Send the texts.** Everything else compounds off it, and its absence is
-   currently a silent failure that would first become visible at the worst
-   possible moment.
+1. ~~**Send the texts.**~~ Done — see §7. What remains is buying a number and
+   building the diamond shift screen so path 1 can start itself.
 2. **Umpires.** They are absent entirely, they are the best available source of
    truth for scores, and there is money attached to getting their game counts
    right.

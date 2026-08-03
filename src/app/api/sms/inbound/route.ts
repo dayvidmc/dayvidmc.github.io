@@ -8,7 +8,9 @@ import {
   recordProposal,
 } from '@/server/repo';
 import { parseScoreMessage } from '@/server/scoreParser';
+import { optIn, optOut } from '@/server/sms/drain';
 import { AUTO_FILL_CONFIDENCE } from '@/domain/scoreParsing';
+import { inboundIntent } from '@/domain/messaging';
 import { toWallClock } from '@/domain/time';
 
 /**
@@ -37,6 +39,29 @@ export async function POST(request: Request) {
   const mediaUrl = form.get('MediaUrl0');
 
   if (!from || (!text && !mediaUrl)) return twiml('Sorry, that came through empty.');
+
+  // STOP comes before everything, including before we look for a tournament.
+  // Carriers require it to work, Canadian anti-spam law requires it to work,
+  // and "we were between tournaments" is not a defence for having ignored it.
+  //
+  // The match is strict — the whole message must be the keyword — because
+  // reading "stop the game, it's raining" as an unsubscribe silences a coach
+  // for the rest of the weekend.
+  const intent = inboundIntent(text);
+  if (intent === 'stop') {
+    await optOut(from, text);
+    return twiml('Stopped. You will not get any more texts from the tournament. Reply START to turn them back on.');
+  }
+  if (intent === 'start') {
+    await optIn(from);
+    return twiml('You are back on. We will text you about your games again.');
+  }
+  if (intent === 'help') {
+    return twiml(
+      'Scott Tokessy Memorial Tournament. Reply with a score like "MA-01 7-2". ' +
+        'Reply STOP to stop these texts.',
+    );
+  }
 
   const tournament = await currentTournament();
   if (!tournament) return twiml('No tournament is running right now.');

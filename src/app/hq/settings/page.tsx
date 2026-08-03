@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
 import { currentTournament, listDivisions } from '@/server/repo';
 import { query } from '@/db/client';
+import { outboundStatus } from '@/server/sms/drain';
 import { AutoSaveField, AutoSaveToggle } from '../../_components/AutoSave';
 import { saveTournamentField } from '../editActions';
 
@@ -37,6 +38,7 @@ export default async function SettingsPage() {
     ),
   ]);
 
+  const outbound = await outboundStatus(tournament.id);
   const c = counts[0]!;
   const queued = Number(c.queued);
   const unreviewed = divisions.filter((d) => !d.rules_reviewed);
@@ -86,15 +88,37 @@ export default async function SettingsPage() {
         : 'TWILIO_AUTH_TOKEN not set — inbound texts are refused in production',
     },
     {
-      // Outbound is genuinely not built yet, and the queue silently growing
-      // would be the worst way to find that out — on Saturday, when ninety
-      // coaches are waiting for a text that is never coming.
-      done: false,
-      label: 'Outbound texts are NOT being sent',
+      // The sender exists now, but "a sender exists" and "texts are reaching
+      // phones" are different claims, and only the second one matters on
+      // Saturday. So this reports which of the two is true.
+      done: outbound.provider !== 'console' && outbound.blocked === null,
+      label:
+        outbound.blocked !== null
+          ? 'Texts cannot be sent'
+          : outbound.provider === 'console'
+            ? 'Texts are in dry-run — nobody is being texted'
+            : 'Texts are going out',
       detail:
-        `${queued} message${queued === 1 ? '' : 's'} queued and undelivered. Approving a score and ` +
-        `moving a game both write to this queue, but nothing drains it yet — there is no sender. ` +
-        `Until one exists, treat every "queued a text" as "recorded, not sent".`,
+        outbound.blocked !== null
+          ? `${outbound.blocked} ${queued} message${queued === 1 ? '' : 's'} waiting.`
+          : outbound.provider === 'console'
+            ? `Messages are written to the server log and marked sent. ${queued} waiting. ` +
+              `Set SMS_PROVIDER=twilio with its credentials before the weekend.`
+            : `Through ${outbound.provider}. ${queued} waiting, ${outbound.sent} sent` +
+              `${outbound.stuck > 0 ? `, ${outbound.stuck} given up on` : ''}.`,
+      href: '/hq/messages',
+    },
+    {
+      // A queue that is due and not moving means nothing is calling the drain,
+      // which looks identical to "everything is fine" from every other screen.
+      done: outbound.oldestWaitingMinutes === null || outbound.oldestWaitingMinutes <= 15,
+      label: 'Something is calling the sender',
+      detail:
+        outbound.oldestWaitingMinutes === null
+          ? 'Nothing is waiting.'
+          : `Oldest message has waited ${outbound.oldestWaitingMinutes} minutes. Either the cron ` +
+            `is not running or the sender cannot send.`,
+      href: '/hq/messages',
     },
   ];
 

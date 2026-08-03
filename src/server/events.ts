@@ -30,6 +30,7 @@ export type EventKind =
   | 'roster.updated'
   | 'team.registration_updated'
   | 'notification.queued'
+  | 'notification.sent'
   | 'staff.signed_in';
 
 export interface EventInput {

@@ -37,6 +37,8 @@ intake paths that feed it.
 | Public schedule with live status | §5.7 | Built, tested |
 | Playoff bracket — the map, drawn before it is played | §5.6 | Built, tested — structure must still be seeded by hand |
 | Umpires: roster, crews with conflict checks, their own link, honoraria | — | Built, tested — not in the spec at all; see `docs/BRAINSTORM.md` §4 |
+| Registration and rosters, no payments | — | Built, tested — Module E's fees stay deferred |
+| Outbound SMS: sender, retries, opt-outs, failure screen | §5.7 | Built, tested — **dry run by default**; needs a Twilio account to reach a phone |
 | Append-only audit trail | §9 | Built, enforced by the database |
 
 ## What is deliberately not here
@@ -50,12 +52,9 @@ cannot supply:
   seed, and a director with a real playoff schedule has no screen for it. §13
   Q4 — how he builds it today — decides which shape that screen takes. See
   `docs/IDEAS.md` §3.
-- **Sending any text at all.** Approving a score and moving a game both write
-  rows to `notification`, and **nothing drains that queue** — there is no
-  Twilio sender. Inbound works; outbound does not. The settings screen says so
-  in as many words, because a queue growing silently on Saturday while ninety
-  coaches wait for a text is the worst possible way to discover this.
-- **SMS broadcast and the rain button (§5.7)** — same reason.
+- **A broadcast composer and the rain button (§5.7).** The pipeline that would
+  carry them now exists — see below — but there is no screen for writing a
+  message to a whole division, and no rain-delay recompute behind it.
 - **Card processing.** The till records card sales; it does not charge them.
   Tapping a card on a phone needs a native app — Apple and Google only expose
   the NFC reader to signed native apps — so the card tap happens in the Square
@@ -102,7 +101,7 @@ It is meant for the Phase 0 debrief — it is much easier to ask a director "is
 this the board you want?" than to describe one.
 
 ```bash
-npm test          # 150 unit tests, no database needed
+npm test          # 175 unit tests, no database needed
 npm run typecheck
 npm run build
 

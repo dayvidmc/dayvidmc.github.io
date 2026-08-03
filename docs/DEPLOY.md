@@ -62,6 +62,46 @@ Optional, none of it needed to boot: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
 `TWILIO_FROM_NUMBER`, `TWILIO_WEBHOOK_URL`, `ANTHROPIC_API_KEY`,
 `SQUARE_APPLICATION_ID`.
 
+### Making texts actually go out
+
+Approving a score, moving a game and publishing a bracket all queue a text. Two
+things have to be true before one reaches a phone.
+
+**1. A provider that can send.** Without `SMS_PROVIDER=twilio` the app uses the
+console provider: messages are written to the service log, marked sent, and
+nobody is texted. That is the correct setting for a rehearsal and for the
+parallel run — and it is the default, deliberately, so that a credential left
+lying in the environment cannot start texting ninety coaches by accident.
+
+| Variable | For real sending |
+|---|---|
+| `SMS_PROVIDER` | `twilio` |
+| `TWILIO_ACCOUNT_SID` | from the Twilio console |
+| `TWILIO_AUTH_TOKEN` | from the Twilio console |
+| `TWILIO_FROM_NUMBER` | the number you bought, `+1613…` |
+
+**2. Something calling the drain.** Next.js has no background worker, so the
+sending happens when `POST /api/notifications/drain` is called. Set
+`SENDER_TOKEN` to a long random string and add a Railway cron:
+
+```
+Schedule:  * * * * *
+Command:   curl -fsS -X POST -H "Authorization: Bearer $SENDER_TOKEN" \
+             "$RAILWAY_PUBLIC_DOMAIN/api/notifications/drain?tick=60"
+```
+
+Without `SENDER_TOKEN` the endpoint refuses everything — an open drain endpoint
+is a way for a stranger to run up a charity's phone bill. A director can always
+press **Send what is due now** in HQ → Texts; that calls the same code.
+
+On a machine that stays up — a laptop at HQ, say — `npm run sender` does the
+same job in a loop and prints what it sends.
+
+**Check it from HQ → Texts.** The top of that screen says which of the three
+states you are in: nothing can be sent, dry run, or sending for real. If the
+oldest message has been waiting more than fifteen minutes, nothing is calling
+the drain.
+
 ## 6. Give it a URL
 
 **Settings → Networking → Generate Domain.** Railway injects `PORT` and

@@ -14,7 +14,8 @@
     "seed": "tsx src/db/seed.ts",
     "demo": "tsx src/db/demo.ts",
     "start:no-migrate": "next start",
-    "migrate:check": "tsx src/db/checkMigrations.ts"
+    "migrate:check": "tsx src/db/checkMigrations.ts",
+    "sender": "tsx src/server/sms/sender.ts"
   },
   "dependencies": {
     "next": "^15.5.4",
