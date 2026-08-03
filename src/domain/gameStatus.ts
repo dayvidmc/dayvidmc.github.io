@@ -36,6 +36,11 @@ export interface GameClock {
 export interface GameStatusResult {
   status: GameStatus;
   clock: GameClock;
+  /**
+   * True once the game should be finishing and nothing has been received —
+   * the trigger for the opening message of score intake path 1 (§5.2).
+   */
+  requestDue: boolean;
   /** True once the nudge is due and nothing has been received. */
   nudgeDue: boolean;
   /**
@@ -69,7 +74,7 @@ export function computeGameStatus(
 ): GameStatusResult {
   const clock = gameClock(scheduledStart, rules);
 
-  const base = { clock, nudgeDue: false, minutesOverdue: 0 };
+  const base = { clock, requestDue: false, nudgeDue: false, minutesOverdue: 0 };
 
   // A dispute outranks everything: it is the one state that needs a person.
   if (state.isDisputed) return { ...base, status: 'disputed' };
@@ -77,19 +82,29 @@ export function computeGameStatus(
 
   // Something was received, so this is not a chase — it is an approval.
   // Pending beats overdue by design: overdue means "nothing received".
+  //
+  // `requestDue` and `nudgeDue` stay false here for the same reason: once a
+  // score has been proposed, asking again is noise. This is what stops a
+  // volunteer who replied promptly from being chased anyway.
   if (state.hasPendingProposal) return { ...base, status: 'pending' };
 
   if (now >= clock.overdueAt) {
     return {
       clock,
       status: 'overdue',
+      requestDue: true,
       nudgeDue: true,
       minutesOverdue: minutesBetween(clock.overdueAt, now),
     };
   }
 
   if (now >= scheduledStart) {
-    return { ...base, status: 'in_progress', nudgeDue: now >= clock.nudgeDueAt };
+    return {
+      ...base,
+      status: 'in_progress',
+      requestDue: now >= clock.expectedEndAt,
+      nudgeDue: now >= clock.nudgeDueAt,
+    };
   }
 
   return { ...base, status: 'scheduled' };
@@ -226,4 +241,22 @@ export function gamesNeedingNudge(
   alreadyNudged: ReadonlySet<string>,
 ): BoardEntry[] {
   return entries.filter((entry) => entry.nudgeDue && !alreadyNudged.has(entry.game.gameId));
+}
+
+/**
+ * Games whose diamond volunteer should be asked for the score right now — the
+ * opening message of path 1, sent when the game should be finishing (§5.2).
+ *
+ * This is the half of the primary intake path that was missing: replying is
+ * easy, but "pull, don't push" (§4) only works if something does the pulling.
+ *
+ * `alreadyRequested` plays the same role as `alreadyNudged`: the `notification`
+ * table is the record of who has been asked, so a volunteer gets one ask and
+ * one follow-up, however many times the scheduler runs.
+ */
+export function gamesNeedingScoreRequest(
+  entries: readonly BoardEntry[],
+  alreadyRequested: ReadonlySet<string>,
+): BoardEntry[] {
+  return entries.filter((entry) => entry.requestDue && !alreadyRequested.has(entry.game.gameId));
 }

@@ -6,7 +6,9 @@ import { buildBoard, type BoardEntry, type BoardGame, type GameIntakeState } fro
 import { addMinutes, toSqlTimestamp } from '@/domain/time';
 import type { DivisionRules, GameResult } from '@/domain/types';
 import type { CandidateGame } from '@/domain/scoreParsing';
+import { scoreApprovedBody } from '@/domain/messaging';
 import { recordEventIn } from './events';
+import { enqueueIn } from './messaging';
 
 export interface Tournament {
   id: string;
@@ -273,7 +275,7 @@ export interface UnmatchedMessage {
   from_phone: string;
   body: string | null;
   photo_key: string | null;
-  reason: 'no_candidate_games' | 'unreadable' | 'no_game_matched';
+  reason: 'no_candidate_games' | 'unreadable' | 'no_game_matched' | 'processing_error';
   received_at: Date;
   /** Team names this number belongs to, when it is a coach we know. */
   known_as: string | null;
@@ -560,19 +562,46 @@ export async function approveScore(input: ApprovalInput): Promise<void> {
     });
 
     // Queue the team notifications in the same transaction (§5.7).
-    await client.query(
-      `INSERT INTO notification (tournament_id, kind, recipient, body, game_id, team_id)
-       SELECT $1, 'score_approved', t.coach_phone,
-              format('%s final: %s %s, %s %s.',
-                     g.external_game_id, ht.name, $3::text, aw.name, $4::text),
-              g.id, t.id
+    //
+    // The body is composed in `src/domain/messaging.ts` rather than by SQL
+    // `format()`, so the one place that decides what a coach reads is also the
+    // place the SMS-length tests guard. A stray em dash in this string would
+    // double the segment cost of every approval, ninety teams over a weekend.
+    const recipients = await client.query<{
+      team_id: string;
+      coach_phone: string;
+      external_game_id: string;
+      home_name: string;
+      away_name: string;
+    }>(
+      `SELECT t.id AS team_id, t.coach_phone, g.external_game_id,
+              ht.name AS home_name, aw.name AS away_name
          FROM game g
          JOIN team ht ON ht.id = g.home_team_id
          JOIN team aw ON aw.id = g.away_team_id
          JOIN team t  ON t.id IN (g.home_team_id, g.away_team_id)
-        WHERE g.id = $2 AND t.coach_phone IS NOT NULL`,
-      [input.tournamentId, input.gameId, String(input.homeRuns), String(input.awayRuns)],
+        WHERE g.id = $1 AND t.coach_phone IS NOT NULL`,
+      [input.gameId],
     );
+
+    for (const row of recipients.rows) {
+      await enqueueIn(client, {
+        tournamentId: input.tournamentId,
+        kind: 'score_approved',
+        recipient: row.coach_phone,
+        body: scoreApprovedBody(
+          {
+            externalGameId: row.external_game_id,
+            homeTeamName: row.home_name,
+            awayTeamName: row.away_name,
+          },
+          input.homeRuns,
+          input.awayRuns,
+        ),
+        gameId: input.gameId,
+        teamId: row.team_id,
+      });
+    }
   });
 }
 

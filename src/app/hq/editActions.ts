@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation';
 import { query, queryOne, transaction } from '@/db/client';
 import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
 import { recordEventIn } from '@/server/events';
+import { enqueueIn } from '@/server/messaging';
+import { scheduleChangeBody } from '@/domain/messaging';
 import { applyRuleEdit, parseDivisionRules } from '@/domain/divisionRules';
 import { approveScore, recordProposal, setDispute } from '@/server/repo';
 import { localWallClock, toSqlTimestamp } from '@/domain/time';
@@ -285,17 +287,28 @@ async function writeGameChange(
     });
 
     // Teams were told a time and a place. If either changes, tell them.
-    await client.query(
-      `INSERT INTO notification (tournament_id, kind, recipient, body, game_id, team_id)
-       SELECT $1, 'schedule_change', t.coach_phone,
-              format('%s has moved. Check your team page for the new time and diamond.',
-                     g.external_game_id),
-              g.id, t.id
+    const affected = await client.query<{
+      team_id: string;
+      coach_phone: string;
+      external_game_id: string;
+    }>(
+      `SELECT t.id AS team_id, t.coach_phone, g.external_game_id
          FROM game g
          JOIN team t ON t.id IN (g.home_team_id, g.away_team_id)
-        WHERE g.id = $2 AND t.coach_phone IS NOT NULL`,
-      [staff.tournamentId, gameId],
+        WHERE g.id = $1 AND t.coach_phone IS NOT NULL`,
+      [gameId],
     );
+
+    for (const row of affected.rows) {
+      await enqueueIn(client, {
+        tournamentId: staff.tournamentId,
+        kind: 'schedule_change',
+        recipient: row.coach_phone,
+        body: scheduleChangeBody(row.external_game_id),
+        gameId,
+        teamId: row.team_id,
+      });
+    }
   });
 
   revalidatePath('/hq');

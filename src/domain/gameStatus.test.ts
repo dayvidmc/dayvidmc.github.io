@@ -4,6 +4,7 @@ import {
   computeGameStatus,
   gameClock,
   gamesNeedingNudge,
+  gamesNeedingScoreRequest,
   publicGameStatus,
   PUBLIC_STATUS_LABEL,
   type BoardGame,
@@ -209,5 +210,51 @@ describe('the HQ board', () => {
     expect(gamesNeedingNudge(board, new Set(['later-still'])).map((e) => e.game.gameId)).toEqual([
       'late',
     ]);
+  });
+
+  it('asks only games still waiting, and never the same one twice', () => {
+    expect(gamesNeedingScoreRequest(board, new Set()).map((e) => e.game.gameId).sort()).toEqual([
+      'late',
+      'later-still',
+    ]);
+    expect(
+      gamesNeedingScoreRequest(board, new Set(['late'])).map((e) => e.game.gameId),
+    ).toEqual(['later-still']);
+  });
+
+  it('never asks about a game somebody already reported', () => {
+    // The one that would burn a volunteer's goodwill fastest: they replied
+    // straight away and the robot asked again anyway.
+    const asked = gamesNeedingScoreRequest(board, new Set()).map((e) => e.game.gameId);
+    expect(asked).not.toContain('waiting'); // proposal in the queue
+    expect(asked).not.toContain('done'); // approved
+    expect(asked).not.toContain('flagged'); // disputed, needs a person not a text
+  });
+});
+
+describe('asking for the score (§5.2 path 1)', () => {
+  const askAt = (time: string, over = {}) => computeGameStatus(start, rules, state(over), at(time));
+
+  it('asks when the game should be finishing, which is before it is late', () => {
+    // 10:30 start, 105 min limit: expected end 12:15, nudge 12:35, red 12:50.
+    expect(askAt('12:00').requestDue).toBe(false);
+    expect(askAt('12:15').requestDue).toBe(true);
+    expect(askAt('12:15').nudgeDue).toBe(false);
+    expect(askAt('12:35').nudgeDue).toBe(true);
+  });
+
+  it('keeps asking while the game is red, so a restarted scheduler recovers', () => {
+    expect(askAt('16:00').status).toBe('overdue');
+    expect(askAt('16:00').requestDue).toBe(true);
+  });
+
+  it('stops the moment anything is received', () => {
+    expect(askAt('16:00', { hasPendingProposal: true }).requestDue).toBe(false);
+    expect(askAt('16:00', { hasApprovedScore: true }).requestDue).toBe(false);
+    expect(askAt('16:00', { isDisputed: true }).requestDue).toBe(false);
+  });
+
+  it('does not ask about a game that has not started', () => {
+    expect(askAt('09:00').requestDue).toBe(false);
   });
 });

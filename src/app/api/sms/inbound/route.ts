@@ -8,6 +8,7 @@ import {
   recordProposal,
 } from '@/server/repo';
 import { parseScoreMessage } from '@/server/scoreParser';
+import { claimInboundMessage, recordInboundOutcome } from '@/server/inboundMessages';
 import { AUTO_FILL_CONFIDENCE } from '@/domain/scoreParsing';
 import { toWallClock } from '@/domain/time';
 
@@ -20,6 +21,11 @@ import { toWallClock } from '@/domain/time';
  * The reply is short and confirms what was understood, so the sender can see
  * immediately if it was read wrong and text again. Silence would leave them
  * wondering whether to phone HQ.
+ *
+ * Every reply below is plain ASCII — no em dashes, no curly quotes. A single
+ * character outside the GSM-7 alphabet cuts an SMS segment from 160 characters
+ * to 70, so the longer confirmations would bill as two segments instead of one
+ * for the sake of punctuation nobody reads. See `src/domain/messaging.ts`.
  */
 
 export const dynamic = 'force-dynamic';
@@ -41,6 +47,63 @@ export async function POST(request: Request) {
   const tournament = await currentTournament();
   if (!tournament) return twiml('No tournament is running right now.');
 
+  // Claim the message before doing any work. Twilio retries a webhook that
+  // times out, and a slow model call during the Saturday burst is exactly what
+  // times out — so the retry must be recognised, not raced.
+  //
+  // A message with no MessageSid is not from Twilio (local testing, curl); give
+  // it a unique key so it is still recorded but can never collide.
+  const providerMessageId = (form.get('MessageSid') ?? '').trim() || `local:${crypto.randomUUID()}`;
+
+  const claim = await claimInboundMessage({
+    tournamentId: tournament.id,
+    providerMessageId,
+    fromPhone: from,
+    body: text === '' ? null : text,
+    mediaUrl,
+  });
+
+  if (claim.status === 'duplicate') {
+    // Replay the original answer where we have it. Where we do not, the first
+    // request is still in flight and a neutral acknowledgement is the honest
+    // response — it is true, and it does not claim a score was recorded.
+    return twiml(claim.reply ?? 'Thanks — we have that and HQ is looking at it.');
+  }
+
+  try {
+    const { outcome, reply } = await handleMessage(tournament, from, text, mediaUrl);
+    await recordInboundOutcome(claim.id, outcome, reply);
+    return twiml(reply);
+  } catch (error) {
+    // Never drop a text. The fallback chain ends at a human (§4), so a failure
+    // in here becomes a row on the unmatched screen rather than a 500 that
+    // Twilio retries into the same failure five times.
+    console.error('[sms] inbound processing failed', error);
+
+    const reply = "Thanks — something went wrong reading that, so HQ will take a look.";
+    await parkUnmatchedMessage({
+      tournamentId: tournament.id,
+      fromPhone: from,
+      body: text === '' ? null : text,
+      photoKey: mediaUrl,
+      reason: 'processing_error',
+    }).catch((parkError) => console.error('[sms] could not park failed message', parkError));
+
+    await recordInboundOutcome(claim.id, 'processing_error', reply).catch(() => {});
+    return twiml(reply);
+  }
+}
+
+/**
+ * The actual read of one message. Returns what happened and what to say back,
+ * so the caller can store both against the message for replay.
+ */
+async function handleMessage(
+  tournament: { id: string; time_zone: string },
+  from: string,
+  text: string,
+  mediaUrl: string | null,
+): Promise<{ outcome: string; reply: string }> {
   const now = toWallClock(new Date(), tournament.time_zone);
   const candidates = await candidateGamesForPhone(tournament.id, from, now);
 
@@ -48,20 +111,26 @@ export async function POST(request: Request) {
     // Nothing to attach it to. Do not drop it — a human at HQ is the last link
     // in every fallback chain (§4).
     await parkForHq(tournament.id, from, text, mediaUrl, 'no_candidate_games');
-    return twiml("Thanks — we couldn't match that to a game, so HQ will take a look.");
+    return {
+      outcome: 'no_candidate_games',
+      reply: "Thanks - we couldn't match that to a game, so HQ will take a look.",
+    };
   }
 
   const parsed = await parseScoreMessage(text, candidates, now);
 
   if (!parsed) {
     await parkForHq(tournament.id, from, text, mediaUrl, 'unreadable');
-    return twiml("Thanks — we couldn't read a score in that, so HQ will take a look.");
+    return {
+      outcome: 'unreadable',
+      reply: "Thanks - we couldn't read a score in that, so HQ will take a look.",
+    };
   }
 
   const game = candidates.find((c) => c.gameId === parsed.gameId);
   if (!game) {
     await parkForHq(tournament.id, from, text, mediaUrl, 'no_game_matched');
-    return twiml('Thanks — HQ will take a look.');
+    return { outcome: 'no_game_matched', reply: 'Thanks - HQ will take a look.' };
   }
 
   // A message with no runs in it is not a score report, whatever game it was
@@ -73,7 +142,10 @@ export async function POST(request: Request) {
   // Forfeits are exempt: a forfeit is a result even with no runs attached.
   if (parsed.resultKind === 'played' && (parsed.homeRuns === null || parsed.awayRuns === null)) {
     await parkForHq(tournament.id, from, text, mediaUrl, 'unreadable');
-    return twiml("Thanks — we couldn't read a score in that, so HQ will take a look.");
+    return {
+      outcome: 'unreadable',
+      reply: "Thanks - we couldn't read a score in that, so HQ will take a look.",
+    };
   }
 
   await recordProposal({
@@ -92,20 +164,27 @@ export async function POST(request: Request) {
   });
 
   if (parsed.resultKind === 'forfeit') {
-    return twiml(`Got it — recorded as a forfeit in ${game.externalGameId}. HQ will confirm.`);
+    return {
+      outcome: 'forfeit_proposed',
+      reply: `Got it - recorded as a forfeit in ${game.externalGameId}. HQ will confirm.`,
+    };
   }
 
   if (parsed.homeRuns === null || parsed.awayRuns === null || parsed.confidence < AUTO_FILL_CONFIDENCE) {
-    return twiml(
-      `Thanks. We think that's ${game.externalGameId} (${game.homeTeamName} v ${game.awayTeamName}) ` +
+    return {
+      outcome: 'low_confidence_proposed',
+      reply:
+        `Thanks. We think that's ${game.externalGameId} (${game.homeTeamName} v ${game.awayTeamName}) ` +
         `but weren't certain, so HQ will confirm it.`,
-    );
+    };
   }
 
-  return twiml(
-    `Got it: ${game.homeTeamName} ${parsed.homeRuns}, ${game.awayTeamName} ${parsed.awayRuns}. ` +
+  return {
+    outcome: 'proposed',
+    reply:
+      `Got it: ${game.homeTeamName} ${parsed.homeRuns}, ${game.awayTeamName} ${parsed.awayRuns}. ` +
       `Reply again if that's wrong.`,
-  );
+  };
 }
 
 /**
