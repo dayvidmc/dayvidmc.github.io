@@ -169,6 +169,27 @@ export default async function EnterPage({
         <>
           <h2>Your team</h2>
           <form action={submitEntryAction} className="card">
+            <label htmlFor="ageGroup">Age group</label>
+            {settings.ageGroups.length > 0 ? (
+              <select id="ageGroup" name="ageGroup" required defaultValue="">
+                <option value="" disabled>
+                  Choose one
+                </option>
+                {settings.ageGroups.map((group) => (
+                  <option key={group} value={group}>
+                    {group}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input id="ageGroup" name="ageGroup" type="text" required maxLength={40} />
+            )}
+            <p className="hint">
+              What the team plays as. Birth years decide this, so it is the one thing on this form
+              nobody has to look up — and it is what lets the tournament move you between divisions
+              if the one you pick is full.
+            </p>
+
             <label htmlFor="divisionId">Division</label>
             <select id="divisionId" name="divisionId" required defaultValue="">
               <option value="" disabled>
@@ -220,11 +241,23 @@ export default async function EnterPage({
               to enter.
             </p>
 
-            <label htmlFor="alternateContact">Second contact</label>
-            <input
-              id="alternateContact" name="alternateContact" type="text" maxLength={200}
-              placeholder="optional — a manager or assistant coach"
-            />
+            <div className="row">
+              <div>
+                <label htmlFor="alternateName">Second contact</label>
+                <input
+                  id="alternateName" name="alternateName" type="text" maxLength={120}
+                  placeholder="a manager or assistant coach"
+                />
+              </div>
+              <div>
+                <label htmlFor="alternateContact">Their phone or email</label>
+                <input id="alternateContact" name="alternateContact" type="text" maxLength={200} />
+              </div>
+            </div>
+            <p className="hint">
+              Optional, and the most useful optional thing here. When the head coach is on a
+              diamond with their phone in a bag, this is who HQ rings.
+            </p>
 
             <label htmlFor="notes">Anything we should know</label>
             <textarea

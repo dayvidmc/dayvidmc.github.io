@@ -131,6 +131,21 @@ export async function saveWindowAction(formData: FormData): Promise<void> {
   if (open && close && close <= open) redirect('/hq/entries/settings?error=backwards');
 
   const days = Number(text(formData, 'balanceDueDays'));
+  const deposit = cents(text(formData, 'defaultDeposit'));
+  if (text(formData, 'defaultDeposit').trim() && deposit === null) {
+    redirect('/hq/entries/settings?error=bad_amount');
+  }
+
+  const dueDate = text(formData, 'balanceDueDate').trim();
+  if (dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+    redirect('/hq/entries/settings?error=bad_due_date');
+  }
+
+  // "Rookie, Mosquito , Peewee,," is what somebody actually types.
+  const ageGroups = text(formData, 'ageGroups')
+    .split(',')
+    .map((group) => group.trim().slice(0, 40))
+    .filter(Boolean);
 
   await saveEntrySettings(
     staff.tournamentId,
@@ -140,7 +155,10 @@ export async function saveWindowAction(formData: FormData): Promise<void> {
       etransferAddress: text(formData, 'etransferAddress').trim() || null,
       chequePayableTo: text(formData, 'chequePayableTo').trim() || null,
       chequeMailTo: text(formData, 'chequeMailTo').trim() || null,
+      balanceDueDate: dueDate || null,
+      ageGroups,
       ...(Number.isInteger(days) && days > 0 ? { balanceDueDays: days } : {}),
+      ...(deposit === null ? {} : { defaultDepositCents: deposit }),
     },
     staff.name,
     staff.role,

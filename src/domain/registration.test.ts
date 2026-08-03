@@ -68,38 +68,61 @@ describe('what an entry has to have', () => {
   const good: EntryDraft = {
     teamName: 'Nepean Canadians',
     association: 'Nepean Minor Baseball',
+    ageGroup: 'Peewee',
     coachName: 'Sam Rivera',
     coachEmail: 'sam@example.com',
     coachPhone: '613 555 0142',
+    alternateName: '',
     alternateContact: '',
     notes: '',
     divisionId: 'div-1',
   };
 
-  it('accepts an entry with a division, a name, a human and an email', () => {
+  it('accepts an entry with an age group, a division, a name, a human and an email', () => {
     expect(entryProblems(good)).toEqual([]);
   });
 
-  it('does not require a phone number, an association or notes', () => {
+  it('does not require a phone number, an association, an alternate or notes', () => {
     expect(
-      entryProblems({ ...good, coachPhone: '', association: '', notes: '', alternateContact: '' }),
+      entryProblems({
+        ...good,
+        coachPhone: '',
+        association: '',
+        notes: '',
+        alternateName: '',
+        alternateContact: '',
+      }),
     ).toEqual([]);
   });
 
-  it('catches the four things that make an entry useless', () => {
+  it('catches the five things that make an entry useless', () => {
     const problems = entryProblems({
       ...good,
       divisionId: '',
+      ageGroup: '',
       teamName: 'X',
       coachName: '',
       coachEmail: 'not-an-email',
     });
     expect(problems.map((p) => p.field).sort()).toEqual([
+      'ageGroup',
       'coachEmail',
       'coachName',
       'divisionId',
       'teamName',
     ]);
+  });
+
+  it('rejects an age group the tournament does not run', () => {
+    const problems = entryProblems({ ...good, ageGroup: 'Senior' }, ['Peewee', 'Bantam']);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]!.field).toBe('ageGroup');
+  });
+
+  it('accepts whatever is typed when the tournament has not listed its age groups', () => {
+    // Blocking every entry on a setting nobody filled in would be worse than
+    // taking a word the director has to tidy up afterwards.
+    expect(entryProblems({ ...good, ageGroup: 'Anything At All' }, [])).toEqual([]);
   });
 
   it('rejects a name too long to fit on a scoreboard', () => {

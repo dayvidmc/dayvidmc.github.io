@@ -468,6 +468,55 @@ The deadline is stamped rather than recomputed for the same reason §2.14 pins a
 bracket slot: the date the coach was told is the date on the record, even if
 somebody changes the setting in March.
 
+### 2.27 Age group and division are two questions, not one
+
+**Decision.** An entry records both. The age group is required and comes from a
+list the director maintains; the division is the tier they are asking for.
+
+**Why.** A coach knows their age group for certain, because birth years decide
+it. Which tier they belong in is an opinion, and one the director may overrule
+after watching them for a weekend. Holding both is what makes "move this team
+from A to B within Bantam" a thing somebody can do — with only the division,
+that move loses the one fact nobody had to look up.
+
+The list is data rather than a set in code because Baseball Ontario has renamed
+these twice in ten years, and a tournament that decides to say "13U" instead of
+"Peewee" should not be waiting on a deployment. An empty list means the field
+falls back to free text: blocking every entry on a setting nobody filled in
+would be worse than a word the director tidies up afterwards.
+
+### 2.28 The balance is due on a date, or so many days after acceptance
+
+**Decision.** A stated calendar date wins when it is set; otherwise the balance
+is due N days after that team was accepted. Either way the date is stamped onto
+the entry at acceptance and never recomputed.
+
+**Why.** Both are real. A fixed date is what goes on a poster and makes chasing
+one list rather than ninety; days-after-acceptance is fairer to a team taken off
+the waitlist in April, who would otherwise be handed a deadline that has already
+gone. The tournament picks.
+
+A fixed date already in the past is used as-is rather than quietly moved. A team
+accepted after the stated deadline does owe the money now, and inventing them a
+fresh fortnight is the kind of kindness that costs a tournament its own
+deadline.
+
+### 2.29 A team row cannot be deleted, by anything
+
+**Not a decision so much as a discovered property, recorded so nobody trips
+over it.** `score_report`'s append-only trigger is `FOR EACH STATEMENT`, so the
+`ON DELETE SET NULL` cascade from `team` raises even when it would null out
+nothing at all. The practical effect is that no `team` row can ever be deleted.
+
+That is the behaviour the design wants — §2.26 says un-accepting an entry must
+not delete a team that may already be on a schedule — but the error somebody
+would see is `score_report is append-only`, which says nothing about teams. If a
+"delete this team" control is ever wanted, it needs a real answer for the games,
+pools and bracket slots pointing at it, not a change to that trigger.
+
+The browser checks assert the deletion fails, so this cannot be quietly
+"fixed".
+
 ---
 
 ## 3. Deliberately not built

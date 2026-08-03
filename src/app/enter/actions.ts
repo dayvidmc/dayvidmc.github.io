@@ -37,6 +37,8 @@ export async function submitEntryAction(formData: FormData): Promise<void> {
     coachName: text(formData, 'coachName'),
     coachEmail: text(formData, 'coachEmail'),
     coachPhone: text(formData, 'coachPhone'),
+    ageGroup: text(formData, 'ageGroup'),
+    alternateName: text(formData, 'alternateName'),
     alternateContact: text(formData, 'alternateContact'),
     notes: text(formData, 'notes'),
   });

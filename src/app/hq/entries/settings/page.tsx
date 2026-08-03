@@ -16,6 +16,7 @@ const ERROR: Record<string, string> = {
   bad_amount: 'A fee has to be an amount of money.',
   bad_cap: 'A cap has to be a whole number of teams, or blank for no limit.',
   deposit_over_fee: 'A deposit cannot be more than the entry fee itself.',
+  bad_due_date: 'That balance due date did not read.',
 };
 
 /**
@@ -122,14 +123,55 @@ export default async function EntrySettingsPage({
         </div>
         <p className="hint">Blank means entries stay open until you take the opening date away.</p>
 
-        <label htmlFor="balanceDueDays">Days to pay the balance after being accepted</label>
+        <h3 style={{ marginTop: 18, fontSize: 17 }}>When the balance is due</h3>
+
+        <label htmlFor="balanceDueDate">On this date</label>
+        <input
+          id="balanceDueDate" name="balanceDueDate" type="date"
+          defaultValue={settings.balanceDueDate ?? ''} disabled={!director}
+        />
+        <p className="hint">
+          One deadline for everybody, which is what goes on a poster and what makes chasing simple.
+          A team accepted after this date owes the money straight away rather than being given a
+          fresh fortnight.
+        </p>
+
+        <label htmlFor="balanceDueDays">Or this many days after each team is accepted</label>
         <input
           id="balanceDueDays" name="balanceDueDays" type="number" min={1} max={365}
           defaultValue={settings.balanceDueDays} disabled={!director}
         />
         <p className="hint">
-          Stamped onto each entry when it is accepted, so changing this later does not move a
-          deadline somebody has already been told.
+          Used only when no date is set above. Fairer to a team accepted off the waitlist in April.
+          Either way it is stamped onto the entry when it is accepted, so changing this later never
+          moves a deadline somebody has already been told.
+        </p>
+
+        <h3 style={{ marginTop: 18, fontSize: 17 }}>Age groups</h3>
+
+        <label htmlFor="ageGroups">The age groups this tournament runs</label>
+        <input
+          id="ageGroups" name="ageGroups" type="text" disabled={!director}
+          defaultValue={settings.ageGroups.join(', ')}
+          placeholder="Rookie, Mosquito, Peewee, Bantam, Midget"
+        />
+        <p className="hint">
+          Comma separated, in the order they should be offered. This is the list a coach picks
+          from, and an entry naming anything else is refused. Leave it blank and the box on the
+          entry form becomes free text — which is worse, but better than an empty list stopping
+          everybody entering.
+        </p>
+
+        <h3 style={{ marginTop: 18, fontSize: 17 }}>Deposit</h3>
+
+        <label htmlFor="defaultDeposit">The deposit, across every division</label>
+        <input
+          id="defaultDeposit" name="defaultDeposit" type="text" inputMode="decimal"
+          defaultValue={(settings.defaultDepositCents / 100).toFixed(2)} disabled={!director}
+        />
+        <p className="hint">
+          Saving this sets every division that has an entry fee to this amount. A division can
+          still be given its own figure below afterwards; this is the one number to set first.
         </p>
 
         <h3 style={{ marginTop: 18, fontSize: 17 }}>Where money can be sent</h3>

@@ -41,7 +41,7 @@ intake paths that feed it.
 | Outbound SMS: sender, retries, opt-outs, failure screen | §5.7 | Built, tested — **dry run by default**; needs a Twilio account to reach a phone |
 | Money raised: every stream, cost of goods, gifts in kind, cash control | §8A | Built, tested — the raffle is still recorded by hand |
 | Silent auction: lots, printable bid sheets, a fast close, winners, payment | §7.3 | Built, tested — reports itself into the money total |
-| Team entries: a timed opening, a queue, caps and waitlists, deposits and balances | §8A/E | Built, tested — e-transfer and cheque work out of the box; card needs a merchant account |
+| Team entries: a timed opening, a queue, caps and waitlists, deposits and balances | §8A/E | Built, tested — age group and division both captured; e-transfer and cheque work out of the box, card needs a merchant account |
 | Append-only audit trail | §9 | Built, enforced by the database |
 
 ## What is deliberately not here

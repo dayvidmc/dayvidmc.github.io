@@ -91,9 +91,11 @@ export function untilPhrase(minutes: number): string {
 export interface EntryDraft {
   teamName: string;
   association: string;
+  ageGroup: string;
   coachName: string;
   coachEmail: string;
   coachPhone: string;
+  alternateName: string;
   alternateContact: string;
   notes: string;
   divisionId: string;
@@ -109,15 +111,37 @@ export interface EntryProblem {
  *
  * Deliberately short. Every extra required field on this form is a coach who
  * gives up halfway and emails the director instead, which is the process this
- * replaces. A division, a team name, a human, and a way to reach them —
- * everything else can be chased later by somebody who now has a phone number.
+ * replaces. An age group, a division, a team name, a human, and a way to reach
+ * them — everything else can be chased later by somebody who now has a phone
+ * number.
+ *
+ * The age group is required and the division is required, and they are not the
+ * same question. A coach knows their age group for certain because birth years
+ * decide it; which tier they belong in is an opinion, and one the director may
+ * overrule. Asking for both is what makes moving a team between divisions
+ * within its own age group possible later.
+ *
+ * `ageGroups` is what the tournament runs. An empty list means it has not said,
+ * and then anything the coach types is accepted rather than blocking an entry
+ * on a setting nobody filled in.
  */
-export function entryProblems(draft: EntryDraft): EntryProblem[] {
+export function entryProblems(
+  draft: EntryDraft,
+  ageGroups: readonly string[] = [],
+): EntryProblem[] {
   const problems: EntryProblem[] = [];
   const trimmed = draft.teamName.trim();
 
   if (!draft.divisionId) {
     problems.push({ field: 'divisionId', message: 'Pick the division you are entering.' });
+  }
+  if (!draft.ageGroup.trim()) {
+    problems.push({ field: 'ageGroup', message: 'Pick the age group this team plays.' });
+  } else if (ageGroups.length > 0 && !ageGroups.includes(draft.ageGroup.trim())) {
+    problems.push({
+      field: 'ageGroup',
+      message: 'That is not an age group this tournament runs.',
+    });
   }
   if (trimmed.length < 2) {
     problems.push({ field: 'teamName', message: 'The team needs a name.' });
@@ -257,6 +281,31 @@ export function owing(fees: Fees, payments: readonly Payment[]): Owing {
     depositSatisfied: paid >= fees.depositCents,
     balanceSatisfied: fees.entryFeeCents === 0 || paid >= fees.entryFeeCents,
   };
+}
+
+/**
+ * When this team's balance falls due.
+ *
+ * Two rules, and the tournament picks. A **fixed date** is what goes on a
+ * poster — "all balances due 1 May" — and is the easier one to chase, because
+ * every team has the same deadline. **So many days after acceptance** is
+ * fairer to a team accepted off the waitlist in April, who would otherwise be
+ * given a deadline that has already passed.
+ *
+ * A fixed date already in the past is used anyway rather than quietly moved.
+ * A team accepted after the stated deadline genuinely does owe the money now,
+ * and inventing them a fresh fortnight is the sort of kindness that loses a
+ * tournament its own deadline.
+ */
+export function balanceDueOn(
+  acceptedOn: Date,
+  daysAfterAcceptance: number,
+  fixedDate: Date | null,
+): Date {
+  if (fixedDate) return fixedDate;
+  const due = new Date(acceptedOn.getTime());
+  due.setUTCDate(due.getUTCDate() + daysAfterAcceptance);
+  return due;
 }
 
 /** What a card checkout should be for, given what is already paid. */

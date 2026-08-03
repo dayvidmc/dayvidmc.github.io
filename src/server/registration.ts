@@ -50,6 +50,10 @@ export interface EntrySettings {
   chequePayableTo: string | null;
   chequeMailTo: string | null;
   balanceDueDays: number;
+  /** When set, every accepted team's balance is due on this date instead. */
+  balanceDueDate: string | null;
+  defaultDepositCents: number;
+  ageGroups: string[];
 }
 
 interface SettingsRow {
@@ -59,12 +63,16 @@ interface SettingsRow {
   cheque_payable_to: string | null;
   cheque_mail_to: string | null;
   balance_due_days: number;
+  balance_due_date: string | null;
+  default_deposit_cents: number;
+  age_groups: string[];
 }
 
 export async function entrySettings(tournamentId: string): Promise<EntrySettings> {
   const row = await queryOne<SettingsRow>(
     `SELECT entries_open_at, entries_close_at, etransfer_address,
-            cheque_payable_to, cheque_mail_to, balance_due_days
+            cheque_payable_to, cheque_mail_to, balance_due_days,
+            balance_due_date::text AS balance_due_date, default_deposit_cents, age_groups
        FROM tournament WHERE id = $1`,
     [tournamentId],
   );
@@ -79,6 +87,9 @@ export async function entrySettings(tournamentId: string): Promise<EntrySettings
     chequePayableTo: row?.cheque_payable_to ?? null,
     chequeMailTo: row?.cheque_mail_to ?? null,
     balanceDueDays: row?.balance_due_days ?? 14,
+    balanceDueDate: row?.balance_due_date ?? null,
+    defaultDepositCents: row?.default_deposit_cents ?? 10000,
+    ageGroups: row?.age_groups ?? [],
   };
 }
 
@@ -136,6 +147,8 @@ export interface Entry {
   coachName: string;
   coachEmail: string;
   coachPhone: string | null;
+  ageGroup: string | null;
+  alternateName: string | null;
   alternateContact: string | null;
   notes: string | null;
   status: EntryStatus;
@@ -165,7 +178,8 @@ export interface EntryPayment {
 
 const ENTRY_COLUMNS = `
   e.id, e.reference, e.division_id, d.name AS division_name, e.team_name, e.association,
-  e.coach_name, e.coach_email, e.coach_phone, e.alternate_contact, e.notes,
+  e.coach_name, e.coach_email, e.coach_phone, e.age_group, e.alternate_name,
+  e.alternate_contact, e.notes,
   e.status, e.submitted_at, e.decided_at, e.decided_by, e.decision_note,
   e.team_id, e.balance_due_on::text AS balance_due_on,
   e.etransfer_claimed_at, e.etransfer_claimed_ref,
@@ -181,6 +195,8 @@ interface EntryRow {
   coach_name: string;
   coach_email: string;
   coach_phone: string | null;
+  age_group: string | null;
+  alternate_name: string | null;
   alternate_contact: string | null;
   notes: string | null;
   status: EntryStatus;
@@ -207,6 +223,8 @@ function toEntry(row: EntryRow, payments: EntryPayment[]): Entry {
     coachName: row.coach_name,
     coachEmail: row.coach_email,
     coachPhone: row.coach_phone,
+    ageGroup: row.age_group,
+    alternateName: row.alternate_name,
     alternateContact: row.alternate_contact,
     notes: row.notes,
     status: row.status,
@@ -367,20 +385,27 @@ export async function createEntry(
   tournamentId: string,
   draft: EntryDraft,
 ): Promise<CreateResult> {
-  const problems = entryProblems(draft);
-  if (problems.length > 0) {
-    return { ok: false, error: 'invalid', problems: problems.map((problem) => problem.message) };
-  }
-
   const phone = draft.coachPhone.trim() ? normalisePhone(draft.coachPhone) : null;
 
   return transaction(async (client) => {
     const settings = await client.query<SettingsRow>(
-      `SELECT entries_open_at, entries_close_at FROM tournament WHERE id = $1 FOR SHARE`,
+      `SELECT entries_open_at, entries_close_at, age_groups
+         FROM tournament WHERE id = $1 FOR SHARE`,
       [tournamentId],
     );
     const row = settings.rows[0];
     if (!row) return { ok: false, error: 'closed' } as CreateResult;
+
+    // Validated against the tournament's own age groups, read here rather than
+    // trusted from the form that offered them.
+    const problems = entryProblems(draft, row.age_groups ?? []);
+    if (problems.length > 0) {
+      return {
+        ok: false,
+        error: 'invalid',
+        problems: problems.map((problem) => problem.message),
+      } as CreateResult;
+    }
 
     const state = windowState(
       { opensAt: row.entries_open_at, closesAt: row.entries_close_at },
@@ -399,8 +424,9 @@ export async function createEntry(
       try {
         const inserted = await client.query<{ id: string }>(
           `INSERT INTO entry (tournament_id, division_id, team_name, association, coach_name,
-                              coach_email, coach_phone, alternate_contact, notes, reference)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+                              coach_email, coach_phone, age_group, alternate_name,
+                              alternate_contact, notes, reference)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
           [
             tournamentId,
             draft.divisionId,
@@ -409,6 +435,8 @@ export async function createEntry(
             draft.coachName.trim().slice(0, 120),
             draft.coachEmail.trim().toLowerCase().slice(0, 200),
             phone?.ok ? phone.value : null,
+            draft.ageGroup.trim().slice(0, 40) || null,
+            draft.alternateName.trim().slice(0, 120) || null,
             draft.alternateContact.trim().slice(0, 200) || null,
             draft.notes.trim().slice(0, 2000) || null,
             reference,
@@ -489,8 +517,11 @@ export async function decide(
   note: string,
 ): Promise<{ ok: boolean; error?: string; teamId?: string }> {
   return transaction(async (client) => {
-    const found = await client.query<EntryRow & { balance_due_days: number }>(
-      `SELECT ${ENTRY_COLUMNS}, t.balance_due_days
+    const found = await client.query<
+      EntryRow & { balance_due_days: number; balance_due_date: string | null }
+    >(
+      `SELECT ${ENTRY_COLUMNS}, t.balance_due_days,
+              t.balance_due_date::text AS balance_due_date
          FROM entry e
          JOIN division d ON d.id = e.division_id
          JOIN tournament t ON t.id = e.tournament_id
@@ -515,9 +546,9 @@ export async function decide(
 
       const created = await client.query<{ id: string }>(
         `INSERT INTO team (tournament_id, division_id, name, association, coach_name,
-                           coach_phone, coach_email, alternate_contact,
+                           coach_phone, coach_email, alternate_contact, age_group,
                            access_token, registration_status, registered_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'registered', now())
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'registered', now())
          RETURNING id`,
         [
           tournamentId,
@@ -527,7 +558,10 @@ export async function decide(
           entry.coach_name,
           entry.coach_phone,
           entry.coach_email,
-          entry.alternate_contact,
+          // One column on the team, so whoever picks up the phone on the
+          // Saturday has both the name and the number in front of them.
+          [entry.alternate_name, entry.alternate_contact].filter(Boolean).join(' · ') || null,
+          entry.age_group,
           randomBytes(24).toString('base64url'),
         ],
       );
@@ -538,13 +572,17 @@ export async function decide(
       `UPDATE entry
           SET status = $2, decided_at = now(), decided_by = $3, decision_note = $4,
               team_id = $5,
+              -- A stated calendar date wins; otherwise so many days from
+              -- today. Stamped once, so the date the coach was told stays the
+              -- date on the record even if the setting changes in March.
               balance_due_on = CASE
                 WHEN $2 = 'accepted' AND balance_due_on IS NULL
-                  THEN (current_date + ($6 || ' days')::interval)::date
+                  THEN COALESCE($7::date, (current_date + ($6 || ' days')::interval)::date)
                 ELSE balance_due_on END,
               updated_at = now()
         WHERE id = $1`,
-      [entryId, status, actor, note.trim().slice(0, 500) || null, teamId, entry.balance_due_days],
+      [entryId, status, actor, note.trim().slice(0, 500) || null, teamId,
+       entry.balance_due_days, entry.balance_due_date],
     );
 
     await recordEventIn(client, {
@@ -773,6 +811,9 @@ export async function saveEntrySettings(
     chequePayableTo: string | null;
     chequeMailTo: string | null;
     balanceDueDays: number;
+    balanceDueDate: string | null;
+    defaultDepositCents: number;
+    ageGroups: string[];
   }>,
   actor: string,
   actorRole: string,
@@ -784,6 +825,9 @@ export async function saveEntrySettings(
     chequePayableTo: 'cheque_payable_to',
     chequeMailTo: 'cheque_mail_to',
     balanceDueDays: 'balance_due_days',
+    balanceDueDate: 'balance_due_date',
+    defaultDepositCents: 'default_deposit_cents',
+    ageGroups: 'age_groups',
   };
 
   const sets: string[] = [];
@@ -796,6 +840,18 @@ export async function saveEntrySettings(
   if (sets.length === 0) return;
 
   await query(`UPDATE tournament SET ${sets.join(', ')} WHERE id = $1`, values);
+
+  // Applying one deposit across seven divisions is what the director actually
+  // wants; the clamp keeps the "deposit inside the fee" rule that the database
+  // enforces, so a division with no fee set yet is left alone rather than
+  // failing the whole save.
+  if (patch.defaultDepositCents !== undefined) {
+    await query(
+      `UPDATE division SET deposit_cents = LEAST($2, entry_fee_cents)
+        WHERE tournament_id = $1 AND entry_fee_cents > 0`,
+      [tournamentId, patch.defaultDepositCents],
+    );
+  }
   await recordEvent({
     tournamentId,
     actor,

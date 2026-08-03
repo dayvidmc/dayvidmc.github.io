@@ -81,6 +81,7 @@ export default async function EntryPage({
     <>
       <h1>{entry.teamName}</h1>
       <p className="sub">
+        {entry.ageGroup ? `${entry.ageGroup} · ` : ''}
         {entry.divisionName} · {STATUS_LABEL[entry.status]} · reference{' '}
         <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{entry.reference}</strong>
       </p>
@@ -345,10 +346,14 @@ export default async function EntryPage({
             <div style={{ textAlign: 'right' }}>{entry.association}</div>
           </div>
         )}
-        {entry.alternateContact && (
+        {(entry.alternateName || entry.alternateContact) && (
           <div className="row-item">
             <div>Second contact</div>
-            <div style={{ textAlign: 'right' }}>{entry.alternateContact}</div>
+            <div style={{ textAlign: 'right' }}>
+              {entry.alternateName}
+              {entry.alternateName && entry.alternateContact ? ' · ' : ''}
+              {entry.alternateContact}
+            </div>
           </div>
         )}
         {entry.teamId && (

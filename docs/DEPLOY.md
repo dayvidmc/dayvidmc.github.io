@@ -293,8 +293,16 @@ than leaking a working PIN — but the flag should still be off.
 The opening time is announced to ninety coaches and cannot be quietly moved
 afterwards, so everything below has to be right the first time.
 
-- **Set the fees, the deposits and the caps** per division at HQ → Entries →
-  Fees and dates. A division left at zero takes free entries.
+- **Set the age groups** the tournament runs, at HQ → Entries → Fees and dates.
+  A coach picks from this list, and an entry naming anything else is refused.
+  Leave it blank and the box becomes free text, which somebody then has to tidy.
+- **Set the deposit once** on the same screen — saving it applies to every
+  division that has an entry fee. A division can still be given its own figure
+  underneath afterwards.
+- **Set the fees and the caps** per division. A division left at zero takes free
+  entries.
+- **Decide how the balance falls due**: a stated date for everybody, or so many
+  days after each team is accepted. A stated date wins when both are set.
 - **Set the e-transfer address and the cheque payee.** With neither set, and no
   card provider, a coach's page has no way to pay on it at all — it says so, but
   that is not a state to open in.

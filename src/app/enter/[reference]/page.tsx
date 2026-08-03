@@ -79,6 +79,7 @@ export default async function EntryPage({
     <>
       <h1>{entry.teamName}</h1>
       <p className="sub">
+        {entry.ageGroup ? `${entry.ageGroup} · ` : ''}
         {entry.divisionName} · {tournament.name} · reference{' '}
         <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{entry.reference}</strong>
       </p>

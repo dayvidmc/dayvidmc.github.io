@@ -725,7 +725,9 @@ async function seedEntries(tournamentId: string): Promise<void> {
             etransfer_address = 'treasurer@kanatabaseball.com',
             cheque_payable_to = 'Kanata Baseball Association',
             cheque_mail_to = 'PO Box 1247, Kanata ON K2K 0B1',
-            balance_due_days = 14
+            balance_due_days = 14,
+            default_deposit_cents = 10000,
+            age_groups = ARRAY['Rookie','Mosquito','Peewee','Bantam','Midget']
       WHERE id = $1`,
     [tournamentId],
   );
@@ -733,7 +735,7 @@ async function seedEntries(tournamentId: string): Promise<void> {
   // Real fees for a three-day tournament, and a cap on the division everybody
   // wants.
   await query(
-    `UPDATE division SET entry_fee_cents = 70000, deposit_cents = 20000,
+    `UPDATE division SET entry_fee_cents = 70000, deposit_cents = 10000,
                          team_cap = CASE WHEN name = 'Major A' THEN 4 ELSE 8 END
       WHERE tournament_id = $1`,
     [tournamentId],
@@ -756,31 +758,33 @@ async function seedEntries(tournamentId: string): Promise<void> {
     coach: string,
     email: string,
     phone: string | null,
+    ageGroup: string,
     minutesAfterOpen: number,
     status: string,
     notes: string | null,
   ][] = [
     ['TK-3F7K-9QB2', 'Gloucester Major A', 'Gloucester Baseball', 'Major A', 'Dana Whitfield',
-      'dana.whitfield@example.com', '+16135550101', 1, 'accepted', null],
+      'dana.whitfield@example.com', '+16135550101', 'Bantam', 1, 'accepted', null],
     ['TK-8HJP-4RT6', 'Orleans Major A', 'Orleans Minor Baseball', 'Major A', 'Marcus Bell',
-      'marcus.bell@example.com', '+16135550102', 3, 'accepted',
+      'marcus.bell@example.com', '+16135550102', 'Bantam', 3, 'accepted',
       'We cannot play before noon on the Friday — half the team is at a school trip.'],
     ['TK-2WQD-7NCV', 'Barrhaven Bandits', 'Barrhaven Baseball', 'Major A', 'Priya Raman',
-      'priya.raman@example.com', '+16135550103', 4, 'submitted', null],
+      'priya.raman@example.com', '+16135550103', 'Bantam', 4, 'submitted', null],
     ['TK-6ZXK-3MPT', 'West Carleton Wolves', 'West Carleton Baseball', 'Major A', 'Tom Reilly',
-      'tom.reilly@example.com', null, 9, 'submitted',
+      'tom.reilly@example.com', null, 'Bantam', 9, 'submitted',
       'Played in 2019 as West Carleton Red. Same club, new name.'],
     ['TK-9BRT-2KHW', 'Almonte Thunder', 'Mississippi Mills Baseball', 'Major A', 'Jen Okafor',
-      'jen.okafor@example.com', '+16135550105', 22, 'submitted', null],
+      'jen.okafor@example.com', '+16135550105', 'Bantam', 22, 'submitted', null],
     ['TK-4NMC-8VQJ', 'Manotick Minor', 'Rideau Baseball', 'Minor', 'Ray Deschamps',
-      'ray.deschamps@example.com', '+16135550106', 6, 'accepted', null],
+      'ray.deschamps@example.com', '+16135550106', 'Peewee', 6, 'accepted', null],
     ['TK-7TQV-5DKZ', 'Cumberland Colts', 'Cumberland Baseball', 'Minor', 'Ellen Novak',
-      'ellen.novak@example.com', '+16135550107', 40, 'waitlisted', null],
+      'ellen.novak@example.com', '+16135550107', 'Peewee', 40, 'waitlisted', null],
   ];
 
   const created = new Map<string, string>();
 
-  for (const [reference, team, association, division, coach, email, phone, minutes, status, notes] of applications) {
+  for (const [reference, team, association, division, coach, email, phone, ageGroup, minutes,
+              status, notes] of applications) {
     const [existing] = await query<{ id: string }>(
       'SELECT id FROM team WHERE tournament_id = $1 AND lower(name) = lower($2)',
       [tournamentId, team],
@@ -788,18 +792,22 @@ async function seedEntries(tournamentId: string): Promise<void> {
 
     const [row] = await query<{ id: string }>(
       `INSERT INTO entry (tournament_id, division_id, team_name, association, coach_name,
-                          coach_email, coach_phone, notes, reference, submitted_at, status,
+                          coach_email, coach_phone, age_group, alternate_name, alternate_contact,
+                          notes, reference, submitted_at, status,
                           decided_at, decided_by, balance_due_on, team_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
-               (current_date - 1) + time '19:00' + ($10 || ' minutes')::interval,
-               $11,
-               CASE WHEN $11 <> 'submitted' THEN now() END,
-               CASE WHEN $11 <> 'submitted' THEN 'Tournament Director' END,
-               CASE WHEN $11 = 'accepted' THEN current_date + 13 END,
-               CASE WHEN $11 = 'accepted' THEN $12::uuid END)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
+               (current_date - 1) + time '19:00' + ($13 || ' minutes')::interval,
+               $14,
+               CASE WHEN $14 <> 'submitted' THEN now() END,
+               CASE WHEN $14 <> 'submitted' THEN 'Tournament Director' END,
+               CASE WHEN $14 = 'accepted' THEN current_date + 13 END,
+               CASE WHEN $14 = 'accepted' THEN $15::uuid END)
        RETURNING id`,
-      [tournamentId, divisionId(division), team, association, coach, email, phone, notes,
-        reference, String(minutes), status, existing?.id ?? null],
+      [tournamentId, divisionId(division), team, association, coach, email, phone, ageGroup,
+        // Most entries name a second contact; one deliberately does not, because
+        // that is the team HQ cannot reach on the Saturday.
+        phone ? 'Chris Lalonde' : null, phone ? '+16135550188' : null,
+        notes, reference, String(minutes), status, existing?.id ?? null],
     );
     created.set(reference, row!.id);
   }

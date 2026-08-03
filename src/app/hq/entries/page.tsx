@@ -203,6 +203,7 @@ export default async function EntriesPage({
                     {index + 1}. {entry.teamName}
                   </div>
                   <div className="meta">
+                    {entry.ageGroup ? `${entry.ageGroup} · ` : ''}
                     {entry.divisionName}
                     {entry.association ? ` · ${entry.association}` : ''} ·{' '}
                     {formatDateFriendly(entry.submittedAt)} {formatTimeFriendly(entry.submittedAt)}
@@ -254,6 +255,7 @@ export default async function EntriesPage({
                   <div>
                     <div className="teams" style={{ fontSize: 16 }}>{entry.teamName}</div>
                     <div className="meta">
+                      {entry.ageGroup ? `${entry.ageGroup} · ` : ''}
                       {entry.divisionName} · {money(state.paidCents)} of {money(state.feeCents)}
                       {state.outstandingCents > 0 && entry.status === 'accepted'
                         ? ` · ${money(state.outstandingCents)} owed`
