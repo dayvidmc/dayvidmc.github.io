@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { SiteFooter, SiteNav } from './_components/SiteNav';
 
 export const metadata: Metadata = {
-  title: 'Tokessy Tournament Operations',
+  title: 'Scott Tokessy Memorial Gold Glove Tournament',
   description:
-    'Operations tool for the Scott Tokessy Memorial Gold Glove Tournament in support of CHEO Cardiology.',
+    'Canada’s largest Little League charity tournament, in Kanata. Every dollar raised goes ' +
+    'to the Cardiology department at the Children’s Hospital of Eastern Ontario.',
 };
 
 export const viewport: Viewport = {
@@ -19,21 +21,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <header className="bar">
-          <div className="wrap">
-            <strong>
-              <a href="/">
-                Tokessy<span className="long"> Tournament</span>
-              </a>
-            </strong>
-            <nav>
-              <a href="/schedule">Schedule</a>
-              <a href="/bracket">Playoffs</a>
-              <a href="/hq">HQ</a>
-            </nav>
-          </div>
-        </header>
-        <main className="wrap">{children}</main>
+        {/* Skip link first in the DOM. The menu now holds a couple of dozen
+            links, and tabbing through all of them to reach a page is exactly
+            the experience this avoids. */}
+        <a className="skip" href="#main">
+          Skip to the page
+        </a>
+        <SiteNav />
+        <main className="wrap" id="main">
+          {children}
+        </main>
+        <SiteFooter />
       </body>
     </html>
   );

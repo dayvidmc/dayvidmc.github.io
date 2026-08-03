@@ -29,6 +29,18 @@ export interface Tournament {
   /** Whether the public pages ask for a donation at all. Off by default. */
   donations_open: boolean;
   donation_message: string | null;
+
+  // --- The website's own identity (§020) ---
+  tagline: string | null;
+  /** 1996. So "29 years and counting" needs nobody to edit a number. */
+  established_year: number | null;
+  /** Every year since the beginning — the figure nobody can derive from here. */
+  total_raised_cents: number;
+  venue_city: string | null;
+  contact_general: string | null;
+  contact_entries: string | null;
+  contact_sponsors: string | null;
+  contact_volunteers: string | null;
 }
 
 /** The tournament in play. There is one; scoping is for cloning years cleanly. */
@@ -37,7 +49,9 @@ export async function currentTournament(): Promise<Tournament | null> {
     `SELECT id, name, year, time_zone, starts_on::text, ends_on::text,
             day_start_time::text, day_end_time::text, umpire_score_entry,
             ticket_covers, tickets_per_team, previous_year_raised_cents,
-            donations_open, donation_message
+            donations_open, donation_message,
+            tagline, established_year, total_raised_cents, venue_city,
+            contact_general, contact_entries, contact_sponsors, contact_volunteers
        FROM tournament ORDER BY year DESC LIMIT 1`,
   );
 }

@@ -289,6 +289,36 @@ most likely to want that are not the people with a PIN.
 
 ---
 
+## 13. The website, now that it is one
+
+Merging the public site in closed some gaps and opened others.
+
+**There are no images anywhere.** No logo, no photograph of a diamond, no
+sponsor logos. Every other tournament site has them and this one looks
+deliberately plain beside those. The reason is that images need somewhere to
+live and something to serve them, and neither exists in this repository yet —
+that is an object store, an upload path, and a size limit, and it is a real
+piece of work rather than an afternoon. Worth doing before this replaces
+anything public.
+
+**Nothing has a printable form.** A sponsor asking for the pamphlet, a coach
+wanting the rules on paper, a director wanting the honour roll for the
+engraver — all of them currently print a web page with a menu on it.
+
+**The honour roll holds three years, not twenty-nine.** The demo deliberately
+does not invent the rest: twenty-six years of made-up champions would fill a
+page with fiction that looks exactly like a record, and somebody would
+eventually cite it. Typing in the real ones is a genuinely valuable afternoon's
+work by somebody who has the old results, and the year nobody does it is the
+year they are lost.
+
+**Search engines see almost nothing.** Titles and descriptions are set per
+page, and that is all. No sitemap, no structured data for the event, no Open
+Graph tags — so a link to this site shared in a Facebook group is a bare URL
+where every other tournament's is a card with a name and a date on it.
+
+---
+
 ## Recommended next three
 
 1. **The messaging spine** (§1). Without it the primary score path is

@@ -50,7 +50,39 @@ intake paths that feed it.
 | Donations: a public page, a live total against last year | §8A | Built, tested — off until the committee turns it on; nobody is thanked by name who did not ask to be |
 | Cash that goes home overnight | §8A | Built, tested — who has it and since when, because that protects the volunteer as much as the money |
 | Trophies: the engraving list, and the Gold Glove draw | — | Built, tested — the draw records its pool size and seed so it can be shown to have been straight |
+| **The public website itself** | — | Built, tested — pages the committee edits, the honour roll, sponsors, directions, a volunteer sign-up. This is the site, not a tool beside it |
 | Append-only audit trail | §9 | Built, enforced by the database |
+
+## The site it now is
+
+This started as an operations tool sitting beside a WordPress site. It is now
+both, because each half needed the other: the public site's most-wanted pages
+during the weekend are the schedule and the results, which only this database
+has — and the tool's most valuable public moment, a live fundraising total on a
+page a parent is already reading, only works if that page is this one.
+
+```
+/                     what is on today, the running total, and what this is
+/schedule             every division, with what is on now
+/standings            every division, with the tiebreakers shown
+/bracket              the Sunday map, filling in as it goes
+/results              the honour roll — this year live, every year before it recorded
+/donate               a running total against last year, and a way to give
+/volunteer            what is short this weekend, and a form to put your name down
+/sponsors             who agreed to be named, and what they gave
+/contact              who to email about what, and where every diamond is
+/enter                a timed opening, a queue, deposits and balances
+/p/<anything>         a page the committee wrote — Scott's story, the rules, visiting Kanata
+/team/<token>         one team's games, times, diamonds and roster
+/hq                   the board, and everything behind it
+/pos                  the concession till
+```
+
+Every page the committee writes is a row, editable from `/hq/site`. Page bodies
+are a markdown subset parsed into a tree of nodes that React renders — there is
+no `dangerouslySetInnerHTML` in this repository and there must never be one, so
+a body cannot introduce a tag, an attribute or a script whatever gets pasted
+into the editor.
 
 ## What is deliberately not here
 
@@ -116,7 +148,7 @@ It is meant for the Phase 0 debrief — it is much easier to ask a director "is
 this the board you want?" than to describe one.
 
 ```bash
-npm test          # 400+ unit tests, no database needed
+npm test          # 440+ unit tests, no database needed
 npm run typecheck
 npm run build
 

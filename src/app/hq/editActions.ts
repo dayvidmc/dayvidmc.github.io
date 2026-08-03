@@ -170,13 +170,22 @@ const TOURNAMENT_FIELDS = new Set(['name', 'starts_on', 'ends_on', 'day_start_ti
 const TOURNAMENT_FLAGS = new Set(['umpire_score_entry', 'donations_open']);
 
 /** Settings where blank is a real answer meaning "nothing to say". */
-const TOURNAMENT_OPTIONAL_TEXT = new Set(['ticket_covers', 'donation_message']);
+const TOURNAMENT_OPTIONAL_TEXT = new Set([
+  'ticket_covers',
+  'donation_message',
+  'tagline',
+  'venue_city',
+  'contact_general',
+  'contact_entries',
+  'contact_sponsors',
+  'contact_volunteers',
+]);
 
 /** Settings that are a whole number. Blank means zero, not an error. */
-const TOURNAMENT_COUNTS = new Set(['tickets_per_team']);
+const TOURNAMENT_COUNTS = new Set(['tickets_per_team', 'established_year']);
 
 /** Settings typed in dollars and stored in cents, like every other amount here. */
-const TOURNAMENT_MONEY = new Set(['previous_year_raised_cents']);
+const TOURNAMENT_MONEY = new Set(['previous_year_raised_cents', 'total_raised_cents']);
 
 export async function saveTournamentField(field: string, value: string): Promise<SaveResult> {
   const staff = await currentStaff();
@@ -207,13 +216,31 @@ export async function saveTournamentField(field: string, value: string): Promise
     ]);
     revalidatePath('/hq/settings');
     revalidatePath('/donate');
+    // The header and footer read the tournament's own details, so a change to
+    // any of them touches every page on the site.
+    revalidatePath('/', 'layout');
     return { ok: true };
   }
 
   if (TOURNAMENT_COUNTS.has(field)) {
+    const blank = value.trim() === '';
     const count = Number(value.trim() || '0');
     if (!Number.isInteger(count) || count < 0 || count > 10_000) {
       return { ok: false, error: 'A whole number, zero or more.' };
+    }
+    // A founding year of zero is not a founding year. Blank means "not
+    // recorded", and the page says "years and counting" only when it knows.
+    if (field === 'established_year') {
+      if (!blank && (count < 1900 || count > 2100)) {
+        return { ok: false, error: 'A four-digit year.' };
+      }
+      await query(`UPDATE tournament SET ${field} = $2 WHERE id = $1`, [
+        staff!.tournamentId,
+        blank ? null : count,
+      ]);
+      revalidatePath('/hq/settings');
+      revalidatePath('/', 'layout');
+      return { ok: true };
     }
     await query(`UPDATE tournament SET ${field} = $2 WHERE id = $1`, [staff!.tournamentId, count]);
     revalidatePath('/hq/settings');

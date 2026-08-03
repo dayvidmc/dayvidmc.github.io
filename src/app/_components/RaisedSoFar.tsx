@@ -64,7 +64,9 @@ export async function RaisedSoFar({ compact = false }: { compact?: boolean }) {
 
       {!compact && (
         <div className="raised-label">
-          100% of proceeds go to CHEO Cardiology. Twenty-nine years have raised over $536,000.
+          100% of proceeds go to CHEO Cardiology.
+          {tournament.total_raised_cents > 0 &&
+            ` ${publicMoney(tournament.total_raised_cents)} since ${tournament.established_year ?? 'the beginning'}.`}
         </div>
       )}
       <div className="raised-cta">Donate →</div>

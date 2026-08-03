@@ -173,6 +173,54 @@ export default async function SettingsPage() {
       </fieldset>
 
       <fieldset disabled={!editable}>
+        <legend>What the public site says</legend>
+        <AutoSaveField
+          save={saveTournamentField} field="tagline" label="One line under the name"
+          defaultValue={tournament.tagline ?? ''}
+          hint="The first thing a stranger reads. e.g. “Canada’s largest Little League charity tournament.”"
+        />
+        <AutoSaveField
+          save={saveTournamentField} field="venue_city" label="Where it is"
+          defaultValue={tournament.venue_city ?? ''}
+          hint="e.g. Kanata, Ontario. Shown beside the dates and in the footer."
+        />
+        <AutoSaveField
+          save={saveTournamentField} field="established_year" label="First held" type="number"
+          defaultValue={tournament.established_year ? String(tournament.established_year) : ''}
+          hint="1996. The site works out “29 years and counting” from this, so nobody has to edit a number every July."
+        />
+        <AutoSaveField
+          save={saveTournamentField} field="total_raised_cents" label="Raised since the beginning"
+          defaultValue={(tournament.total_raised_cents / 100).toFixed(2)}
+          hint="In dollars, every year added up. The single most persuasive figure on the site, and the only one this database cannot work out for itself."
+        />
+      </fieldset>
+
+      <fieldset disabled={!editable}>
+        <legend>Who to email</legend>
+        <p className="hint" style={{ marginTop: 0 }}>
+          Role addresses rather than people, so a page does not need editing when a volunteer
+          changes — and so nobody&rsquo;s personal inbox ends up on a public website.
+        </p>
+        <AutoSaveField
+          save={saveTournamentField} field="contact_general" label="Anything at all"
+          defaultValue={tournament.contact_general ?? ''}
+        />
+        <AutoSaveField
+          save={saveTournamentField} field="contact_entries" label="Entering a team"
+          defaultValue={tournament.contact_entries ?? ''}
+        />
+        <AutoSaveField
+          save={saveTournamentField} field="contact_sponsors" label="Sponsorship"
+          defaultValue={tournament.contact_sponsors ?? ''}
+        />
+        <AutoSaveField
+          save={saveTournamentField} field="contact_volunteers" label="Volunteering"
+          defaultValue={tournament.contact_volunteers ?? ''}
+        />
+      </fieldset>
+
+      <fieldset disabled={!editable}>
         <legend>Concession tickets</legend>
         <AutoSaveField
           save={saveTournamentField} field="ticket_covers" label="One ticket covers"

@@ -166,6 +166,9 @@ export default async function HqBoardPage({
         <a className="btn" href="/hq/trophies" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
           Trophies
         </a>
+        <a className="btn" href="/hq/site" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
+          The website
+        </a>
         <a className="btn" href="/hq/settings" style={{ flex: '1 1 100%', minHeight: 44, fontSize: 15 }}>
           Settings and readiness
         </a>

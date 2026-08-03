@@ -457,6 +457,7 @@ export async function seedDemo(): Promise<DemoResult> {
   await seedPurchasesAndSponsors(tournamentId);
   await seedVolunteers(tournamentId, base);
   await seedDonations(tournamentId);
+  await seedWebsite(tournamentId);
 
   const [division] = await query<{ id: string }>(
     "SELECT id FROM division WHERE name = 'Major A'",
@@ -1397,4 +1398,286 @@ async function seedDonations(tournamentId: string): Promise<void> {
       ],
     );
   }
+}
+
+/**
+ * The website's own content.
+ *
+ * The facts here are the tournament's real ones — the year it started, why it
+ * exists, the format, the diamonds. The email addresses are deliberately role
+ * addresses rather than the real volunteers' personal inboxes: a demo that gets
+ * shown around a committee table and pushed to a public repository should not
+ * carry somebody's private email, even one that is already on their own site.
+ *
+ * The honour roll is deliberately thin — three years, not twenty-nine. Making
+ * up twenty-six years of champions would fill the page with fiction that looks
+ * exactly like a record, and somebody would eventually cite it.
+ */
+async function seedWebsite(tournamentId: string): Promise<void> {
+  await query(
+    `UPDATE tournament
+        SET tagline = $2, established_year = 1996, total_raised_cents = $3,
+            venue_city = 'Kanata, Ontario',
+            contact_general = 'tournament@example.com',
+            contact_entries = 'entries@example.com',
+            contact_sponsors = 'sponsors@example.com',
+            contact_volunteers = 'volunteers@example.com'
+      WHERE id = $1`,
+    [
+      tournamentId,
+      "Canada's largest Little League charity tournament, run entirely by volunteers.",
+      53_600_000,
+    ],
+  );
+
+  // Addresses for the sites, so a coach driving in has something to type into a
+  // phone. Only the ones the demo's diamonds use.
+  const addresses: [site: string, address: string][] = [
+    ['Tokessy', 'Scott Tokessy Field, Kanata, ON'],
+    ['Deevy Pines', 'Deevy Pines Park, Kanata, ON'],
+    ['Walter Baker', 'Walter Baker Park, Kanata, ON'],
+    ['Mike Channing', 'Mike Channing Park, Kanata, ON'],
+  ];
+  for (const [site, address] of addresses) {
+    await query(
+      `UPDATE diamond SET address = $3,
+              map_url = COALESCE(map_url, 'https://maps.google.com/?q=' || replace($3, ' ', '+'))
+        WHERE tournament_id = $1 AND site = $2`,
+      [tournamentId, site, address],
+    );
+  }
+
+  const pages: [
+    slug: string,
+    title: string,
+    summary: string | null,
+    group: string | null,
+    order: number,
+    published: boolean,
+    body: string,
+  ][] = [
+    [
+      'welcome',
+      'Welcome',
+      null,
+      null,
+      10,
+      true,
+      `Run entirely by volunteers since 1996, in memory of Scott Tokessy. Every dollar raised
+goes to the Cardiology department at the [Children's Hospital of Eastern Ontario](https://www.cheo.on.ca).
+
+All teams play Friday and Saturday, with playoffs on the Sunday. [Scott's story](/p/scotts-story)
+is why any of this happens.`,
+    ],
+    [
+      'scotts-story',
+      "Scott's story",
+      'Why this tournament exists.',
+      'about',
+      10,
+      true,
+      `The tournament was founded in 1996 in memory of Scott, a twelve-year-old boy from Kanata
+who died suddenly of an irregular heartbeat after hitting a home run for his house league team,
+in May of that year.
+
+Every year since, teams have gathered at Scott Tokessy field to play in his honour. It has grown
+into the largest Little League tournament in the region, and every dollar it raises goes directly
+to the CHEO Cardiology department — towards the equipment used to find heart conditions in
+children, and the research into treating them.
+
+The Tokessy family still help plan the tournament. You will find them at the main field, watching
+the games.
+
+> To this day it is run entirely by volunteers. There is no paid staff at all.`,
+    ],
+    [
+      'tournament-info',
+      'Tournament information',
+      'Format, divisions and what a team gets.',
+      'play',
+      10,
+      true,
+      `## The weekend
+
+All teams play **Friday and Saturday**, with playoffs running on **Sunday**. Games are spread
+across several diamonds in Kanata — see [contact and directions](/contact) for where.
+
+## Divisions
+
+Rookie, Minor, Major and Junior, each with an A and a B division. Minor and Major also run an
+All Star division, and there is a Girls division at Minor, Major and Junior level.
+
+Teams are placed by the division they play in at home. If you are unsure which fits, ask before
+you enter rather than after — moving a team after the schedule is drawn affects everybody in
+the pool.
+
+## What a team gets
+
+- A guaranteed number of games — see the rules for your division
+- Concession tickets for every player in the team package
+- Their own live page showing only that team's games, times and diamonds
+
+## Rules
+
+Each division has its own time limit, run rule and pitching restrictions.
+[The rules for every division](/p/rules) are published before the weekend, and the umpires
+work from the same page you do.`,
+    ],
+    [
+      'rules',
+      'Rules',
+      'Time limits, run rules and pitching, by division.',
+      'play',
+      20,
+      true,
+      `Each division's rules are set before the tournament and checked against that year's
+official documents. They are shown on every umpire's own page and on the standings for the
+division, so the person calling a game and the person watching it are reading the same thing.
+
+The rules that vary by division:
+
+1. **Time limit** — how long before no new inning starts
+2. **Run rule** — the margin at which a game is called, and from which inning
+3. **Pitching** — pitch counts and required rest
+4. **Tie-breaking** — how a pool is separated when records match
+
+Where a rule is not listed for a division, the governing body's standard rule applies.
+
+If you think a rule has been applied wrongly during the weekend, tell the site supervisor at
+that diamond rather than the umpire. Every score has a written trail behind it, and a genuine
+mistake can be corrected — but not from memory, three hours later.`,
+    ],
+    [
+      'visiting',
+      'Visiting Kanata',
+      'Hotels, food and something to do between games.',
+      'play',
+      30,
+      true,
+      `Teams travel in from across Ontario and Quebec, and most stay the weekend.
+
+## Staying
+
+Several hotels near the diamonds offer a tournament rate. Ask when booking — the rate is not
+always applied automatically.
+
+## Between games
+
+There is usually three or four hours between a team's games. The main field has a canteen and a
+barbecue running all weekend, and the silent auction table is worth a look on the Saturday.
+
+## Food
+
+Every canteen is run by volunteers and every dollar it takes goes to the ward. The barbecue at
+the main field is supplied by a local restaurant who donate the food outright, which means the
+whole of what it sells goes to CHEO.`,
+    ],
+    [
+      'sponsors-intro',
+      'About our sponsors',
+      null,
+      null,
+      50,
+      true,
+      `This tournament runs on donated food, donated prizes, donated printing and donated time.
+Every business below gave something, and every dollar it saved went to the ward instead.
+
+Sponsorship here is mostly in kind, and every arrangement is its own conversation. If your
+business would like to help, we would be glad to hear from you.`,
+    ],
+    [
+      'volunteer-intro',
+      'About volunteering',
+      null,
+      null,
+      50,
+      true,
+      `Most shifts are two to four hours. You do not need to know baseball, and you do not need
+to commit to the whole weekend.
+
+The jobs that are hardest to fill are the early ones — somebody has to line and rake the
+diamonds before anybody can play on them — and the site supervisors, who collect the signed
+scoresheets and text the results in. Both are more important than they sound and neither needs
+any experience.`,
+    ],
+    [
+      'opening-ceremonies',
+      'Opening ceremonies',
+      'Saturday, 10am, at the main field.',
+      'about',
+      20,
+      true,
+      `Opening ceremonies are at **10am on the Saturday** at the main field.
+
+The Gold Glove is drawn there — one player, at random, from every registered roster — and the
+cheque for this year's fundraising is presented. Because there are games on the Friday, the
+Saturday and the Sunday, the figure on that cheque is an estimate of where the weekend is
+heading rather than a final total.
+
+Everybody is welcome, whether your team is playing that morning or not.`,
+    ],
+  ];
+
+  for (const [slug, title, summary, group, order, published, body] of pages) {
+    await query(
+      `INSERT INTO site_page
+         (tournament_id, slug, title, summary, body, nav_group, nav_order, published, updated_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Tournament Director')`,
+      [tournamentId, slug, title, summary, body.trim(), group, order, published],
+    );
+  }
+
+  // A draft, so the screen shows what one looks like and the public site does
+  // not.
+  await query(
+    `INSERT INTO site_page (tournament_id, slug, title, summary, body, nav_group, nav_order, published, updated_by)
+     VALUES ($1, 'next-year', 'Next year', 'Being written.', $2, 'about', 90, false, 'Tournament Director')`,
+    [tournamentId, 'Dates for next year will be confirmed in the autumn.'],
+  );
+
+  // Three years of the roll. Deliberately not twenty-nine: inventing the rest
+  // would fill a page with fiction that looks exactly like a record.
+  const years: [year: number, edition: string, teams: number, raised: number][] = [
+    [2024, '27th', 68, 3_800_000],
+    [2025, '28th', 74, 3_000_000],
+    [2026, '29th', 90, 4_500_000],
+  ];
+  for (const [year, edition, teams, raised] of years) {
+    await query(
+      `INSERT INTO past_year (tournament_id, year, edition, teams, raised_cents)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [tournamentId, year, edition, teams, raised],
+    );
+  }
+
+  const champions: [year: number, division: string, champion: string, runnerUp: string][] = [
+    [2026, 'Major A', 'Kanata Major A', 'Nepean Major A'],
+    [2026, 'Major B', 'Orleans Major B', 'Gloucester Major B'],
+    [2026, 'Minor A', 'West Ottawa Minor A', 'Kanata Minor A'],
+    [2026, 'Junior A', 'Perth Junior A', 'Stittsville Junior A'],
+    [2025, 'Major A', 'Nepean Major A', 'Kanata Major A'],
+    [2025, 'Minor A', 'Kanata Minor A', 'Orleans Minor A'],
+    [2024, 'Major A', 'Gloucester Major A', 'West Ottawa Major A'],
+  ];
+  for (const [index, [year, division, champion, runnerUp]] of champions.entries()) {
+    await query(
+      `INSERT INTO past_champion
+         (tournament_id, year, division_name, champion, runner_up, sort_order)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [tournamentId, year, division, champion, runnerUp, index],
+    );
+  }
+
+  // Sponsors who agreed to be named. The others stay hidden, which is the
+  // default and is the state worth demonstrating.
+  await query(
+    `UPDATE sponsor SET show_publicly = true,
+            tier = CASE WHEN name ILIKE '%Montana%' THEN 'Food and drink' ELSE NULL END,
+            blurb = CASE
+              WHEN name ILIKE '%Montana%'
+                THEN 'Supplies the barbecue at the main field. The food is given outright, so every dollar it sells for goes to the ward.'
+              ELSE NULL END
+      WHERE tournament_id = $1 AND name NOT ILIKE '%anonymous%'`,
+    [tournamentId],
+  );
 }

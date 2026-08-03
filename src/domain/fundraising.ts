@@ -264,7 +264,7 @@ export interface PublicProgress {
   percent: number;
   /** Positive once this year is past last year's. */
   aheadCents: number | null;
-  /** Twenty-nine years of it. Null when nobody has recorded that either. */
+  /** Which sentence to print, so the wording lives with the page not the maths. */
   message: 'ahead' | 'close' | 'under_way' | 'nothing_yet';
 }
 

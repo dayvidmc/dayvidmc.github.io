@@ -913,6 +913,133 @@ with two games in it is reported as having no single final rather than having
 one of them picked. A tied final is a real state to be in for twenty minutes and
 is not a champion.
 
+### 2.52 The website and the operations tool are one thing
+
+**Decision.** The public site is this application. The words are rows in
+`site_page`, the honour roll is rows, and the committee edits both from HQ.
+
+**Why.** They were two systems, which is how a division name gets changed in
+one and not the other. But the stronger argument is that each half already
+needed the other.
+
+The public site's most-wanted pages during the weekend are the schedule and the
+results, and only this database has them. And this application's most valuable
+public moment — a live total on a page a parent is already reading — only works
+if the page they are reading is this one. Two systems means the schedule is
+published twice and the total is on neither.
+
+The cost is real and worth naming: this repository is now responsible for a
+website, which is a thing that has to look right to strangers rather than
+merely work for volunteers. That is a different bar, and every screen here now
+has to clear it.
+
+### 2.53 No HTML from the database, ever
+
+**Decision.** Page bodies are a small markdown subset parsed into a **tree of
+nodes** which React renders as elements. There is no `dangerouslySetInnerHTML`
+anywhere in the repository and there must never be one.
+
+**Why.** The moment a committee can edit the front page, somebody is typing
+text that ends up in front of every visitor. The obvious implementation stores
+HTML and renders it. That is also how a charity's website comes to serve a
+script, and the person who put it there need not have meant anything by it — a
+block pasted out of a word processor is enough.
+
+Parsing to a tree removes the question rather than answering it. There is no
+HTML string in the pipeline, so there is nothing to sanitise and nothing to get
+wrong. An unsupported construct comes out as the literal characters somebody
+typed, which is the correct failure: their words appear, looking slightly
+wrong, instead of vanishing.
+
+Links are checked separately. `http`, `https`, `mailto`, `tel` and site-relative
+paths are allowed; anything else renders as plain text, so `javascript:` keeps
+its words and loses its link. The check rejects control characters, because
+`java\nscript:` is how a naive one is beaten, and rejects `//host` because it
+looks like a path and is not one.
+
+Verified in a browser rather than only in unit tests: a page body containing
+`<script>`, an `onerror` image and a `javascript:` link was saved through the
+real editor, and the public page was checked for the tag, the element and the
+side effect.
+
+### 2.54 The menu is a `<details>` element
+
+**Decision.** One control, no JavaScript, containing every section. Two links
+stay visible beside it: the schedule and, when donations are open, donate.
+
+**Why.** Everything else in this project degrades to a form post, and a menu
+that needs a bundle to open is the one thing that would strand somebody on a
+bad connection at a diamond with no way to reach the schedule.
+
+The old header spent a fifth of a 390px viewport on three links, and the site
+now has two dozen pages. A hamburger would need script; a wrapping row of links
+would eat the screen. `<details>` opens on a tap in every browser made this
+decade and needs nothing at all.
+
+The fixed entries — schedule, standings, playoffs, results — are in the menu
+because they exist, not because a row says so. Somebody tidying the pages
+screen at 11pm on a Friday cannot take the schedule off the site.
+
+### 2.55 A nav that cannot reach the database still renders
+
+**Decision.** `SiteNav` catches its own database failure and falls back to its
+fixed links.
+
+**Why.** Found by the build, which broke: the layout now queries, and Next
+prerenders the 404 page at build time when there is no database at all. The
+fix is the same as the runtime one, and the runtime one matters more — the
+header renders on every page including the 404, which is exactly the page
+somebody lands on when something is already wrong. A nav that throws turns one
+broken page into a broken site.
+
+### 2.56 A division name on the honour roll is text, not a reference
+
+**Decision.** `past_champion.division_name` is free text per year, not a
+foreign key to `division`.
+
+**Why.** Division names change between years — a Junior Girls division existed
+for the first time in 2026 — and a roll that renames 1998's divisions to match
+this year's is a tidier table and a worse record. The roll is a historical
+document; it should say what was actually played.
+
+The same reasoning puts `past_year` outside `tournament` rather than inside it.
+Nobody is going to re-enter twenty-nine years as full tournaments with
+schedules and rosters, and requiring that would mean the roll never gets
+entered at all.
+
+### 2.57 Volunteers can put their own name down
+
+**Decision.** A public form at `/volunteer` creates an ordinary volunteer row,
+which appears in the coordinator's list exactly as if she had typed it.
+
+**Why.** Until now the only route onto the list was for her to type somebody
+in, which meant every volunteer had to already know her. That is a real limit
+on a tournament whose own description of staffing is "a mix, and it is a
+struggle every year".
+
+It refuses a name with neither a phone nor an email, because a row nobody can
+contact looks like help and is not. Somebody already on the list who fills the
+form in again gets the same thank-you rather than being told they are already
+on a list, which is a strange thing to say to a volunteer.
+
+### 2.58 A figure on a page is derived, never typed
+
+**Decision.** The lifetime total and the years-since are columns on
+`tournament`, and every sentence that quotes them reads them.
+
+**Why.** "$536,000 over twenty-nine years" was written into three pages. Each
+one is correct until the following August and then quietly wrong, and the wrong
+ones are the most persuasive sentences on the site. Now the settings screen has
+one field for the total and one for the founding year, and the pages do the
+arithmetic.
+
+The same instinct applies to the public money format: grouped, and without
+cents. `formatMoney` is built for a till, where the cents are the point and a
+total is rarely four digits. A fundraising total is the opposite on both counts
+— "$45000.00" is a number somebody has to stop and parse. It rounds **down**,
+because overstating a charity's total by ninety-nine cents is still overstating
+it.
+
 ---
 
 ## 3. Deliberately not built

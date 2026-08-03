@@ -1297,3 +1297,207 @@ legend {
   outline: 3px solid var(--blue);
   outline-offset: 2px;
 }
+
+/* --- The site menu -----------------------------------------------------------
+   A `<details>` element, so it opens with no JavaScript. Everything here is
+   about keeping the header out of the way on a 390px phone: two links stay
+   visible and the other two dozen fold behind one control. */
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: var(--surface);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.skip:focus {
+  left: 8px;
+  top: 8px;
+}
+
+.nav-give {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.menu {
+  position: relative;
+}
+
+.menu > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--blue);
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu > summary::after {
+  content: ' ▾';
+}
+
+.menu[open] > summary::after {
+  content: ' ▴';
+}
+
+.menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 20;
+  width: min(320px, calc(100vw - 24px));
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 14px 12px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+.menu-panel h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 14px 0 4px;
+}
+
+.menu-panel ul,
+.footer-groups ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.menu-panel li a {
+  display: block;
+  padding: 10px 4px;
+  min-height: var(--tap);
+  font-size: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.menu-panel section:last-child li:last-child a {
+  border-bottom: none;
+}
+
+/* --- The footer, which is the whole site on one screen ----------------------- */
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  margin-top: 48px;
+  padding: 8px 0 40px;
+}
+
+.footer-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 4px 20px;
+}
+
+.footer-groups h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 18px 0 6px;
+}
+
+.footer-groups li a {
+  display: block;
+  padding: 7px 0;
+  font-size: 15px;
+}
+
+.footer-note {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 14px 0 0;
+}
+
+/* --- Editable page content --------------------------------------------------- */
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose p {
+  margin: 0 0 14px;
+}
+
+.prose ul,
+.prose ol {
+  margin: 0 0 14px;
+  padding-left: 22px;
+}
+
+.prose li {
+  margin-bottom: 6px;
+}
+
+.prose blockquote {
+  margin: 0 0 14px;
+  padding: 2px 0 2px 14px;
+  border-left: 4px solid var(--green);
+  color: var(--muted);
+  font-style: italic;
+}
+
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 24px 0;
+}
+
+/* The tagline under the tournament name on the front page. */
+.tagline {
+  font-size: 19px;
+  line-height: 1.4;
+  margin: 0 0 18px;
+}
+
+/* Three numbers that say what twenty-nine years amount to. */
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin: 18px 0 8px;
+}
+
+.figures > div {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.figures strong {
+  display: block;
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  color: var(--green);
+  line-height: 1.1;
+}
+
+.figures span {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 2px;
+}

@@ -155,6 +155,15 @@ interface FieldProps {
    * noise that pushes the actual names off a phone.
    */
   labelHidden?: boolean;
+  /**
+   * A textarea rather than an input.
+   *
+   * For the one field that is genuinely long: the body of a website page.
+   * Everything else here is a name, a number or a time, and a textarea for
+   * those would invite a paragraph into a field that cannot hold one.
+   */
+  multiline?: boolean;
+  rows?: number;
 }
 
 export function AutoSaveField({
@@ -169,6 +178,8 @@ export function AutoSaveField({
   placeholder,
   suffix,
   labelHidden,
+  multiline,
+  rows = 14,
 }: FieldProps) {
   const id = useId();
   const { status, error, onChange, onBlur, retry } = useFieldSave(save, field, defaultValue);
@@ -189,18 +200,30 @@ export function AutoSaveField({
         </div>
       )}
       <div className="field-input">
-        <input
-          id={id}
-          name={field}
-          type={type}
-          defaultValue={defaultValue}
-          min={min}
-          max={max}
-          placeholder={placeholder}
-          inputMode={type === 'number' ? 'numeric' : undefined}
-          onChange={(e) => onChange(e.target.value)}
-          onBlur={(e) => onBlur(e.target.value)}
-        />
+        {multiline ? (
+          <textarea
+            id={id}
+            name={field}
+            rows={rows}
+            defaultValue={defaultValue}
+            placeholder={placeholder}
+            onChange={(e) => onChange(e.target.value)}
+            onBlur={(e) => onBlur(e.target.value)}
+          />
+        ) : (
+          <input
+            id={id}
+            name={field}
+            type={type}
+            defaultValue={defaultValue}
+            min={min}
+            max={max}
+            placeholder={placeholder}
+            inputMode={type === 'number' ? 'numeric' : undefined}
+            onChange={(e) => onChange(e.target.value)}
+            onBlur={(e) => onBlur(e.target.value)}
+          />
+        )}
         {suffix && <span className="suffix">{suffix}</span>}
       </div>
       {hint && <p className="hint">{hint}</p>}

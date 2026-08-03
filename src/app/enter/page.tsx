@@ -1,6 +1,7 @@
 import { currentTournament } from '@/server/repo';
 import { board, byAgeGroup, currentWindow, entryDivisions, entrySettings } from '@/server/registration';
 import { refundStance, untilPhrase } from '@/domain/registration';
+import { publicMoney } from '@/domain/fundraising';
 import { formatDateFriendly, formatTimeFriendly, toWallClock } from '@/domain/time';
 import { findEntryAction, submitEntryAction } from './actions';
 
@@ -62,9 +63,22 @@ export default async function EnterPage({
         {formatDateFriendly(new Date(`${tournament.ends_on}T12:00:00`))}, Kanata
       </p>
 
+      {/* Derived, not typed. A figure written into a page is a figure that is
+          wrong from the following August onwards, and this one is the most
+          persuasive sentence on the page. */}
       <div className="notice ok">
-        <strong>Every dollar goes to CHEO Cardiology.</strong> Twenty-nine years of this tournament
-        have raised over $536,000 for the cardiology ward. Your entry fee is part of the thirtieth.
+        <strong>Every dollar goes to CHEO Cardiology.</strong>
+        {tournament.total_raised_cents > 0 ? (
+          <>
+            {' '}
+            This tournament has raised {publicMoney(tournament.total_raised_cents)} for the
+            cardiology ward
+            {tournament.established_year ? ` since ${tournament.established_year}` : ''}. Your entry
+            fee is part of this year&rsquo;s.
+          </>
+        ) : (
+          ' Nothing is taken out for running the weekend.'
+        )}
       </div>
 
       {params.error && (

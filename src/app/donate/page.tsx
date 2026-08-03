@@ -136,8 +136,13 @@ export default async function DonatePage({
 
       <p>
         {tournament.donation_message ??
-          'Twenty-nine years of this tournament have raised over $536,000 for CHEO Cardiology. ' +
-            'Every dollar given here goes there — nothing is taken out for running the weekend.'}
+          `${
+            tournament.total_raised_cents > 0
+              ? `This tournament has raised ${publicMoney(tournament.total_raised_cents)} for CHEO Cardiology${
+                  tournament.established_year ? ` since ${tournament.established_year}` : ''
+                }. `
+              : ''
+          }Every dollar given here goes there — nothing is taken out for running the weekend.`}
       </p>
 
       {!tournament.donations_open ? (

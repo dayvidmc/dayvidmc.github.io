@@ -55,6 +55,7 @@ export type EventKind =
   | 'volunteer.no_show'
   | 'volunteer.shift_created'
   | 'gold_glove.drawn'
+  | 'site.content_changed'
   | 'donation.received'
   | 'donation.settings_changed'
   | 'staff.signed_in';
