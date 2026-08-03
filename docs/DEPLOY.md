@@ -41,8 +41,11 @@ For the demo (see below):
 | `DEMO_MODE` | `true` |
 
 Leave unset for anything real. Optional, none of it needed to boot:
-`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`,
 `TWILIO_WEBHOOK_URL`, `ANTHROPIC_API_KEY`, `SQUARE_APPLICATION_ID`.
+
+Needed before any text is sent or received — see §5 below:
+`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` or
+`TWILIO_MESSAGING_SERVICE_SID`, and `CRON_SECRET`.
 
 ## 4. Deploy
 
@@ -58,7 +61,58 @@ serving traffic.
 boots happily but cannot reach Postgres fails the check instead of taking
 traffic.
 
-## 5. Load the demo data
+## 5. Schedule the sender — nothing sends without this
+
+**This is the step that is easy to skip and expensive to skip.** Every outbound
+text — the score request that starts intake path 1, the nudge, the confirmation
+to both coaches, every broadcast — is written to a queue and sent by
+`POST /api/tick`. If nothing calls that endpoint, messages pile up and no
+volunteer is ever asked for a score.
+
+In Railway: **New → Cron**, in the same project.
+
+| Setting | Value |
+|---|---|
+| Schedule | `* * * * *` (Railway cron is per-minute; see below) |
+| Command | `curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/tick"` |
+
+Set `CRON_SECRET` to a long random string (`openssl rand -base64 32`) on both
+the web service and the cron, and `APP_URL` to the service's public URL.
+
+**Per-minute is the floor Railway cron offers, and it is fine.** The spec's
+clocks are in tens of minutes — grace periods, a fifteen-minute escalation — so
+a message waiting up to sixty seconds changes nothing anyone will notice. If you
+want it tighter, the endpoint is safe to call as often as you like: enqueueing
+is deduped by key and sending claims rows with `FOR UPDATE SKIP LOCKED`, so
+overlapping runs do less work rather than wrong work.
+
+Verify it before you rely on it: `/hq/messages` says how long ago the sender
+last ran, and the HQ board carries a red banner when it has gone quiet. There is
+also a **"Send whatever is waiting now"** button on that screen for proving it
+works on a Tuesday in March.
+
+### Pick the Twilio number type deliberately
+
+A **long code** sends roughly one message per second. Ninety teams × two coaches
+is ~180 messages, so a bracket-publish broadcast takes three minutes to drain —
+and Saturday evening will have several bursts overlapping. Either use a
+**Messaging Service** with a toll-free or short code
+(`TWILIO_MESSAGING_SERVICE_SID`), or accept the lag knowingly. Decide this in
+advance rather than discovering it at 7pm on the Saturday.
+
+### Cost
+
+The messages screen shows **segments**, not message count, because segments are
+what Twilio bills. Every composed message is held to one GSM-7 segment by a
+test — one emoji or one em dash would drop the budget from 160 characters to 70
+and double the largest line on the bill.
+
+Rough weekend estimate at Canadian SMS rates: ~150 games × (1 request + some
+nudges + 2 confirmations) plus a few broadcasts lands in the low thousands of
+segments — tens of dollars, not hundreds. Spec §11 budgets the whole weekend,
+hosting included, under $200. That still holds.
+
+## 6. Load the demo data
 
 Once it is up, from the Railway service shell:
 
@@ -69,7 +123,8 @@ npm run demo
 That creates a tournament dated relative to *now*, so the board shows live
 statuses rather than grey rows: yesterday's round robin complete, today's games
 variously final, on now, upcoming and one disputed, three concession stands with
-a menu, and two texts nobody could place.
+a menu, two texts nobody could place, and a diamond volunteer on shift at every
+diamond so the score-request path has someone to text.
 
 It refuses to run against a database that already has a tournament. To start
 over you have to drop and recreate the database — a tournament with history
@@ -99,9 +154,13 @@ the first two:
 2. `/standings/…` — the three-way tie, with the tiebreaker explaining itself
 3. Sign in as **HQ Desk 1** → `/hq` — the board, worst-first
 4. `/hq/queue` — approve a score, and watch the standings move
-5. Sign in as **Concession Volunteer** → `/pos` — open a till, sell a hot dog,
+5. `/hq/messages` — every text the system has sent, what it cost in segments,
+   and anything it could not deliver. With `SMS_DRY_RUN=true` the "Send whatever
+   is waiting now" button drains the queue to the log, so the whole path can be
+   shown without a Twilio account
+6. Sign in as **Concession Volunteer** → `/pos` — open a till, sell a hot dog,
    take cash, get change
-6. Sign in as **Concession Lead** → `/hq/concessions` — takings, then close the
+7. Sign in as **Concession Lead** → `/hq/concessions` — takings, then close the
    till and count the cash
 
 Try signing in as the **Concession Volunteer** and visiting `/hq/concessions` —
@@ -126,9 +185,14 @@ than leaking a working PIN — but the flag should still be off.
 - **`TWILIO_AUTH_TOKEN`** must be set or the inbound webhook refuses everything
   in production — deliberately, since anyone who guesses the URL could otherwise
   post scores that decide who plays on Sunday.
-- **Outbound texts still do not send.** Rows pile up in `notification` and
-  nothing drains them. `/hq/settings` shows the queue depth and says so. This is
-  item 1 in `docs/IDEAS.md`.
+- **`CRON_SECRET` set and the cron scheduled** (§5). Without it nothing sends,
+  and the symptom — a board slowly filling with overdue games — looks exactly
+  like volunteers being slow to reply.
+- **`SMS_DRY_RUN` off.** The messages screen warns when it is on.
+- **Diamond volunteer shifts loaded.** They are what tells the system who to
+  text about which diamond. With none, `/hq/messages` lists every unchased game
+  under "no volunteer to ask" — which is accurate, and not a substitute for
+  having people.
 - **Turn on Railway's Postgres backups.** Losing Saturday's scores loses the
   tournament.
 

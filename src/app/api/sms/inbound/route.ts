@@ -7,8 +7,10 @@ import {
   parkUnmatchedMessage,
   recordProposal,
 } from '@/server/repo';
+import { claimInboundMessage, completeInboundMessage } from '@/server/inbound';
 import { parseScoreMessage } from '@/server/scoreParser';
 import { AUTO_FILL_CONFIDENCE } from '@/domain/scoreParsing';
+import { normalizePhone } from '@/domain/messaging';
 import { toWallClock } from '@/domain/time';
 
 /**
@@ -20,9 +22,17 @@ import { toWallClock } from '@/domain/time';
  * The reply is short and confirms what was understood, so the sender can see
  * immediately if it was read wrong and text again. Silence would leave them
  * wondering whether to phone HQ.
+ *
+ * Every delivery is claimed by its `MessageSid` before anything is parsed.
+ * Twilio retries a webhook that is slow — and this one can be, because it may
+ * call a model — so without that claim one text becomes two proposals, in a
+ * table that by design cannot be corrected.
  */
 
 export const dynamic = 'force-dynamic';
+
+/** What the sender is told when a retry arrives while the first is still going. */
+const IN_FLIGHT_REPLY = "Thanks — we've got that, HQ will confirm it.";
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -32,37 +42,99 @@ export async function POST(request: Request) {
   }
 
   const form = new URLSearchParams(body);
-  const from = (form.get('From') ?? '').trim();
+  // Twilio always sends E.164, but normalising both sides means the comparison
+  // against a coach number somebody typed at HQ actually matches.
+  const from = normalizePhone(form.get('From')) ?? (form.get('From') ?? '').trim();
   const text = (form.get('Body') ?? '').trim();
   const mediaUrl = form.get('MediaUrl0');
+  const messageSid = (form.get('MessageSid') ?? '').trim() || null;
 
   if (!from || (!text && !mediaUrl)) return twiml('Sorry, that came through empty.');
 
   const tournament = await currentTournament();
   if (!tournament) return twiml('No tournament is running right now.');
 
-  const now = toWallClock(new Date(), tournament.time_zone);
-  const candidates = await candidateGamesForPhone(tournament.id, from, now);
+  if (messageSid) {
+    const claim = await claimInboundMessage({
+      providerMessageId: messageSid,
+      tournamentId: tournament.id,
+      fromPhone: from,
+      body: text === '' ? null : text,
+      photoKey: mediaUrl,
+    });
+
+    // Answer a retry with exactly what the sender was told the first time.
+    // Saying something different about a message they only sent once is how a
+    // volunteer ends up texting a third time to find out which reply was true.
+    if (claim.kind === 'duplicate') return twiml(claim.reply);
+    if (claim.kind === 'in_flight') return twiml(IN_FLIGHT_REPLY);
+  }
+
+  const outcome = await handle(tournament.id, tournament.time_zone, from, text, mediaUrl);
+
+  if (messageSid) {
+    await completeInboundMessage({
+      providerMessageId: messageSid,
+      reply: outcome.reply,
+      scoreReportId: outcome.scoreReportId,
+      unmatchedMessageId: outcome.unmatchedMessageId,
+    });
+  }
+
+  return twiml(outcome.reply);
+}
+
+interface Outcome {
+  reply: string;
+  scoreReportId?: string | null;
+  unmatchedMessageId?: string | null;
+}
+
+/**
+ * Read one message and file it.
+ *
+ * Split out from the handler so that every path ends by returning what it
+ * decided, and the record of "this is what we told them" is written in exactly
+ * one place. Nothing here ever drops a message: each branch produces either a
+ * proposal or a row on the unmatched screen.
+ */
+async function handle(
+  tournamentId: string,
+  timeZone: string,
+  from: string,
+  text: string,
+  mediaUrl: string | null,
+): Promise<Outcome> {
+  const now = toWallClock(new Date(), timeZone);
+  const candidates = await candidateGamesForPhone(tournamentId, from, now);
+
+  const park = async (reason: 'no_candidate_games' | 'unreadable' | 'no_game_matched', reply: string) => ({
+    reply,
+    unmatchedMessageId: await parkUnmatchedMessage({
+      tournamentId,
+      fromPhone: from,
+      body: text === '' ? null : text,
+      photoKey: mediaUrl,
+      reason,
+    }),
+  });
 
   if (candidates.length === 0) {
     // Nothing to attach it to. Do not drop it — a human at HQ is the last link
     // in every fallback chain (§4).
-    await parkForHq(tournament.id, from, text, mediaUrl, 'no_candidate_games');
-    return twiml("Thanks — we couldn't match that to a game, so HQ will take a look.");
+    return park(
+      'no_candidate_games',
+      "Thanks — we couldn't match that to a game, so HQ will take a look.",
+    );
   }
 
   const parsed = await parseScoreMessage(text, candidates, now);
-
   if (!parsed) {
-    await parkForHq(tournament.id, from, text, mediaUrl, 'unreadable');
-    return twiml("Thanks — we couldn't read a score in that, so HQ will take a look.");
+    return park('unreadable', "Thanks — we couldn't read a score in that, so HQ will take a look.");
   }
 
   const game = candidates.find((c) => c.gameId === parsed.gameId);
-  if (!game) {
-    await parkForHq(tournament.id, from, text, mediaUrl, 'no_game_matched');
-    return twiml('Thanks — HQ will take a look.');
-  }
+  if (!game) return park('no_game_matched', 'Thanks — HQ will take a look.');
 
   // A message with no runs in it is not a score report, whatever game it was
   // nearest to. "Game is running long sorry" and a bare photo of the signed
@@ -72,14 +144,13 @@ export async function POST(request: Request) {
   //
   // Forfeits are exempt: a forfeit is a result even with no runs attached.
   if (parsed.resultKind === 'played' && (parsed.homeRuns === null || parsed.awayRuns === null)) {
-    await parkForHq(tournament.id, from, text, mediaUrl, 'unreadable');
-    return twiml("Thanks — we couldn't read a score in that, so HQ will take a look.");
+    return park('unreadable', "Thanks — we couldn't read a score in that, so HQ will take a look.");
   }
 
-  await recordProposal({
-    tournamentId: tournament.id,
+  const scoreReportId = await recordProposal({
+    tournamentId,
     gameId: game.gameId,
-    source: (await isDiamondVolunteer(tournament.id, from)) ? 'diamond_volunteer' : 'coach_sms',
+    source: (await isDiamondVolunteer(tournamentId, from)) ? 'diamond_volunteer' : 'coach_sms',
     reportedBy: from,
     rawText: text,
     homeRuns: parsed.homeRuns,
@@ -92,42 +163,27 @@ export async function POST(request: Request) {
   });
 
   if (parsed.resultKind === 'forfeit') {
-    return twiml(`Got it — recorded as a forfeit in ${game.externalGameId}. HQ will confirm.`);
+    return {
+      scoreReportId,
+      reply: `Got it — recorded as a forfeit in ${game.externalGameId}. HQ will confirm.`,
+    };
   }
 
   if (parsed.homeRuns === null || parsed.awayRuns === null || parsed.confidence < AUTO_FILL_CONFIDENCE) {
-    return twiml(
-      `Thanks. We think that's ${game.externalGameId} (${game.homeTeamName} v ${game.awayTeamName}) ` +
+    return {
+      scoreReportId,
+      reply:
+        `Thanks. We think that's ${game.externalGameId} (${game.homeTeamName} v ${game.awayTeamName}) ` +
         `but weren't certain, so HQ will confirm it.`,
-    );
+    };
   }
 
-  return twiml(
-    `Got it: ${game.homeTeamName} ${parsed.homeRuns}, ${game.awayTeamName} ${parsed.awayRuns}. ` +
+  return {
+    scoreReportId,
+    reply:
+      `Got it: ${game.homeTeamName} ${parsed.homeRuns}, ${game.awayTeamName} ${parsed.awayRuns}. ` +
       `Reply again if that's wrong.`,
-  );
-}
-
-/**
- * A message we cannot attach to a game becomes a row on the HQ unmatched
- * screen, not a line in a log nobody reads. Any photo comes with it — a picture
- * of the signed sheet is often the most useful part of a message we could not
- * otherwise place.
- */
-async function parkForHq(
-  tournamentId: string,
-  from: string,
-  text: string,
-  mediaUrl: string | null,
-  reason: 'no_candidate_games' | 'unreadable' | 'no_game_matched',
-): Promise<void> {
-  await parkUnmatchedMessage({
-    tournamentId,
-    fromPhone: from,
-    body: text === '' ? null : text,
-    photoKey: mediaUrl,
-    reason,
-  });
+  };
 }
 
 async function isDiamondVolunteer(tournamentId: string, phone: string): Promise<boolean> {

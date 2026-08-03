@@ -8,6 +8,8 @@ import { recordEventIn } from '@/server/events';
 import { applyRuleEdit, parseDivisionRules } from '@/domain/divisionRules';
 import { approveScore, recordProposal, setDispute } from '@/server/repo';
 import { localWallClock, toSqlTimestamp } from '@/domain/time';
+import { normalizePhone } from '@/domain/messaging';
+import { enqueueNotificationIn } from '@/server/notifications';
 import type { SaveResult } from '../_components/AutoSave';
 
 /**
@@ -123,20 +125,21 @@ const TEAM_FIELDS: Record<string, { column: string; label: string }> = {
 /**
  * Normalise a typed phone number to E.164 so SMS matching works.
  *
- * A coach's number is how the system recognises an inbound text (§5.2). A
- * number saved as "613-555-0142" would never match the "+16135550142" Twilio
- * sends, and the text would land on the unmatched screen for no visible reason.
+ * A coach's number is how the system recognises an inbound text (§5.2), and now
+ * also where an outbound one goes. A number saved as "613-555-0142" would never
+ * match the "+16135550142" Twilio sends, and the text would land on the
+ * unmatched screen for no visible reason.
+ *
+ * The reading itself lives in the domain, where it is tested against the
+ * formats people actually type. This wrapper only adds the message the field
+ * shows when it cannot be read.
  */
 function normalisePhone(raw: string): { ok: true; value: string | null } | { ok: false; error: string } {
-  const trimmed = raw.trim();
-  if (trimmed === '') return { ok: true, value: null };
+  if (raw.trim() === '') return { ok: true, value: null };
 
-  const digits = trimmed.replace(/[^\d+]/g, '');
-  const bare = digits.replace(/^\+?1?/, '');
-  if (bare.length !== 10 || !/^\d{10}$/.test(bare)) {
-    return { ok: false, error: 'Needs 10 digits, e.g. 613 555 0142.' };
-  }
-  return { ok: true, value: `+1${bare}` };
+  const normalised = normalizePhone(raw);
+  if (!normalised) return { ok: false, error: 'Needs 10 digits, e.g. 613 555 0142.' };
+  return { ok: true, value: normalised };
 }
 
 export async function saveTeamField(
@@ -285,17 +288,30 @@ async function writeGameChange(
     });
 
     // Teams were told a time and a place. If either changes, tell them.
-    await client.query(
-      `INSERT INTO notification (tournament_id, kind, recipient, body, game_id, team_id)
-       SELECT $1, 'schedule_change', t.coach_phone,
-              format('%s has moved. Check your team page for the new time and diamond.',
-                     g.external_game_id),
-              g.id, t.id
+    const affected = await client.query<{
+      team_id: string;
+      coach_phone: string;
+      external_game_id: string;
+    }>(
+      `SELECT t.id AS team_id, t.coach_phone, g.external_game_id
          FROM game g
          JOIN team t ON t.id IN (g.home_team_id, g.away_team_id)
-        WHERE g.id = $2 AND t.coach_phone IS NOT NULL`,
-      [staff.tournamentId, gameId],
+        WHERE g.id = $1 AND t.coach_phone IS NOT NULL`,
+      [gameId],
     );
+
+    for (const team of affected.rows) {
+      await enqueueNotificationIn(client, {
+        tournamentId: staff.tournamentId,
+        kind: 'schedule_change',
+        recipient: team.coach_phone,
+        body:
+          `${team.external_game_id} has moved. ` +
+          `Check your team page for the new time and diamond.`,
+        gameId,
+        teamId: team.team_id,
+      });
+    }
   });
 
   revalidatePath('/hq');

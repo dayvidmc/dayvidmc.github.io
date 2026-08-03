@@ -24,6 +24,11 @@ export type EventKind =
   | 'coin_flip.recorded'
   | 'division.rules_updated'
   | 'notification.queued'
+  // A text that will never arrive is a person who was never told. That belongs
+  // on the trail the director reads out, not only in a log file.
+  | 'notification.failed'
+  | 'notification.retried'
+  | 'notification.cancelled'
   | 'staff.signed_in';
 
 export interface EventInput {

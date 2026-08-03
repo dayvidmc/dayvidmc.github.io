@@ -1,9 +1,17 @@
 import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff } from '@/server/auth';
 import { boardForDate, currentTournament, openUnmatchedCount } from '@/server/repo';
+import { lastHeartbeat, queueSnapshot } from '@/server/notifications';
 import { STATUS_LABEL, STATUS_MARKER, type BoardEntry } from '@/domain/gameStatus';
 import { formatDate, formatDateFriendly, formatTimeFriendly, toWallClock } from '@/domain/time';
 import { signOut } from './actions';
+
+/**
+ * Past this, the sender is late enough that the board should say so. A stopped
+ * sender means nobody is being asked for scores, and the symptom — a board that
+ * slowly fills with red — looks exactly like volunteers being slow to reply.
+ */
+const SENDER_STALE_SECONDS = 180;
 
 export const dynamic = 'force-dynamic';
 
@@ -35,10 +43,15 @@ export default async function HqBoardPage({
   const now = toWallClock(new Date(), tournament.time_zone);
   const date = params.date ?? clampToTournament(formatDate(now), tournament.starts_on, tournament.ends_on);
 
-  const [entries, unmatchedCount] = await Promise.all([
+  const [entries, unmatchedCount, messages, heartbeat] = await Promise.all([
     boardForDate(tournament.id, date, now) as Promise<(BoardEntry & { externalGameId: string })[]>,
     openUnmatchedCount(tournament.id),
+    queueSnapshot(tournament.id),
+    lastHeartbeat('tick'),
   ]);
+
+  const senderAge = heartbeat ? Math.round((Date.now() - heartbeat.ran_at.getTime()) / 1000) : null;
+  const senderStale = senderAge === null || senderAge > SENDER_STALE_SECONDS;
 
   const counts = entries.reduce<Record<string, number>>((acc, entry) => {
     acc[entry.status] = (acc[entry.status] ?? 0) + 1;
@@ -104,6 +117,26 @@ export default async function HqBoardPage({
         )}
       </div>
 
+      {/* A stopped sender is the worst kind of failure this system has: no
+          error, no red row, just volunteers who are never asked and a board
+          that fills with overdue games looking like people being slow to
+          reply. It belongs on the screen HQ is already staring at. */}
+      {senderStale && (
+        <a className="notice error" href="/hq/messages" style={{ display: 'block' }}>
+          {heartbeat === null
+            ? 'Texts are not being sent — the sender has never run.'
+            : `Texts are not being sent — the sender last ran ${Math.round(senderAge! / 60)} min ago.`}{' '}
+          Nobody is being asked for scores. →
+        </a>
+      )}
+
+      {messages.failed > 0 && (
+        <a className="notice warn" href="/hq/messages" style={{ display: 'block' }}>
+          {messages.failed} text{messages.failed === 1 ? '' : 's'} could not be delivered. Each one
+          is somebody who was not told. →
+        </a>
+      )}
+
       {/* Unmatched texts are not tied to the selected day — a message that
           arrived on Friday is still waiting on Sunday. Surface it wherever the
           director happens to be looking. */}
@@ -133,7 +166,10 @@ export default async function HqBoardPage({
         <a className="btn" href="/hq/import" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
           Schedule
         </a>
-        <a className="btn" href="/hq/settings" style={{ flex: '1 1 100%', minHeight: 44, fontSize: 15 }}>
+        <a className="btn" href="/hq/messages" style={{ flex: '1 1 45%', minHeight: 44, fontSize: 15 }}>
+          Messages
+        </a>
+        <a className="btn" href="/hq/settings" style={{ flex: '1 1 45%', minHeight: 44, fontSize: 15 }}>
           Settings and readiness
         </a>
       </div>

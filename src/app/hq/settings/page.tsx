@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
 import { currentTournament, listDivisions } from '@/server/repo';
+import { lastHeartbeat } from '@/server/notifications';
+import { isDryRun, smsConfig } from '@/server/sms';
 import { query } from '@/db/client';
 import { AutoSaveField } from '../../_components/AutoSave';
 import { saveTournamentField } from '../editActions';
@@ -24,7 +26,7 @@ export default async function SettingsPage() {
 
   const editable = isDirector(staff);
 
-  const [divisions, counts] = await Promise.all([
+  const [divisions, counts, heartbeat] = await Promise.all([
     listDivisions(tournament.id),
     query<{ teams: string; no_phone: string; games: string; shifts: string; diamonds: string; queued: string }>(
       `SELECT (SELECT count(*) FROM team WHERE tournament_id = $1)::text AS teams,
@@ -35,11 +37,17 @@ export default async function SettingsPage() {
               (SELECT count(*) FROM notification WHERE tournament_id = $1 AND status = 'queued')::text AS queued`,
       [tournament.id],
     ),
+    lastHeartbeat('tick'),
   ]);
 
   const c = counts[0]!;
   const queued = Number(c.queued);
   const unreviewed = divisions.filter((d) => !d.rules_reviewed);
+
+  const dryRun = isDryRun();
+  const sendingConfigured = smsConfig() !== null || dryRun;
+  const senderAge = heartbeat ? Math.round((Date.now() - heartbeat.ran_at.getTime()) / 1000) : null;
+  const senderStale = senderAge === null || senderAge > 180;
 
   const checks: { done: boolean; label: string; detail: string; href?: string }[] = [
     {
@@ -86,15 +94,34 @@ export default async function SettingsPage() {
         : 'TWILIO_AUTH_TOKEN not set — inbound texts are refused in production',
     },
     {
-      // Outbound is genuinely not built yet, and the queue silently growing
-      // would be the worst way to find that out — on Saturday, when ninety
-      // coaches are waiting for a text that is never coming.
-      done: false,
-      label: 'Outbound texts are NOT being sent',
+      done: sendingConfigured,
+      label: 'Twilio configured for outbound texts',
+      detail: dryRun
+        ? 'SMS_DRY_RUN is on — messages are logged and marked sent without going anywhere'
+        : sendingConfigured
+          ? 'a from number or messaging service is set'
+          : 'no from number or messaging service — messages will queue and never leave',
+      href: '/hq/messages',
+    },
+    {
+      // A sender that has stopped is invisible: no error, no red row, just
+      // volunteers who are never asked. It is worth a line of its own.
+      done: !senderStale,
+      label: 'The sender is running',
       detail:
-        `${queued} message${queued === 1 ? '' : 's'} queued and undelivered. Approving a score and ` +
-        `moving a game both write to this queue, but nothing drains it yet — there is no sender. ` +
-        `Until one exists, treat every "queued a text" as "recorded, not sent".`,
+        heartbeat === null
+          ? 'it has never run — schedule the tick, see docs/DEPLOY.md'
+          : senderStale
+            ? `last ran ${Math.round(senderAge! / 60)} min ago; it should run every 30 seconds`
+            : `last ran ${senderAge}s ago · ${queued} waiting to go out`,
+      href: '/hq/messages',
+    },
+    {
+      done: !!process.env.CRON_SECRET,
+      label: 'CRON_SECRET set',
+      detail: process.env.CRON_SECRET
+        ? 'the tick endpoint is protected'
+        : 'not set — /api/tick refuses to run in production, so nothing sends',
     },
   ];
 

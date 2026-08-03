@@ -226,7 +226,67 @@ wrong score can be approved without a human seeing the original message.
 the strongest signal in a message and should widen the candidate set rather than
 be ignored.
 
-### 2.12 Only the director changes the schedule
+### 2.12 A volunteer is asked twice, never three times
+
+**Decision.** A game past its expected end with nothing reported produces one
+score request at `expectedEndAt` and one follow-up at `nudgeDueAt`. There is no
+third message, ever.
+
+**Why.** §5.3 asks for an auto-nudge at grace and a red flag fifteen minutes
+later. The red flag *is* the escalation — it puts the game in front of a human
+at HQ who can pick up a phone. A volunteer who has ignored two texts is dealing
+with something, and a robot asking six times is the fastest way to teach someone
+to ignore this number entirely, including for the game that matters.
+
+**Confirm with:** tournament director. **If wrong:** the stage logic is a dozen
+lines in `enqueueScoreRequests()`.
+
+### 2.13 A stale message is cancelled rather than sent
+
+**Decision.** Every score request and nudge carries an expiry of
+`overdueAt + 60 minutes`. Past it, the worker cancels the message instead of
+sending it.
+
+**Why.** If the sender is down for two hours and comes back, the queue behind it
+is full of requests about games that are long over. Delivering them is worse
+than delivering nothing: a volunteer asked at 8pm about a 5pm game learns the
+system is not paying attention and stops reading its texts. Catching up is not
+the same as being useful.
+
+The sixty minutes is a guess and is the one number here worth arguing about.
+
+**Confirm with:** tournament director.
+
+### 2.14 Confirmations to coaches are not deduped
+
+**Decision.** Score approval queues a text to both coaches with no dedupe key,
+so correcting an approved score sends a second one.
+
+**Why.** A correction is exactly the thing a coach needs to hear about. The
+dedupe key exists to stop the tick re-deriving the same conclusion every thirty
+seconds; a human approving twice is not that.
+
+### 2.15 A send timeout is retried, accepting a possible duplicate
+
+**Decision.** When the Twilio call times out, the result is ambiguous — the
+message may or may not have been accepted — and the message is retried.
+
+**Why.** The two mistakes are not equal. A volunteer asked twice is an
+annoyance; a volunteer never asked is a game nobody reports. Invalid numbers and
+STOP replies are still never retried, because those fail identically forever and
+retrying only delays the moment a human sees the problem.
+
+### 2.16 Broadcasts go to coaches, and only by division
+
+**Decision.** §5.7 asks for broadcasts targeted by team, division, diamond or
+everyone. Built: division and everyone. Recipients are coach mobiles.
+
+**Why.** Coach mobiles are the only contact details this system holds — there is
+no channel to a diamond or to a team that is not the coach's phone. Targeting by
+diamond is the same query with a different `WHERE`, and it is not worth guessing
+which one the director reaches for first before the Phase 0 debrief.
+
+### 2.17 Only the director changes the schedule
 
 **Decision.** HQ staff approve scores and read the board; schedule import is
 director-only.
@@ -240,6 +300,8 @@ in that list.
 
 | Thing | Why |
 |---|---|
+| The rain button (§5.7) | The reflow needs preview-then-confirm, not a button that fires. Broadcasts exist; shifting every remaining game does not. |
+| A diamond shifts screen | The linchpin of score intake path 1, and still SQL-only. The biggest remaining gap in game operations — see `docs/IDEAS.md` §2. |
 | Raffle / 50-50 logic | §7.4 — likely needs an AGCO or municipal licence. Legal question for the committee, not a technical one. No draw functionality exists. |
 | Charitable receipting | §8A.4 — entry fees are generally not receiptable; who issues the receipt is unresolved. The schema separates payment types from day one so this is not painful later, but no receipting logic is written. |
 | Scheduling engine | §5.1 — explicitly out of scope for v1. |
@@ -250,10 +312,13 @@ in that list.
 
 ## 4. Open questions from §13, and what each one blocks
 
-1. **Does a per-diamond volunteer role already exist?** Blocks nothing in code —
-   `diamond_shift` is built and score intake path 1 works. But if the role does
-   not exist, it is a spring recruitment ask, and path 1 is the primary route.
-   **This is the highest-leverage question on the list.**
+1. **Does a per-diamond volunteer role already exist?** Now the most concrete
+   dependency in the system: outbound sending is built and works, and it has
+   nobody to text without these people. If the role does not exist it is a
+   spring recruitment ask, and path 1 is the primary route. `/hq/messages`
+   reports every game it could not chase for want of a shift, which is the
+   evidence to bring to that conversation. **Still the highest-leverage question
+   on the list.**
 2. **Is the signed-sheet requirement KBA/Little League or custom?** Determines
    whether the photo-of-the-sheet field ever becomes more than optional.
 3. **Does the director want an approval queue at all?** The whole HQ flow assumes

@@ -6,7 +6,9 @@ import { buildBoard, type BoardEntry, type BoardGame, type GameIntakeState } fro
 import { addMinutes, toSqlTimestamp } from '@/domain/time';
 import type { DivisionRules, GameResult } from '@/domain/types';
 import type { CandidateGame } from '@/domain/scoreParsing';
+import { scoreApprovedBody } from '@/domain/messaging';
 import { recordEventIn } from './events';
+import { enqueueNotificationIn } from './notifications';
 
 export interface Tournament {
   id: string;
@@ -560,19 +562,49 @@ export async function approveScore(input: ApprovalInput): Promise<void> {
     });
 
     // Queue the team notifications in the same transaction (§5.7).
-    await client.query(
-      `INSERT INTO notification (tournament_id, kind, recipient, body, game_id, team_id)
-       SELECT $1, 'score_approved', t.coach_phone,
-              format('%s final: %s %s, %s %s.',
-                     g.external_game_id, ht.name, $3::text, aw.name, $4::text),
-              g.id, t.id
+    //
+    // Composed in TypeScript rather than with SQL `format()` so the body that
+    // ninety coaches actually receive is the one the domain tests hold to a
+    // single GSM-7 segment. This is the highest-volume message of the weekend —
+    // two per game across 150+ games — so a body that quietly runs to two
+    // segments doubles the largest line on the SMS bill.
+    const recipients = await client.query<{
+      team_id: string;
+      coach_phone: string;
+      external_game_id: string;
+      home_team_name: string;
+      away_team_name: string;
+    }>(
+      `SELECT t.id AS team_id, t.coach_phone, g.external_game_id,
+              ht.name AS home_team_name, aw.name AS away_team_name
          FROM game g
          JOIN team ht ON ht.id = g.home_team_id
          JOIN team aw ON aw.id = g.away_team_id
          JOIN team t  ON t.id IN (g.home_team_id, g.away_team_id)
-        WHERE g.id = $2 AND t.coach_phone IS NOT NULL`,
-      [input.tournamentId, input.gameId, String(input.homeRuns), String(input.awayRuns)],
+        WHERE g.id = $1 AND t.coach_phone IS NOT NULL`,
+      [input.gameId],
     );
+
+    for (const recipient of recipients.rows) {
+      // No dedupe key: approving twice means a correction was made, and the
+      // second text is exactly the one a coach needs to receive.
+      await enqueueNotificationIn(client, {
+        tournamentId: input.tournamentId,
+        kind: 'score_approved',
+        recipient: recipient.coach_phone,
+        body: scoreApprovedBody(
+          {
+            externalGameId: recipient.external_game_id,
+            homeTeamName: recipient.home_team_name,
+            awayTeamName: recipient.away_team_name,
+          },
+          input.homeRuns,
+          input.awayRuns,
+        ),
+        gameId: input.gameId,
+        teamId: recipient.team_id,
+      });
+    }
   });
 }
 

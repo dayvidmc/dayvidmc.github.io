@@ -266,6 +266,8 @@ async function main() {
     await query('UPDATE team SET coach_phone = $2 WHERE id = $1', [t.id, fakePhone(t.name, used)]);
   }
 
+  await seedDiamondShifts(tournamentId);
+
   // --- Yesterday: every game approved --------------------------------------
 
   for (const [gameId, , , , homeRuns, awayRuns] of YESTERDAY) {
@@ -371,12 +373,75 @@ async function main() {
   console.log('  /hq                       the board, mid-Saturday');
   console.log('  /hq/queue                 two scores waiting, one the parser is unsure of');
   console.log('  /hq/unmatched             two texts nobody could place');
+  console.log('  /hq/messages              the outbound queue — set SMS_DRY_RUN=true and');
+  console.log('                            tap "send whatever is waiting now"');
   console.log('  /pos                      the concession till (3 stands, 11 items)');
   console.log('  /hq/concessions           takings, cash reconciliation, refunds');
   console.log(`  /standings/${division!.id}`);
   console.log('                            a three-way tie broken on runs allowed');
   console.log(`  /team/${team!.access_token}`);
   console.log("                            what a coach's link looks like\n");
+}
+
+/**
+ * Diamond volunteers on shift — the linchpin of score intake path 1 (§5.2).
+ *
+ * Without these there is nobody to text, and the primary route cannot run at
+ * all: the board fills with overdue games and the system has no way to chase
+ * any of them. Seeding them is what lets the demo show the thing the weekend
+ * actually depends on — a volunteer being asked, and replying.
+ *
+ * Every diamond is covered, for the whole playing day. That is the setup a
+ * working tournament has, and the demo should show the system working rather
+ * than a failure staged in fixture data. The "no volunteer to ask" screen earns
+ * its place from real gaps, and there will be real gaps.
+ *
+ * Shifts run the whole day rather than in blocks. Real ones come from Module B,
+ * where a coordinator schedules actual people against actual availability.
+ */
+async function seedDiamondShifts(tournamentId: string): Promise<void> {
+  const diamonds = await query<{ id: string; name: string }>(
+    'SELECT id, name FROM diamond WHERE tournament_id = $1 ORDER BY name',
+    [tournamentId],
+  );
+
+  const days = await query<{ day: string }>(
+    `SELECT DISTINCT to_char(scheduled_start, 'YYYY-MM-DD') AS day
+       FROM game WHERE tournament_id = $1 ORDER BY day`,
+    [tournamentId],
+  );
+
+  const used = new Set<string>([DIAMOND_VOLUNTEER_PHONE]);
+
+  for (const diamond of diamonds) {
+    const phone =
+      diamond.name === 'Kinsmen'
+        ? DIAMOND_VOLUNTEER_PHONE // the number that already texted a score in
+        : fakePhone(`volunteer:${diamond.name}`, used);
+
+    for (const { day } of days) {
+      // Through to midnight: a shift that ends at 22:00 leaves the last games
+      // of the evening quietly unchaseable, which is a bug in fixture data
+      // that would read as a bug in the system.
+      await query(
+        `INSERT INTO diamond_shift
+           (tournament_id, diamond_id, volunteer_name, volunteer_phone, starts_at, ends_at)
+         VALUES ($1, $2, $3, $4, ($5 || ' 08:00')::timestamp, ($5 || ' 23:59')::timestamp)`,
+        [tournamentId, diamond.id, volunteerName(diamond.name), phone, day],
+      );
+    }
+  }
+}
+
+const VOLUNTEER_NAMES = [
+  'Sam Whitfield', 'Dana Roy', 'Priya Mehta', 'Chris Beaulieu',
+  'Tom Ashcroft', 'Nadia Okonkwo', 'Ellen Park', 'Marc Lévesque',
+];
+
+function volunteerName(diamondName: string): string {
+  let hash = 0;
+  for (const char of diamondName) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return VOLUNTEER_NAMES[hash % VOLUNTEER_NAMES.length]!;
 }
 
 /**
