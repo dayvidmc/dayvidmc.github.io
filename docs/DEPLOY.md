@@ -9,7 +9,7 @@ they should take about ten minutes.
 ## 1. New project, same account as Pawl
 
 In Railway, **New Project → Deploy from GitHub repo**, pick this repository and
-the branch `claude/tokessy-tournament-ops-v1o6id`.
+the branch `claude/tokessy-tournament-ops-3uz5t4`.
 
 Keep it a **separate project** from Pawl rather than a second service inside it.
 Separate projects get separate databases, separate environment variables and
