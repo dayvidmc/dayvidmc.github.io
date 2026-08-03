@@ -22,7 +22,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="bar">
           <div className="wrap">
             <strong>
-              <a href="/">Tokessy Tournament</a>
+              <a href="/">
+                Tokessy<span className="long"> Tournament</span>
+              </a>
             </strong>
             <nav>
               <a href="/schedule">Schedule</a>

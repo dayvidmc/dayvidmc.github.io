@@ -67,11 +67,16 @@ CREATE TABLE game_umpire (
 CREATE INDEX game_umpire_umpire_idx ON game_umpire (umpire_id);
 
 -- The umpire becomes a score source. Adding to a CHECK constraint means
--- replacing it; the existing values are unchanged.
+-- replacing it, and the replacement has to list **every** value already in the
+-- column — including `unknown_sms`, which migration 002 added and which is
+-- therefore not in 001's list. Rebuilding from 001 alone took the live site
+-- down: the constraint was rejected by rows that were already there, the
+-- migration failed on boot, and the container never became healthy.
 ALTER TABLE score_report DROP CONSTRAINT score_report_source_check;
 ALTER TABLE score_report ADD CONSTRAINT score_report_source_check CHECK (source IN (
   'diamond_volunteer',  -- path 1, the primary route
   'coach_sms',          -- path 2, unprompted but accepted
+  'unknown_sms',        -- arrived by text, matched to a game by a human (002)
   'hq_phone',           -- path 3, a human at HQ types it
   'umpire',             -- path 4: the person who was actually there
   'director',

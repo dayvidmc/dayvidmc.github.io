@@ -149,6 +149,12 @@ interface FieldProps {
   placeholder?: string;
   /** Shown after the input, e.g. "minutes". */
   suffix?: string;
+  /**
+   * Keep the label for a screen reader but take it off the screen. For a list
+   * of identical rows — a roster, say — repeating "Name" fourteen times is
+   * noise that pushes the actual names off a phone.
+   */
+  labelHidden?: boolean;
 }
 
 export function AutoSaveField({
@@ -162,16 +168,26 @@ export function AutoSaveField({
   max,
   placeholder,
   suffix,
+  labelHidden,
 }: FieldProps) {
   const id = useId();
   const { status, error, onChange, onBlur, retry } = useFieldSave(save, field, defaultValue);
 
   return (
     <div className="field">
-      <label htmlFor={id}>
+      {/* The status chip normally lives in the label. When the label is hidden
+          it has to come out and stand on its own — it is the only thing telling
+          somebody their typing was kept, and hiding that would be worse than
+          having no auto-save at all. */}
+      <label htmlFor={id} className={labelHidden ? 'sr-only' : undefined}>
         {label}
-        <StatusChip status={status} error={error} retry={retry} />
+        {!labelHidden && <StatusChip status={status} error={error} retry={retry} />}
       </label>
+      {labelHidden && (
+        <div className="chip-row">
+          <StatusChip status={status} error={error} retry={retry} />
+        </div>
+      )}
       <div className="field-input">
         <input
           id={id}

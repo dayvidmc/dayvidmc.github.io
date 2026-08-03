@@ -100,13 +100,20 @@ header.bar strong {
 
 /* On a narrow phone the full name wrapped onto two lines and pushed the nav
    onto a third, costing a fifth of the screen before any content. */
-@media (max-width: 420px) {
+@media (max-width: 460px) {
   header.bar strong {
     font-size: 15px;
   }
 
   header.bar nav a {
     padding: 8px 8px;
+    font-size: 14px;
+  }
+
+  /* "Tokessy Tournament" plus three links does not fit on a phone. The full
+     name is on the page below anyway. */
+  header.bar strong .long {
+    display: none;
   }
 }
 
@@ -481,6 +488,22 @@ label.toggle input[type='checkbox'] {
 
 label.toggle span {
   font-weight: 600;
+}
+
+/* Where a field's label is hidden, its save indicator sits above the input on
+   its own line — and collapses to nothing while there is nothing to say. */
+.chip-row:empty {
+  display: none;
+}
+
+.chip-row {
+  margin-bottom: 4px;
+}
+
+/* A field whose label is hidden has no label box to space it, so its own
+   margins would leave a gap where the label used to be. */
+.field:has(> label.sr-only) {
+  margin: 0;
 }
 
 /* The save indicator. Quiet when things are fine, loud only when they aren't. */

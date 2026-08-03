@@ -173,16 +173,17 @@ export default async function TeamPage({
                       {player.isAffiliate && <div className="meta">Affiliate</div>}
                     </>
                   ) : (
-                    <div className="row">
-                      <div style={{ flex: '0 0 90px' }}>
+                    <div className="row" style={{ alignItems: 'center' }}>
+                      <div style={{ flex: '0 0 68px' }}>
                         <AutoSaveField
-                          save={save} field="jersey" label="No." defaultValue={player.jersey ?? ''}
-                          placeholder="12"
+                          save={save} field="jersey" label={`Number for ${player.name}`}
+                          labelHidden defaultValue={player.jersey ?? ''} placeholder="#"
                         />
                       </div>
-                      <div style={{ flex: 1 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <AutoSaveField
-                          save={save} field="name" label="Name" defaultValue={player.name}
+                          save={save} field="name" label="Player name" labelHidden
+                          defaultValue={player.name}
                         />
                       </div>
                     </div>
