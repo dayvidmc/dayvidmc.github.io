@@ -158,7 +158,7 @@ async function parkForHq(
 async function isDiamondVolunteer(tournamentId: string, phone: string): Promise<boolean> {
   const rows = await query<{ exists: boolean }>(
     `SELECT EXISTS (
-       SELECT 1 FROM diamond_shift
+       SELECT 1 FROM diamond_posting
         WHERE tournament_id = $1 AND volunteer_phone = $2
      ) AS exists`,
     [tournamentId, phone],

@@ -49,6 +49,11 @@ export type EventKind =
   | 'purchase.recorded'
   | 'purchase.reimbursed'
   | 'concession.marked_down'
+  | 'volunteer.added'
+  | 'volunteer.updated'
+  | 'volunteer.assigned'
+  | 'volunteer.no_show'
+  | 'volunteer.shift_created'
   | 'staff.signed_in';
 
 export interface EventInput {

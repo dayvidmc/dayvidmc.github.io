@@ -44,6 +44,7 @@ intake paths that feed it.
 | Sponsors: what was promised, the pamphlet list, the thank-you list | §7 | Built, tested — links a gift to what it fetched at the auction |
 | Silent auction: lots, printable bid sheets, a fast close, winners, payment | §7.3 | Built, tested — reports itself into the money total |
 | Team entries: a timed opening, a queue, caps and waitlists, deposits and balances | §8A/E | Built, tested — thirteen divisions grouped by age group, refund terms stated before payment; e-transfer and cheque work out of the box, card needs a merchant account |
+| Volunteers: the list, shifts, coverage gaps, their own link | §6 | Built, tested — a diamond shift is also what makes score intake recognise that phone |
 | Append-only audit trail | §9 | Built, enforced by the database |
 
 ## What is deliberately not here
@@ -64,8 +65,9 @@ cannot supply:
   Tapping a card on a phone needs a native app — Apple and Google only expose
   the NFC reader to signed native apps — so the card tap happens in the Square
   app and this records the result. See `docs/CONCESSIONS.md`.
-- **Volunteers (Module B).** The auction (Module C) and team entries with
-  payment (Module E) are now built; sponsor relationships are not.
+- **Sponsor relationships beyond the pamphlet and the thank-you list.** The
+  auction (Module C), team entries with payment (Module E) and volunteers
+  (Module B) are built.
 - **A card form of our own.** Card payments go through a hosted checkout on the
   provider's page, so no card number reaches this server. That is deliberate
   and permanent — see `DECISIONS.md` §2.23.

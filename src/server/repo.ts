@@ -659,9 +659,10 @@ export async function candidateGamesForPhone(
         AND g.cancelled_at IS NULL
         AND g.scheduled_start BETWEEN $3::timestamp AND $4::timestamp
         AND (
-          -- a diamond the volunteer is on shift for
+          -- a diamond the volunteer is on shift for, from either the older
+          -- hand-typed table or the volunteers module's rota
           EXISTS (
-            SELECT 1 FROM diamond_shift s
+            SELECT 1 FROM diamond_posting s
              WHERE s.diamond_id = g.diamond_id
                AND s.volunteer_phone = $2
                AND g.scheduled_start BETWEEN s.starts_at AND s.ends_at

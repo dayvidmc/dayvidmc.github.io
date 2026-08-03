@@ -40,13 +40,14 @@ should be finishing, they reply". The *reply* half has always worked and the
 *sending* half now works — but **nothing creates the `score_request` message**,
 so the conversation still never starts.
 
-The chain is: `gamesNeedingNudge()` is built and tested and called by nothing →
-because it needs to know which volunteer is on which diamond → which is
-`diamond_shift` → which has no rows and no screen. Building the nudge scheduler
-before the shift screen would just queue messages addressed to nobody.
+**The blocker is gone.** That chain was: `gamesNeedingNudge()` is built and
+called by nothing → because it needs to know which volunteer is on which diamond
+→ which was `diamond_shift` → which had no rows and no screen. The volunteers
+module supplies exactly that. Rostering somebody to a diamond shift creates a
+posting, and the demo now has real ones for the first time.
 
-**So the next item is the diamond shift screen** (§2 below), and then a cron
-that turns `gamesNeedingNudge()` into queued messages. In that order.
+**So the remaining piece is a cron that turns `gamesNeedingNudge()` into queued
+messages** — which now has somebody to address them to.
 
 ### Still missing: webhook idempotency
 
@@ -66,9 +67,9 @@ Small builds that close a loop the system already promises.
   director records the result" and there is no way to record it. The `coin_flip`
   table and the engine's support for it are both done; this is a button and an
   action.
-- **Diamond shifts.** `diamond_shift` is what tells the system which volunteer
-  to text about which diamond — the linchpin of path 1 — and it can only be
-  populated by SQL. Needs a screen, and eventually feeds from Module B.
+- ~~Diamond shifts~~ — done, via the volunteers module. `/hq/volunteers/shifts`
+  creates them and `/hq/volunteers` fills them; the `diamond_posting` view is
+  what score intake reads.
 - **A place to see failures.** Failed sends, model-parse errors and unmatched
   texts each need a human eventually. Unmatched texts have a screen; the others
   have nowhere.
@@ -210,8 +211,10 @@ e-transfer, cheque and card.
 
 What is left:
 
-- **Volunteers (§6)**, needed for spring recruitment and the source of diamond
-  shift data. This is now the largest unbuilt module.
+- ~~Volunteers (§6)~~ — built. The list, shifts, coverage gaps worst-first, a
+  paste import from the coordinator's spreadsheet, and each volunteer's own
+  link. Rostering somebody at a diamond is also what makes score intake
+  recognise their phone, which had never actually worked in the demo before.
 - **Sponsor and donor relationships** — the rest of Module C, waiting on §13 Q7
   about who owns them.
 - **An email when an entry lands and when it is accepted.** The coach currently

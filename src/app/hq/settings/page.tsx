@@ -31,7 +31,7 @@ export default async function SettingsPage() {
       `SELECT (SELECT count(*) FROM team WHERE tournament_id = $1)::text AS teams,
               (SELECT count(*) FROM team WHERE tournament_id = $1 AND coach_phone IS NULL)::text AS no_phone,
               (SELECT count(*) FROM game WHERE tournament_id = $1 AND cancelled_at IS NULL)::text AS games,
-              (SELECT count(*) FROM diamond_shift WHERE tournament_id = $1)::text AS shifts,
+              (SELECT count(*) FROM diamond_posting WHERE tournament_id = $1)::text AS shifts,
               (SELECT count(DISTINCT diamond_id) FROM game WHERE tournament_id = $1)::text AS diamonds,
               (SELECT count(*) FROM notification WHERE tournament_id = $1 AND status = 'queued')::text AS queued`,
       [tournament.id],

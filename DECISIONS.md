@@ -675,6 +675,73 @@ The fair-market-value fields therefore exist for the thank-you letter and for
 the foundation's list, not for tax. That is a different purpose and it survives
 somebody asking what the number is for.
 
+### 2.40 The volunteers module answers one question, twice
+
+**Decision.** `coverage()` is the centre of the module: which shifts are short,
+sorted by how bad the gap is and then by how soon. No assignment engine, no
+preference optimiser, no self-service marketplace.
+
+**Why.** The tournament's own description of staffing is "a mix, and it is a
+struggle every year". There are not enough people for an optimiser to have
+anything to optimise. What a coordinator needs is the same question at two
+moments — in June, far enough ahead to ring somebody; and at 9:05 on the
+Saturday, because two people did not turn up and there are games starting.
+
+A no-show does not reduce what a shift needs. It makes the shift short again,
+which is exactly what has happened to it.
+
+### 2.41 A volunteer in two places at once is refused, with no override
+
+**Decision.** `assign()` refuses when the person is already on an overlapping
+shift, and names where they are. Unlike the umpire module there is no "strain"
+tier and no way to do it anyway.
+
+**Why.** An umpire working five games in a row is legal and unkind — a
+judgement for a human. A volunteer in two places at once is not a judgement, it
+is arithmetic, and a coverage screen that counts them twice is lying about how
+staffed the tournament is. The screen exists to be believed at 9am.
+
+Touching shifts do not clash. A canteen shift ending at noon and a gate shift
+starting at noon is a person walking across a field.
+
+### 2.42 A diamond shift is a posting, and a posting is a score route
+
+**Decision.** The `diamond_posting` view unions the older hand-typed
+`diamond_shift` table with volunteers rostered to a `diamond` shift. Score
+intake reads the view.
+
+**Why.** Score intake path 1 — the fastest route a score has into this system —
+asks "is this phone number posted at a diamond right now". It asked a table
+that only ever held rows somebody typed in by hand, and in the demo that table
+was **empty**, so the fastest path had never actually been exercised.
+
+Now rostering somebody at a diamond makes their texts land on the right game,
+and marking them a no-show takes the posting away with them, because they are
+not there.
+
+The old table stays. It works, and replacing a path that carries scores on a
+Saturday is not a thing to do for tidiness.
+
+### 2.43 A paste that cannot be read is refused, and "???" is not a name
+
+**Decision.** `parseVolunteers()` takes tabs, commas, or a name and a number
+with nothing but spaces between them. A line it cannot read is reported.
+A name must contain at least two **letters**, not two characters.
+
+**Why.** The coordinator holds the whole list in a spreadsheet already, and the
+realistic alternative to a paste box is not her retyping a hundred rows — it is
+her not using this at all. So the import takes whatever shape her sheet is in.
+
+The two-letters rule came out of a browser check that caught the parser
+importing `???` as a person. Three question marks are three characters and
+nobody at all, and the resulting row sits in the list looking real while being
+unringable. A hundred-name list that silently imports ninety-four is worse than
+one that refuses, because nobody counts.
+
+Somebody already on the list is skipped and named, never overwritten. A second
+paste of the same sheet is the normal way this gets used and must not flatten a
+phone number since corrected by hand.
+
 ---
 
 ## 3. Deliberately not built

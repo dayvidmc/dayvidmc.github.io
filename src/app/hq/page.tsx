@@ -145,6 +145,9 @@ export default async function HqBoardPage({
         <a className="btn" href="/hq/umpires" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
           Umpires
         </a>
+        <a className="btn" href="/hq/volunteers" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
+          Volunteers
+        </a>
         <a className="btn" href="/hq/concessions" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
           Concessions
         </a>

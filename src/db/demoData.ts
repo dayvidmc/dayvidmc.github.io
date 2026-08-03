@@ -445,6 +445,7 @@ export async function seedDemo(): Promise<DemoResult> {
   await seedAuction(tournamentId);
   await seedEntries(tournamentId);
   await seedPurchasesAndSponsors(tournamentId);
+  await seedVolunteers(tournamentId, base);
 
   const [division] = await query<{ id: string }>(
     "SELECT id FROM division WHERE name = 'Major A'",
@@ -735,6 +736,111 @@ async function seedAuction(tournamentId: string): Promise<void> {
     `UPDATE auction_item SET paid_at = now(), paid_by = 'Auction Lead', payment_method = 'cash'
       WHERE tournament_id = $1 AND lot_number IN (1, 3)`,
     [tournamentId],
+  );
+}
+
+/**
+ * The volunteer rota, caught mid-Saturday and honestly short.
+ *
+ * "A mix, and it is a struggle every year" is the tournament's own description,
+ * so a demo where every shift is full would show nothing. Here one diamond has
+ * nobody on it and games starting, one person has not turned up, two are
+ * pencilled in without confirming, and three people on the list have no shift
+ * at all — which is the state the coverage board exists to sort out.
+ *
+ * The diamond shifts matter beyond the rota: whoever is on one can text a score
+ * in and have it land on the right game.
+ */
+async function seedVolunteers(tournamentId: string, base: Date): Promise<void> {
+  const diamonds = await query<{ id: string; name: string }>(
+    'SELECT id, name FROM diamond WHERE tournament_id = $1 ORDER BY name',
+    [tournamentId],
+  );
+  const stands = await query<{ id: string; name: string }>(
+    'SELECT id, name FROM concession_location WHERE tournament_id = $1 ORDER BY name',
+    [tournamentId],
+  );
+  const diamondId = (name: string) => diamonds.find((d) => d.name === name)?.id ?? null;
+  const standId = (name: string) => stands.find((l) => l.name === name)?.id ?? null;
+
+  const people: [name: string, phone: string | null, email: string | null, canDo: string | null][] = [
+    ['Marion Ellis', '+16135550219', 'marion.ellis@example.com', 'Canteen, both days'],
+    // Deliberately the number the demo's texted scores come from. Putting him
+    // on a diamond is what makes score intake path 1 work end to end in the
+    // demo — until now no posting existed at all and the fastest route a score
+    // has into the system could not be shown to anybody.
+    ['Ray Deschamps', DIAMOND_VOLUNTEER_PHONE, null, 'Diamonds — has done it for years'],
+    ['Priya Raman', '+16135550221', 'priya.raman@example.com', 'Anything'],
+    ['Tom Reilly', '+16135550222', null, 'Grill only'],
+    ['Jen Okafor', '+16135550223', 'jen.okafor@example.com', 'Gate, Saturday morning'],
+    ['Alice Barrett', null, 'alice.barrett@example.com', 'Auction table'],
+    ['Chris Lalonde', '+16135550225', null, 'Setup and teardown'],
+    ['Dana Whitfield', '+16135550226', 'dana.whitfield@example.com', null],
+    ['Noor Haddad', '+16135550227', null, 'Diamonds'],
+  ];
+
+  const ids = new Map<string, string>();
+  for (const [name, phone, email, canDo] of people) {
+    const [row] = await query<{ id: string }>(
+      `INSERT INTO volunteer (tournament_id, name, phone, email, can_do, access_token)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [tournamentId, name, phone, email, canDo, newAccessToken()],
+    );
+    ids.set(name, row!.id);
+  }
+
+  // Shifts spanning today, so the board has something live on it.
+  const day = formatDate(base);
+  const shifts: [
+    role: string,
+    diamond: string | null,
+    stand: string | null,
+    place: string | null,
+    from: string,
+    to: string,
+    needed: number,
+    on: string[],
+    confirmed: boolean,
+  ][] = [
+    ['diamond', 'Tokessy', null, null, '08:30', '13:00', 1, ['Ray Deschamps'], true],
+    ['diamond', 'Deevy Pines 1', null, null, '08:30', '13:00', 1, ['Noor Haddad'], false],
+    // Nobody at all, and games are on. This is the top of the board.
+    ['diamond', 'Mike Channing', null, null, '08:30', '13:00', 1, [], false],
+    ['canteen', null, 'Tokessy BBQ', null, '10:00', '15:00', 3, ['Marion Ellis', 'Priya Raman'], true],
+    ['bbq', null, null, 'Main field grill', '11:00', '15:00', 2, ['Tom Reilly'], false],
+    ['gate', null, null, 'Main gate', '08:00', '12:00', 2, ['Jen Okafor'], true],
+    ['auction', null, null, 'Auction table', '15:00', '20:00', 2, ['Alice Barrett'], true],
+    ['setup', null, null, 'Main field', '07:00', '09:00', 4, ['Chris Lalonde'], true],
+  ];
+
+  for (const [role, diamond, stand, place, from, to, needed, on, confirmed] of shifts) {
+    const [shift] = await query<{ id: string }>(
+      `INSERT INTO volunteer_shift
+         (tournament_id, role, diamond_id, location_id, place, starts_at, ends_at, needed)
+       VALUES ($1,$2,$3,$4,$5, ($6 || ' ' || $7)::timestamp, ($6 || ' ' || $8)::timestamp, $9)
+       RETURNING id`,
+      [tournamentId, role, diamond ? diamondId(diamond) : null, stand ? standId(stand) : null,
+        place, day, from, to, needed],
+    );
+
+    for (const name of on) {
+      await query(
+        `INSERT INTO volunteer_assignment (shift_id, volunteer_id, assigned_by, confirmed_at)
+         VALUES ($1,$2,'Volunteer Coordinator', CASE WHEN $3 THEN now() END)`,
+        [shift!.id, ids.get(name), confirmed],
+      );
+    }
+  }
+
+  // Somebody did not turn up to the gate. The shift is short again, which is
+  // exactly what has happened to it.
+  await query(
+    `UPDATE volunteer_assignment a
+        SET no_show_at = now(), no_show_by = 'Volunteer Coordinator'
+       FROM volunteer_shift s
+      WHERE a.shift_id = s.id AND s.tournament_id = $1 AND s.role = 'gate'
+        AND a.volunteer_id = $2`,
+    [tournamentId, ids.get('Jen Okafor')],
   );
 }
 
