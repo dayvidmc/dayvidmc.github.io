@@ -4,7 +4,7 @@ import { hashPin } from '@/server/auth';
 import { importSchedule } from '@/domain/schedule/import';
 import { applySchedule } from '@/server/scheduleStore';
 import { approveScore, parkUnmatchedMessage, recordProposal, setDispute } from '@/server/repo';
-import { addMinutes, formatDate, formatTime, toWallClock } from '@/domain/time';
+import { addMinutes, formatDate, formatTime, toSqlTimestamp, toWallClock } from '@/domain/time';
 
 /**
  * A tournament mid-Saturday, for showing someone what this looks like.
@@ -25,6 +25,26 @@ import { addMinutes, formatDate, formatTime, toWallClock } from '@/domain/time';
 
 /** A diamond volunteer's number — not a coach's, so the queue shows both routes. */
 const DIAMOND_VOLUNTEER_PHONE = '+16135554417';
+
+/**
+ * Diamond volunteers, two per diamond per day with a handover in the middle.
+ *
+ * `March Central` is deliberately left off. It has games today and nobody to
+ * ask about them, so the coverage table on `/hq/shifts` and the warning on
+ * `/hq/messages` both have something real to show — which is the point worth
+ * making to a director in the debrief, because that gap is completely
+ * invisible until something looks for it.
+ */
+const SHIFT_VOLUNTEERS: [string, string, string][] = [
+  // diamond, morning volunteer, afternoon volunteer
+  ['Tokessy', 'Priya Raman', 'Tom Beaudry'],
+  ['Deevy Pines 1', 'Sam Whitfield', 'Alex Nguyen'],
+  ['Deevy Pines 2', 'Jordan Leclair', 'Maya Osei'],
+  ['Mike Channing', 'Chris Doyle', 'Ella Fontaine'],
+  ['Walter Baker West', 'Dev Patel', 'Robin Carr'],
+  ['Roland Michener', 'Nina Kowalski', 'Owen Tremblay'],
+  ['Kinsmen', 'Grace Adeyemi', 'Liam Byrne'],
+];
 
 const DIAMONDS: [string, string][] = [
   ['Tokessy', 'Tokessy'],
@@ -264,6 +284,68 @@ async function main() {
   const used = new Set<string>();
   for (const t of teams) {
     await query('UPDATE team SET coach_phone = $2 WHERE id = $1', [t.id, fakePhone(t.name, used)]);
+  }
+
+  // --- Diamond volunteers on shift -----------------------------------------
+  //
+  // Without these there is nobody to text when a game should be finishing, so
+  // score intake path 1 does not run at all (§5.2).
+
+  const diamondIds = new Map(
+    (await query<{ id: string; name: string }>('SELECT id, name FROM diamond')).map((d) => [
+      d.name,
+      d.id,
+    ]),
+  );
+
+  // Shift bounds come from the games themselves rather than fixed hours,
+  // because the demo schedule is generated relative to *now*: a run started in
+  // the evening puts games at 23:10, and hard-coded 08:00–22:00 shifts would
+  // leave them uncovered for a reason that has nothing to do with the point
+  // being demonstrated.
+  let shiftNumber = 0;
+  for (const [diamond, morning, afternoon] of SHIFT_VOLUNTEERS) {
+    const diamondId = diamondIds.get(diamond);
+    if (!diamondId) continue;
+
+    for (const day of [yesterday, today]) {
+      const span = await query<{ first: Date | null; last: Date | null }>(
+        `SELECT min(scheduled_start) AS first, max(scheduled_start) AS last
+           FROM game
+          WHERE diamond_id = $1
+            AND scheduled_start >= $2::timestamp
+            AND scheduled_start <  $2::timestamp + interval '1 day'`,
+        [diamondId, day],
+      );
+
+      const first = span[0]?.first;
+      const last = span[0]?.last;
+      if (!first || !last) continue;
+
+      // Open half an hour before the first game and stay until three hours
+      // after the last one starts — long enough to cover its expected end and
+      // the grace period that follows.
+      const from = addMinutes(first, -30);
+      const to = addMinutes(last, 180);
+      // Handover in the middle, so the board shows two people rather than one
+      // implausible twelve-hour shift.
+      const middle = new Date((from.getTime() + to.getTime()) / 2);
+
+      for (const [name, start, end] of [
+        [morning, from, middle],
+        [afternoon, middle, to],
+      ] as const) {
+        // Distinct numbers, so the messages screen shows texts going to
+        // different people rather than one number receiving everything.
+        const phone = `+1613555${String(4500 + shiftNumber++).padStart(4, '0')}`;
+        await query(
+          `INSERT INTO diamond_shift
+             (tournament_id, diamond_id, volunteer_name, volunteer_phone, starts_at, ends_at)
+           VALUES ($1, $2, $3, $4, $5::timestamp, $6::timestamp)`,
+          [tournamentId, diamondId, name, phone, toSqlTimestamp(start), toSqlTimestamp(end)],
+        );
+      }
+    }
   }
 
   // --- Yesterday: every game approved --------------------------------------

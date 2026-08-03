@@ -7,6 +7,7 @@ import {
   parkUnmatchedMessage,
   recordProposal,
 } from '@/server/repo';
+import { claimInboundMessage, completeInboundMessage } from '@/server/inbound';
 import { parseScoreMessage } from '@/server/scoreParser';
 import { AUTO_FILL_CONFIDENCE } from '@/domain/scoreParsing';
 import { toWallClock } from '@/domain/time';
@@ -20,9 +21,19 @@ import { toWallClock } from '@/domain/time';
  * The reply is short and confirms what was understood, so the sender can see
  * immediately if it was read wrong and text again. Silence would leave them
  * wondering whether to phone HQ.
+ *
+ * Every path through this handler is recorded against Twilio's `MessageSid`
+ * before anything is written, so a retried webhook replays the answer we
+ * already gave instead of proposing the same score twice.
  */
 
 export const dynamic = 'force-dynamic';
+
+interface Handled {
+  reply: string;
+  outcome: 'proposal' | 'parked' | 'rejected';
+  scoreReportId?: string | null;
+}
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -35,12 +46,55 @@ export async function POST(request: Request) {
   const from = (form.get('From') ?? '').trim();
   const text = (form.get('Body') ?? '').trim();
   const mediaUrl = form.get('MediaUrl0');
+  const messageSid = (form.get('MessageSid') ?? '').trim();
 
   if (!from || (!text && !mediaUrl)) return twiml('Sorry, that came through empty.');
 
   const tournament = await currentTournament();
   if (!tournament) return twiml('No tournament is running right now.');
 
+  // Twilio always sends a MessageSid; its absence means a hand-rolled request
+  // in development, which is allowed to skip the replay protection.
+  if (messageSid) {
+    const claim = await claimInboundMessage({
+      providerMessageId: messageSid,
+      tournamentId: tournament.id,
+      fromPhone: from,
+      body: text === '' ? null : text,
+      photoKey: mediaUrl,
+    });
+    if (!claim.proceed) return twiml(claim.reply);
+  }
+
+  let handled: Handled;
+  try {
+    handled = await handleMessage(tournament, from, text, mediaUrl);
+  } catch (error) {
+    // Leave the claim un-completed. Twilio will retry, the claim will be stale
+    // by then, and the retry gets to try again — which is the right outcome for
+    // a score nobody has recorded yet.
+    console.error('[sms] handler failed', error);
+    return new NextResponse('handler error', { status: 500 });
+  }
+
+  if (messageSid) {
+    await completeInboundMessage(
+      messageSid,
+      handled.outcome,
+      handled.reply,
+      handled.scoreReportId ?? null,
+    );
+  }
+
+  return twiml(handled.reply);
+}
+
+async function handleMessage(
+  tournament: { id: string; time_zone: string },
+  from: string,
+  text: string,
+  mediaUrl: string | null,
+): Promise<Handled> {
   const now = toWallClock(new Date(), tournament.time_zone);
   const candidates = await candidateGamesForPhone(tournament.id, from, now);
 
@@ -48,20 +102,26 @@ export async function POST(request: Request) {
     // Nothing to attach it to. Do not drop it — a human at HQ is the last link
     // in every fallback chain (§4).
     await parkForHq(tournament.id, from, text, mediaUrl, 'no_candidate_games');
-    return twiml("Thanks — we couldn't match that to a game, so HQ will take a look.");
+    return {
+      outcome: 'parked',
+      reply: "Thanks - we couldn't match that to a game, so HQ will take a look.",
+    };
   }
 
   const parsed = await parseScoreMessage(text, candidates, now);
 
   if (!parsed) {
     await parkForHq(tournament.id, from, text, mediaUrl, 'unreadable');
-    return twiml("Thanks — we couldn't read a score in that, so HQ will take a look.");
+    return {
+      outcome: 'parked',
+      reply: "Thanks - we couldn't read a score in that, so HQ will take a look.",
+    };
   }
 
   const game = candidates.find((c) => c.gameId === parsed.gameId);
   if (!game) {
     await parkForHq(tournament.id, from, text, mediaUrl, 'no_game_matched');
-    return twiml('Thanks — HQ will take a look.');
+    return { outcome: 'parked', reply: 'Thanks - HQ will take a look.' };
   }
 
   // A message with no runs in it is not a score report, whatever game it was
@@ -73,10 +133,13 @@ export async function POST(request: Request) {
   // Forfeits are exempt: a forfeit is a result even with no runs attached.
   if (parsed.resultKind === 'played' && (parsed.homeRuns === null || parsed.awayRuns === null)) {
     await parkForHq(tournament.id, from, text, mediaUrl, 'unreadable');
-    return twiml("Thanks — we couldn't read a score in that, so HQ will take a look.");
+    return {
+      outcome: 'parked',
+      reply: "Thanks - we couldn't read a score in that, so HQ will take a look.",
+    };
   }
 
-  await recordProposal({
+  const scoreReportId = await recordProposal({
     tournamentId: tournament.id,
     gameId: game.gameId,
     source: (await isDiamondVolunteer(tournament.id, from)) ? 'diamond_volunteer' : 'coach_sms',
@@ -92,20 +155,30 @@ export async function POST(request: Request) {
   });
 
   if (parsed.resultKind === 'forfeit') {
-    return twiml(`Got it — recorded as a forfeit in ${game.externalGameId}. HQ will confirm.`);
+    return {
+      outcome: 'proposal',
+      scoreReportId,
+      reply: `Got it - recorded as a forfeit in ${game.externalGameId}. HQ will confirm.`,
+    };
   }
 
   if (parsed.homeRuns === null || parsed.awayRuns === null || parsed.confidence < AUTO_FILL_CONFIDENCE) {
-    return twiml(
-      `Thanks. We think that's ${game.externalGameId} (${game.homeTeamName} v ${game.awayTeamName}) ` +
+    return {
+      outcome: 'proposal',
+      scoreReportId,
+      reply:
+        `Thanks. We think that's ${game.externalGameId} (${game.homeTeamName} v ${game.awayTeamName}) ` +
         `but weren't certain, so HQ will confirm it.`,
-    );
+    };
   }
 
-  return twiml(
-    `Got it: ${game.homeTeamName} ${parsed.homeRuns}, ${game.awayTeamName} ${parsed.awayRuns}. ` +
+  return {
+    outcome: 'proposal',
+    scoreReportId,
+    reply:
+      `Got it: ${game.homeTeamName} ${parsed.homeRuns}, ${game.awayTeamName} ${parsed.awayRuns}. ` +
       `Reply again if that's wrong.`,
-  );
+  };
 }
 
 /**

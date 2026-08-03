@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
 import { currentTournament, listDivisions } from '@/server/repo';
 import { query } from '@/db/client';
+import { describeTransport, smsConfig } from '@/server/sms';
 import { AutoSaveField } from '../../_components/AutoSave';
 import { saveTournamentField } from '../editActions';
 
@@ -26,19 +27,25 @@ export default async function SettingsPage() {
 
   const [divisions, counts] = await Promise.all([
     listDivisions(tournament.id),
-    query<{ teams: string; no_phone: string; games: string; shifts: string; diamonds: string; queued: string }>(
+    query<{
+      teams: string; no_phone: string; games: string; shifts: string; diamonds: string;
+      queued: string; failed: string;
+    }>(
       `SELECT (SELECT count(*) FROM team WHERE tournament_id = $1)::text AS teams,
               (SELECT count(*) FROM team WHERE tournament_id = $1 AND coach_phone IS NULL)::text AS no_phone,
               (SELECT count(*) FROM game WHERE tournament_id = $1 AND cancelled_at IS NULL)::text AS games,
               (SELECT count(*) FROM diamond_shift WHERE tournament_id = $1)::text AS shifts,
               (SELECT count(DISTINCT diamond_id) FROM game WHERE tournament_id = $1)::text AS diamonds,
-              (SELECT count(*) FROM notification WHERE tournament_id = $1 AND status = 'queued')::text AS queued`,
+              (SELECT count(*) FROM notification WHERE tournament_id = $1 AND status = 'queued')::text AS queued,
+              (SELECT count(*) FROM notification WHERE tournament_id = $1 AND status = 'failed')::text AS failed`,
       [tournament.id],
     ),
   ]);
 
   const c = counts[0]!;
   const queued = Number(c.queued);
+  const failed = Number(c.failed);
+  const transport = smsConfig();
   const unreviewed = divisions.filter((d) => !d.rules_reviewed);
 
   const checks: { done: boolean; label: string; detail: string; href?: string }[] = [
@@ -77,6 +84,7 @@ export default async function SettingsPage() {
         Number(c.shifts) === 0
           ? 'none yet — without these, nobody gets asked for a score'
           : `${c.shifts} shifts across ${c.diamonds} diamonds`,
+      href: '/hq/shifts',
     },
     {
       done: !!process.env.TWILIO_AUTH_TOKEN,
@@ -86,15 +94,15 @@ export default async function SettingsPage() {
         : 'TWILIO_AUTH_TOKEN not set — inbound texts are refused in production',
     },
     {
-      // Outbound is genuinely not built yet, and the queue silently growing
-      // would be the worst way to find that out — on Saturday, when ninety
-      // coaches are waiting for a text that is never coming.
-      done: false,
-      label: 'Outbound texts are NOT being sent',
+      // The queue used to grow with nothing draining it, which looks identical
+      // to delivery right up until someone asks a volunteer whether they got
+      // the text. Now the honest question is whether the transport is real.
+      done: transport.transport === 'twilio',
+      label: 'Outbound texts are being delivered',
       detail:
-        `${queued} message${queued === 1 ? '' : 's'} queued and undelivered. Approving a score and ` +
-        `moving a game both write to this queue, but nothing drains it yet — there is no sender. ` +
-        `Until one exists, treat every "queued a text" as "recorded, not sent".`,
+        `${describeTransport(transport)}. ` +
+        `${queued} queued, ${failed} failed to send.`,
+      href: '/hq/messages',
     },
   ];
 

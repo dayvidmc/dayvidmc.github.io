@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { startInlineWorker } from '@/server/tick';
 
 export const metadata: Metadata = {
   title: 'Tokessy Tournament Operations',
@@ -16,6 +17,12 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Outbound texts are sent by a worker running inside this process. Starting
+  // it here means a deploy is the whole setup — no second service to configure
+  // and no cron to forget in the eleven months between tournaments. It is
+  // idempotent, so this is one boolean check per render.
+  startInlineWorker();
+
   return (
     <html lang="en">
       <body>

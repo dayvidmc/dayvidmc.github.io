@@ -236,6 +236,125 @@ in that list.
 
 ---
 
+## 2A. Assumptions in outbound messaging (§5.2, §5.7)
+
+### 2A.1 One ask and one nudge, then it is a person's problem
+
+**Decision.** A game gets exactly one score request, at its expected finish, and
+exactly one nudge, at grace. After that nothing more is sent — the game goes red
+on the board and someone makes a phone call.
+
+**Why.** The spec's escalation ends at a red flag, not at a third text. Nothing
+is more corrosive to a volunteer's willingness to reply than a robot asking six
+times, and a volunteer who has ignored two texts is not going to answer a third
+— they are busy, out of signal, or gone. The board is what catches that, and it
+already does.
+
+### 2A.2 The nudge waits ten minutes after the ask, whatever the clock says
+
+**Decision.** On top of the division's grace period, a nudge will not go out
+within ten minutes of the request actually being sent.
+
+**Why.** After any outage both are due at once, and "reply with the score"
+followed ninety seconds later by "still need the score" reads as broken rather
+than diligent. This is the only rule in the chase that is about the message
+history rather than the game clock.
+
+### 2A.3 Nothing is sent between 23:00 and 07:00
+
+**Decision.** The outbox holds everything overnight, tournament-local.
+
+**Why.** Not for the game that finishes at 2am — none do. It is for the backlog:
+if sending is broken all Saturday and recovers at 2am, the queue would otherwise
+empty four hundred messages into the pockets of volunteers and ninety coaches at
+once. Nothing in that queue is worth waking anyone for.
+
+The check happens before the claim rather than after, so held messages stay
+`queued` and visible on `/hq/messages` instead of being claimed and put back.
+
+### 2A.4 Whoever was on shift when the game should have ended
+
+**Decision.** The score request goes to the diamond volunteer whose shift covers
+the game's *expected finish*, not whoever is on shift when the message is sent.
+
+**Why.** They are the person who was standing there watching it end. Texting the
+volunteer who arrived two hours later asks someone about a game they did not
+see. Where two shifts overlap the later one wins, on the reasoning that the
+person arriving is the one who will still be there to answer.
+
+### 2A.5 A game with nobody on shift is reported, not chased
+
+**Decision.** If no volunteer covers a diamond at the relevant time, no message
+is queued and the game is counted as uncovered.
+
+**Why.** There is no sensible fallback recipient — texting the coach would make
+path 2 the primary route, and texting HQ tells them something the board already
+shows. The gap is real and worth surfacing, so it appears on `/hq/shifts` as a
+coverage table and on `/hq/messages` as a warning. It is invisible otherwise:
+uncovered diamonds produce no error, no failed message and no queue, just games
+quietly going red all afternoon.
+
+### 2A.6 Three attempts, then a human
+
+**Decision.** A failed send is retried at 1, 5 and 20 minutes, then marked failed
+and shown on `/hq/messages` with a plain-English reason and a retry button.
+
+**Why.** A message that has failed three times over half an hour is not failing
+because of a blip. Failures are also sorted before retrying: a timeout or a 429
+is worth another go, but "that number cannot receive texts" will be just as true
+in twenty minutes, and retrying it only delays the moment someone notices the
+typo in a coach's phone number.
+
+### 2A.7 The worker runs inside the web process
+
+**Decision.** No separate worker service, no external cron. A timer started from
+the root layout and the health check ticks every 30 seconds.
+
+**Why.** This tournament is run by volunteers and deployed once a year. A second
+service is a second thing to redeploy, and its failure mode is that somebody
+forgets — with the symptom appearing on Saturday as "the texts stopped" and
+nothing on the board to explain it. One process that always contains its own
+worker cannot drift out of sync with itself.
+
+Safe with more than one replica: sends claim their row with `FOR UPDATE SKIP
+LOCKED` and chases dedupe on a unique index, so correctness never depended on
+there being exactly one worker. `POST /api/jobs/tick` exists behind
+`CRON_SECRET` for an external cron if that is ever preferred.
+
+It is deliberately **not** started from Next's `instrumentation.ts` hook, which
+would be the tidier home: Next compiles instrumentation for the edge runtime as
+well as Node, and the edge build cannot resolve the Postgres driver's `fs`
+import, which takes `npm run dev` down entirely.
+
+### 2A.8 Inbound webhooks are recorded against Twilio's MessageSid
+
+**Decision.** Every inbound text is claimed by `MessageSid` before anything is
+written, and the reply is stored. A retry replays that reply rather than
+deciding again.
+
+**Why.** Twilio retries any webhook that times out or answers non-2xx. Without
+this a retry writes a second `score_report` for the same text — and
+`score_report` is append-only by design, so the duplicate can never be removed.
+It would sit in the director's queue looking like an independent second opinion
+on a game.
+
+A claim older than 60 seconds is treated as abandoned and taken over, on the
+grounds that a duplicate proposal in the queue is a smaller problem than a score
+nobody recorded at all.
+
+### 2A.9 Message bodies avoid non-GSM-7 characters
+
+**Decision.** Plain hyphens, no em dashes, no emoji in anything sent.
+
+**Why.** One character outside GSM-7 drops the whole message to 70 characters
+per billable segment instead of 160. The spec's own example score request uses
+an em dash; writing it that way would have more than doubled the cost of every
+score request of the weekend for a difference nobody can see on a phone. Running
+costs come out of donation dollars (§11), so `smsSegments` is tested and
+`/hq/messages` flags anything over one segment rather than quietly paying for it.
+
+---
+
 ## 3. Deliberately not built
 
 | Thing | Why |
@@ -251,9 +370,11 @@ in that list.
 ## 4. Open questions from §13, and what each one blocks
 
 1. **Does a per-diamond volunteer role already exist?** Blocks nothing in code —
-   `diamond_shift` is built and score intake path 1 works. But if the role does
-   not exist, it is a spring recruitment ask, and path 1 is the primary route.
-   **This is the highest-leverage question on the list.**
+   shifts have a screen, the chase runs off them, and `/hq/shifts` shows exactly
+   which games have nobody to ask. But if the role does not exist, it is a
+   spring recruitment ask, and path 1 is the primary route. **This is the
+   highest-leverage question on the list**, and it is now the only thing
+   standing between the code and a working primary path.
 2. **Is the signed-sheet requirement KBA/Little League or custom?** Determines
    whether the photo-of-the-sheet field ever becomes more than optional.
 3. **Does the director want an approval queue at all?** The whole HQ flow assumes

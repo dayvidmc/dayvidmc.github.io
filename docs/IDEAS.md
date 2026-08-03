@@ -9,42 +9,36 @@ debrief before anyone builds it.
 
 ---
 
-## 1. The messaging spine — this is the real gap
+## 1. The messaging spine — ~~this is the real gap~~ built
 
-Everything below in this section is one work item, and it is the difference
-between a demo and a tool.
+**Done.** Score intake path 1 now runs end to end: when a game should be
+finishing, the volunteer on shift at that diamond is texted and asked for the
+score; one nudge follows at grace; then the board goes red and it is a phone
+call. See the README's *Outbound messaging* section and DECISIONS §2A.
 
-**Nothing sends a text.** Approving a score and moving a game write rows to
-`notification` with `status = 'queued'`, and no code ever reads them. The
-consequences run deeper than missing confirmations:
+What landed:
 
-- **Score intake path 1 does not actually work.** The primary route is "system
-  texts the diamond volunteer when a game should be finishing, they reply."
-  There is no outbound, so nobody is ever asked. What works today is the
-  *reply* half of a conversation that never starts.
-- `gamesNeedingNudge()` is built and tested and called by nothing.
-- The rain button, bracket publishing and broadcasts all depend on the same
-  missing piece.
+- A worker inside the web process, ticking every 30 seconds — reclaim, chase,
+  send. Sends claim their row with `FOR UPDATE SKIP LOCKED`; chases dedupe on a
+  unique index, so nothing goes twice.
+- Retries at 1, 5 and 20 minutes, then failure with a readable reason and a
+  retry button on `/hq/messages`. Permanent failures (invalid number,
+  unsubscribed) are not retried at all.
+- Quiet hours, so a backlog cannot empty itself into people's pockets at 2am.
+- Webhook idempotency on Twilio's `MessageSid`, so a retried webhook replays the
+  reply rather than writing a second `score_report` into an append-only table.
+- `POST /api/jobs/tick` behind `CRON_SECRET`, for an external cron or a manual
+  run.
 
-**What it needs.** A worker that claims queued rows with `FOR UPDATE SKIP
-LOCKED`, sends via Twilio, and writes back `sent`/`failed` with the provider id.
-Railway cron every 30 seconds is enough; it does not need to be clever.
-
-**One thing to check before building it.** A Twilio long code sends roughly one
-message per second. Ninety teams × two coaches is ~180 messages, so a
-bracket-publish broadcast would take three minutes to drain, and Saturday
-evening will have several bursts overlapping. Either use a Messaging Service
-with a toll-free or short code, or accept and design for the lag — but decide
+**Still worth deciding: the long code.** A bare `TWILIO_FROM_NUMBER` sends about
+one message per second, so a broadcast to ninety teams takes three minutes to
+drain. The outbox paces itself to match and skips the pacing entirely when a
+Messaging Service is configured — but the account still needs one. Decide it
 deliberately rather than discovering it at 7pm.
 
-**Also needed at the same time: webhook idempotency.** Twilio retries a webhook
-that times out or returns non-2xx. Today a retry would create a second
-`score_report` for the same message, and `score_report` is append-only so the
-duplicate cannot be cleaned up. Store Twilio's `MessageSid` with a unique
-constraint and no-op on conflict. This is a ten-line fix that gets much more
-expensive after the fact.
-
-**Effort:** a few days. **Do this first.**
+**Also worth doing at some point: delivery receipts.** A message marked `sent`
+means Twilio accepted it, not that a phone received it. Twilio's status callback
+would close that gap; it needs a second webhook and a status column.
 
 ---
 
@@ -56,14 +50,14 @@ Small builds that close a loop the system already promises.
   director records the result" and there is no way to record it. The `coin_flip`
   table and the engine's support for it are both done; this is a button and an
   action.
-- **Diamond shifts.** `diamond_shift` is what tells the system which volunteer
-  to text about which diamond — the linchpin of path 1 — and it can only be
-  populated by SQL. Needs a screen, and eventually feeds from Module B.
-- **A place to see failures.** Failed sends, model-parse errors and unmatched
-  texts each need a human eventually. Unmatched texts have a screen; the others
-  have nowhere.
+- ~~**Diamond shifts.**~~ Built: `/hq/shifts`, with a coverage table showing
+  which games have nobody to ask. Still typed in by hand until Module B (§6)
+  recruits these people properly and feeds them in.
+- ~~**A place to see failures.**~~ Built for sends: `/hq/messages`. Model-parse
+  errors still have nowhere — they currently fall back to the unmatched screen,
+  which is the right destination but tells nobody the model was the reason.
 
-**Effort:** a day or two total.
+**Effort:** a day for the coin flip.
 
 ---
 
@@ -85,11 +79,11 @@ the automation.
 The highest-stress twenty minutes of the weekend: shift everything remaining by
 N minutes, or compress to shortened games, re-check conflicts, tell everyone.
 
-Most of the pieces exist — the import validator already detects diamond
-double-bookings and team overlaps, and could be pointed at a proposed reflow
-instead of a CSV. The hard part is not the algorithm, it is showing the director
-what is about to change and letting him veto individual games before anything is
-committed.
+Most of the pieces now exist — the import validator already detects diamond
+double-bookings and team overlaps and could be pointed at a proposed reflow
+instead of a CSV, and "tell everyone" is a `queueMessage` call. The hard part is
+not the algorithm, it is showing the director what is about to change and
+letting him veto individual games before anything is committed.
 
 Worth building as **preview → confirm**, never as a single button that fires.
 
@@ -209,13 +203,19 @@ Recorded so they do not get re-proposed every year.
 
 ## Recommended next three
 
-1. **The messaging spine** (§1). Without it the primary score path is
-   half-built, and everything else that promises a text is writing to a queue
-   nobody drains.
-2. **Close the dead ends** (§2) — coin flips and diamond shifts. Small, and both
-   are places the system currently promises something it cannot do.
-3. **Print views** (§5) and **an e2e smoke test** (§8). Together these are what
-   make a parallel run in July 2027 something the director will actually agree
-   to.
+With the messaging spine in (§1), the ordering changes.
 
-Brackets (§3) before Phase 2 closes, but only after §13 Q4 is answered.
+1. **An end-to-end smoke test** (§8). The system now has a loop worth
+   protecting: text in, parse, queue, approve, standings move, text out. That is
+   exactly the path a broken weekend runs through, and nothing currently guards
+   it. `npm run e2e`.
+2. **Print views** (§5). Cheap, and the thing that makes a parallel run in July
+   2027 comfortable for the people who are sceptical of this — including the
+   printed "how to report a score" card the diamond volunteers now actually
+   need, since they are the ones being texted.
+3. **The rain button** (§4) or **brackets** (§3), depending on §13 Q4. Both now
+   have the messaging half they were waiting on; what they need is the
+   preview-and-confirm UI, which was always the hard part.
+
+The coin flip (§2) is a day's work and closes the last place the system promises
+something it cannot do.

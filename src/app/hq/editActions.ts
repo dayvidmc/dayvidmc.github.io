@@ -8,6 +8,7 @@ import { recordEventIn } from '@/server/events';
 import { applyRuleEdit, parseDivisionRules } from '@/domain/divisionRules';
 import { approveScore, recordProposal, setDispute } from '@/server/repo';
 import { localWallClock, toSqlTimestamp } from '@/domain/time';
+import { normalisePhone } from '@/domain/phone';
 import type { SaveResult } from '../_components/AutoSave';
 
 /**
@@ -119,25 +120,6 @@ const TEAM_FIELDS: Record<string, { column: string; label: string }> = {
   alternate_contact: { column: 'alternate_contact', label: 'Alternate contact' },
   association: { column: 'association', label: 'Association' },
 };
-
-/**
- * Normalise a typed phone number to E.164 so SMS matching works.
- *
- * A coach's number is how the system recognises an inbound text (§5.2). A
- * number saved as "613-555-0142" would never match the "+16135550142" Twilio
- * sends, and the text would land on the unmatched screen for no visible reason.
- */
-function normalisePhone(raw: string): { ok: true; value: string | null } | { ok: false; error: string } {
-  const trimmed = raw.trim();
-  if (trimmed === '') return { ok: true, value: null };
-
-  const digits = trimmed.replace(/[^\d+]/g, '');
-  const bare = digits.replace(/^\+?1?/, '');
-  if (bare.length !== 10 || !/^\d{10}$/.test(bare)) {
-    return { ok: false, error: 'Needs 10 digits, e.g. 613 555 0142.' };
-  }
-  return { ok: true, value: `+1${bare}` };
-}
 
 export async function saveTeamField(
   teamId: string,

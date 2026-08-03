@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff } from '@/server/auth';
 import { boardForDate, currentTournament, openUnmatchedCount } from '@/server/repo';
+import { outboxSummary } from '@/server/outbox';
 import { STATUS_LABEL, STATUS_MARKER, type BoardEntry } from '@/domain/gameStatus';
 import { formatDate, formatDateFriendly, formatTimeFriendly, toWallClock } from '@/domain/time';
 import { signOut } from './actions';
@@ -35,10 +36,15 @@ export default async function HqBoardPage({
   const now = toWallClock(new Date(), tournament.time_zone);
   const date = params.date ?? clampToTournament(formatDate(now), tournament.starts_on, tournament.ends_on);
 
-  const [entries, unmatchedCount] = await Promise.all([
+  const [entries, unmatchedCount, outbox] = await Promise.all([
     boardForDate(tournament.id, date, now) as Promise<(BoardEntry & { externalGameId: string })[]>,
     openUnmatchedCount(tournament.id),
+    outboxSummary(tournament.id),
   ]);
+
+  // A message that gave up is somebody who was expecting to hear from us and
+  // did not. It belongs on the screen the director is already looking at.
+  const failedMessages = outbox.failed;
 
   const counts = entries.reduce<Record<string, number>>((acc, entry) => {
     acc[entry.status] = (acc[entry.status] ?? 0) + 1;
@@ -114,6 +120,13 @@ export default async function HqBoardPage({
         </a>
       )}
 
+      {failedMessages > 0 && (
+        <a className="notice error" href="/hq/messages" style={{ display: 'block' }}>
+          {failedMessages} text{failedMessages === 1 ? '' : 's'} could not be delivered. Each one is
+          somebody who was expecting to hear from us. →
+        </a>
+      )}
+
       <div style={{ display: 'flex', gap: 10, margin: '12px 0', flexWrap: 'wrap' }}>
         <a className="btn primary" href="/hq/queue" style={{ flex: '1 1 45%' }}>
           Score queue ({counts.pending ?? 0})
@@ -124,6 +137,12 @@ export default async function HqBoardPage({
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+        <a className="btn" href="/hq/messages" style={{ flex: '1 1 45%', minHeight: 44, fontSize: 15 }}>
+          Messages{failedMessages > 0 ? ` (${failedMessages} failed)` : ''}
+        </a>
+        <a className="btn" href="/hq/shifts" style={{ flex: '1 1 45%', minHeight: 44, fontSize: 15 }}>
+          Diamond volunteers
+        </a>
         <a className="btn" href="/hq/rules" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
           Rules
         </a>

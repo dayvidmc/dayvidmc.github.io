@@ -23,6 +23,9 @@ intake paths that feed it.
 |---|---|---|
 | Schedule import + conflict validation | §5.1 | Built, tested |
 | Score intake — 3 paths, one queue | §5.2 | Built, tested |
+| **Outbound SMS: the system asks, then nudges** | §5.2 | Built, tested — the primary path now starts |
+| Outbox worker, retries, failure screen | §5.7 | Built, tested |
+| Diamond volunteer shifts + coverage gaps | §5.2 | Built |
 | HQ screen for texts nobody could place | §5.2 | Built |
 | HQ board with overdue clock | §5.3 | Built, tested |
 | Division rules config | §5.4 | Built — auto-saving editor with a live overdue-clock preview |
@@ -44,12 +47,9 @@ cannot supply:
 
 - **Brackets (§5.6)** — playoff format comes from the published schedule, and
   §13 Q4 (how the director actually builds it) is unanswered.
-- **Sending any text at all.** Approving a score and moving a game both write
-  rows to `notification`, and **nothing drains that queue** — there is no
-  Twilio sender. Inbound works; outbound does not. The settings screen says so
-  in as many words, because a queue growing silently on Saturday while ninety
-  coaches wait for a text is the worst possible way to discover this.
-- **SMS broadcast and the rain button (§5.7)** — same reason.
+- **SMS broadcast and the rain button (§5.7).** The messaging spine underneath
+  them is built and working; what is missing is the screen that chooses who to
+  send to and the reflow that decides what to say.
 - **Card processing.** The till records card sales; it does not charge them.
   Tapping a card on a phone needs a native app — Apple and Google only expose
   the NFC reader to signed native apps — so the card tap happens in the Square
@@ -122,12 +122,19 @@ src/
     scoreParsing.ts    deterministic score-text reader
     time.ts            tournament-local wall clock handling
     schedule/          CSV reader and schedule import validation
+    messaging.ts       message bodies, chase planning, backoff, SMS segments
+    phone.ts           E.164 normalisation
   db/
     migrations/        plain numbered SQL
     client.ts          pool, transactions, timestamp type parsing
     migrate.ts         migration runner
     seed.ts            development data
   server/              database-backed services (repo, auth, events, parser)
+    sms.ts             the Twilio call, and nothing else
+    outbox.ts          claim, send, retry, give up
+    scoreChase.ts      who to ask, and which diamonds have nobody
+    tick.ts            one pass of all of it, plus the inline worker
+    inbound.ts         webhook idempotency
   app/                 Next.js App Router pages and the SMS webhook
 ```
 
@@ -172,6 +179,13 @@ Three paths, one queue (§5.2). All of them end at a person.
 2. **Coach texts** unprompted — accepted on the same number.
 3. **HQ types in** a phoned-in score.
 
+**The prompt is real.** When a game should be finishing, the volunteer on shift
+at that diamond gets a text naming the game and asking for the score. If nothing
+comes back by the end of the division's grace period they get one nudge, and
+then nothing more — the game turns red on the board and it becomes a phone call.
+A game with nobody on shift is never chased; it is counted as uncovered and
+shown on `/hq/shifts`, because that gap is otherwise completely invisible.
+
 Inbound text is read by a deterministic parser first. Most replies —
 `Kanata 12 Orleans 5`, `12-5` — parse locally with no model call, which keeps
 score intake working when the API is slow and keeps donation dollars out of
@@ -188,6 +202,39 @@ fallback chain, and the board carries a badge whenever anything is waiting on it
 Forfeits are never auto-filled regardless of confidence — a forfeit bars a team
 from winning a tiebreaker, so a director confirms it.
 
+Every inbound text is recorded against Twilio's `MessageSid` before anything is
+written. Twilio retries a webhook that times out, and without that record a
+retry would create a second `score_report` for the same text — in an
+append-only table, so the duplicate could never be removed.
+
+---
+
+## Outbound messaging
+
+A worker runs **inside the web process**, every 30 seconds: reclaim anything a
+dead worker was holding, ask whoever is owed a score request, send what is due.
+No second service and no cron to configure — a deploy is the whole setup.
+
+- **Nothing sends twice.** Sends claim their row with `FOR UPDATE SKIP LOCKED`;
+  chases dedupe on a unique index. Running two workers is wasteful, not wrong.
+- **Nothing fails silently.** Retries at 1, 5 and 20 minutes, then the message
+  is marked failed and appears on `/hq/messages` with a plain-English reason and
+  a retry button. The board carries a banner when anything has given up.
+- **Nothing goes out overnight.** The queue holds between 23:00 and 07:00. Not
+  for the game that finishes at 2am — none do — but for the backlog that would
+  otherwise empty four hundred texts into people's pockets when sending recovers.
+- **Nothing costs more than it should.** One character outside GSM-7 drops a
+  message from 160 characters per billable segment to 70. Message bodies avoid
+  them, `smsSegments` is tested, and anything over one segment is flagged.
+
+`/hq/messages` is the screen that answers "is the chasing actually happening?" —
+a different question from the board's "what still needs chasing?".
+
+Without Twilio credentials the transport prints to the server log instead, so
+the whole loop can be exercised locally. In production that fallback is refused
+rather than silently pretending: "messages went to the log" and "messages were
+delivered" look identical from the HQ board, and only one of them is true.
+
 ---
 
 ## Before this is used for anything real
@@ -199,6 +246,13 @@ from winning a tiebreaker, so a director confirms it.
 - Set `TWILIO_AUTH_TOKEN`. Without it the SMS webhook refuses all traffic in
   production — deliberately, since anyone who guesses the URL could otherwise
   post scores that decide who plays on Sunday.
+- Set the rest of the Twilio variables too, or nothing is delivered. Prefer
+  `TWILIO_MESSAGING_SERVICE_SID` over a bare `TWILIO_FROM_NUMBER`: a long code
+  sends about one message per second, so a broadcast to ninety teams takes three
+  minutes to drain and Saturday evening has several bursts overlapping.
+- Put diamond volunteers on shift at `/hq/shifts`. Without them nobody is asked
+  for a score and the primary intake path does not run — the coverage table on
+  that screen is the thing to check in June, not in July.
 - Load-test the Saturday-evening peak specifically (§11). The profile is dead
   for 51 weeks, then every diamond finishing at once.
 - Read [DECISIONS.md](DECISIONS.md) and get the open questions answered.
