@@ -152,7 +152,11 @@ export default async function VolunteersPage({
             <div className="top">
               <div>
                 <div className="teams" style={{ fontSize: 16 }}>
-                  {ROLE_LABEL[row.shift.role]} · {row.shift.where}
+                  {/* "Auction table · Auction table" reads as a mistake. Drop
+                      the role when the place already says it. */}
+                  {row.shift.where.toLowerCase() === ROLE_LABEL[row.shift.role].toLowerCase()
+                    ? row.shift.where
+                    : `${ROLE_LABEL[row.shift.role]} · ${row.shift.where}`}
                 </div>
                 <div className="meta">
                   {formatDateFriendly(row.shift.startsAt)} ·{' '}

@@ -632,6 +632,19 @@ legend {
   background: var(--green-bg);
 }
 
+/* Without these two, a pill marked `error` or `info` rendered as plain text —
+   so on the volunteer board the most severe state, a shift with nobody on it,
+   had less visual weight than a shift that was merely short. */
+.pill.error {
+  color: var(--red);
+  background: var(--red-bg);
+}
+
+.pill.info {
+  color: var(--blue);
+  background: var(--blue-bg);
+}
+
 .trail {
   font-size: 14px;
   color: var(--muted);

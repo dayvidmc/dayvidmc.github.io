@@ -153,7 +153,9 @@ export default async function ShiftsPage({
                 <div key={shift.id} className="row-item">
                   <div>
                     <div style={{ fontWeight: 600 }}>
-                      {ROLE_LABEL[shift.role]} · {shift.where}
+                      {shift.where.toLowerCase() === ROLE_LABEL[shift.role].toLowerCase()
+                        ? shift.where
+                        : `${ROLE_LABEL[shift.role]} · ${shift.where}`}
                     </div>
                     <div className="meta">
                       {formatTimeFriendly(shift.startsAt)} to {formatTimeFriendly(shift.endsAt)} ·{' '}
