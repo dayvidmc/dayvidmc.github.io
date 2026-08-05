@@ -4,6 +4,25 @@ Everything needed is in the repo. I could not run the deploy myself — this
 container has no Railway credentials — so the steps below are yours to run, and
 they should take about ten minutes.
 
+## Where it lives
+
+**https://tokessy.up.railway.app**
+
+Substitute that wherever this document says `<your-domain>`. Health check:
+`https://tokessy.up.railway.app/api/health`.
+
+Two notes for whoever is looking at it.
+
+**Railway tracks one branch, and the work is not on `main`.** Everything built
+so far is on `claude/tokessy-tournament-ops-v1o6id` — the website, donations,
+concession tickets, site supervisors, the Gold Glove. If the deployment is
+pointed at `main`, none of it is there. See step 1.
+
+**Nothing in this repository can reach that URL.** The agent environment's
+network policy refuses arbitrary hosts, so no session can check whether the
+deploy is up, which branch it is serving, or whether a migration applied. That
+has to be checked by a person, or by the Railway dashboard.
+
 ---
 
 ## 1. Pick the branch

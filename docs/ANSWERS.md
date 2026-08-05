@@ -111,6 +111,7 @@ When a new answer arrives, add it here in the same turn it is given.
 
 | Question | Answer | When |
 |---|---|---|
+| Where is the **test deployment**? | **https://tokessy.up.railway.app** — recorded in `docs/DEPLOY.md`. No session can reach it: the agent environment refuses arbitrary hosts, so whether it is up, and which branch it serves, has to be checked by a person. | 3 Aug 2026 |
 | What happens to **tokessytournament.com**? | **Point it at this.** One address, one system. Needs whoever controls the DNS, and a redirect map so old links — `/2024-results/`, `/scotts-story/`, `/links-and-info/maps/` — land somewhere sensible rather than on a 404. | 3 Aug 2026 |
 | What **images** exist? | **A logo, photographs and sponsor logos — take them from the current site.** See the note below: this environment cannot reach that site, and there is no image hosting built yet. | 3 Aug 2026 |
 | Where should **children's names** appear? | **The committee should decide.** Current position, to be confirmed rather than assumed: rosters are visible on a team's own link and inside HQ only, nothing is on a public page, and the Gold Glove winner's name is HQ-only. | 3 Aug 2026 |
