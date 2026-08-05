@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   availabilityFor,
   honoraria,
+  rateUnknown,
   umpireIssues,
   type UmpireAssignment,
 } from './umpires';
@@ -200,10 +201,13 @@ describe('offering an umpire for a game', () => {
 });
 
 describe('what an umpire is owed', () => {
-  const line = (over: Partial<UmpireAssignment> & { rateCents: number; played: boolean }) => ({
+  const line = (
+    over: Partial<UmpireAssignment> & { rateCents: number; played: boolean; volunteer?: boolean },
+  ) => ({
     ...assign(over),
     rateCents: over.rateCents,
     played: over.played,
+    volunteer: over.volunteer ?? false,
   });
 
   it('pays for games that were actually played', () => {
@@ -238,5 +242,51 @@ describe('what an umpire is owed', () => {
       line({ umpireId: 'b', umpireName: 'Sam Cote', gameId: 'g2', rateCents: 3000, played: true }),
     ]);
     expect(lines.map((l) => l.owedCents)).toEqual([5000, 3000]);
+  });
+});
+
+describe('an umpire who does it for nothing', () => {
+  const line = (
+    over: Partial<UmpireAssignment> & { rateCents: number; played: boolean; volunteer?: boolean },
+  ) => ({
+    ...assign(over),
+    rateCents: over.rateCents,
+    played: over.played,
+    volunteer: over.volunteer ?? false,
+  });
+
+  it('is still on the list, with their games counted', () => {
+    // They did the work. A report that leaves them out is a report that forgets
+    // to thank them.
+    const [dana] = honoraria([
+      line({ gameId: 'g1', rateCents: 0, played: true, volunteer: true }),
+      line({ gameId: 'g2', rateCents: 0, played: true, volunteer: true }),
+    ]);
+    expect(dana).toMatchObject({ gamesWorked: 2, owedCents: 0, volunteer: true });
+  });
+
+  it('is not owed anything even if a rate slipped onto them', () => {
+    // The database refuses this pairing, so it should not arise — but if it
+    // does, the safe reading is the one they agreed to.
+    const [dana] = honoraria([line({ gameId: 'g1', rateCents: 4000, played: true, volunteer: true })]);
+    expect(dana!.owedCents).toBe(0);
+  });
+
+  it('is not what "no rate set" means', () => {
+    // The distinction the whole change exists for. A volunteer is settled; a
+    // paid umpire with no rate is an unanswered question.
+    const volunteer = honoraria([
+      line({ gameId: 'g1', rateCents: 0, played: true, volunteer: true }),
+    ])[0]!;
+    const unset = honoraria([line({ gameId: 'g1', rateCents: 0, played: true })])[0]!;
+
+    expect(rateUnknown(volunteer)).toBe(false);
+    expect(rateUnknown(unset)).toBe(true);
+  });
+
+  it('does not chase a rate for somebody who worked nothing', () => {
+    // Assigned and rained out is not a missing rate either.
+    const [dana] = honoraria([line({ gameId: 'g1', rateCents: 0, played: false })]);
+    expect(rateUnknown(dana!)).toBe(false);
   });
 });

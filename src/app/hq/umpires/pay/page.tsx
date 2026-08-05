@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
 import { currentTournament } from '@/server/repo';
 import { honorariaFor, umpireRoster } from '@/server/umpires';
+import { rateUnknown } from '@/domain/umpires';
 import { NoAccess } from '../../../_components/NoAccess';
 
 export const dynamic = 'force-dynamic';
@@ -43,7 +44,12 @@ export default async function HonorariaPage() {
 
   const total = lines.reduce((sum, line) => sum + line.owedCents, 0);
   const worked = lines.reduce((sum, line) => sum + line.gamesWorked, 0);
-  const noRate = lines.filter((line) => line.rateCents === 0 && line.gamesWorked > 0);
+  // Only a *paid* umpire with no rate is worth chasing. A volunteer with a rate
+  // of zero is not an oversight, and naming them in an amber warning every time
+  // this screen opens is how a committee learns to ignore amber warnings.
+  const noRate = lines.filter(rateUnknown);
+  const volunteers = lines.filter((line) => line.volunteer && line.gamesWorked > 0);
+  const volunteerGames = volunteers.reduce((sum, line) => sum + line.gamesWorked, 0);
   const unassigned = roster.filter((u) => u.active && u.games === 0);
 
   return (
@@ -68,8 +74,18 @@ export default async function HonorariaPage() {
         <div className="notice warn">
           {noRate.length} umpire{noRate.length === 1 ? '' : 's'} worked games with no rate set, so
           {noRate.length === 1 ? ' they are' : ' they are'} counting as $0:{' '}
-          {noRate.map((l) => l.umpireName).join(', ')}. Set it on{' '}
-          <a href="/hq/umpires">the roster</a>.
+          {noRate.map((l) => l.umpireName).join(', ')}. Either set a rate on{' '}
+          <a href="/hq/umpires">the roster</a>, or mark them as umpiring for nothing — this warning
+          is only for the ones who are meant to be paid.
+        </div>
+      )}
+
+      {volunteers.length > 0 && (
+        <div className="notice ok">
+          {volunteers.length} umpire{volunteers.length === 1 ? '' : 's'} worked {volunteerGames}{' '}
+          game{volunteerGames === 1 ? '' : 's'} for nothing:{' '}
+          {volunteers.map((l) => l.umpireName).join(', ')}. They are not owed anything and they are
+          not missing a rate — worth knowing when the thank-yous are written.
         </div>
       )}
 
@@ -108,7 +124,7 @@ export default async function HonorariaPage() {
                     {line.gamesWorked}
                   </td>
                   <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {line.rateCents ? money(line.rateCents) : '—'}
+                    {line.volunteer ? 'volunteer' : line.rateCents ? money(line.rateCents) : '—'}
                   </td>
                   <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
                     {money(line.owedCents)}
@@ -119,7 +135,9 @@ export default async function HonorariaPage() {
           </table>
 
           <p className="sub">
-            A game counts as worked once its score has been approved. A game that never happened —
+            Some of these umpires are paid and some do it for nothing; both are on the list, and a
+            volunteer shows as a volunteer rather than as a rate somebody forgot to fill in. A game
+            counts as worked once its score has been approved. A game that never happened —
             rained out, forfeited before first pitch — does not, and neither does one where the
             umpire did not turn up and somebody recorded it. That is the whole rule; there is
             nothing else behind these numbers.

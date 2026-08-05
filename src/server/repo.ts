@@ -22,8 +22,14 @@ export interface Tournament {
   umpire_score_entry: boolean;
   /** What one concession ticket is good for, in the committee's own words. */
   ticket_covers: string | null;
-  /** How many go in a team's package, so "N of M came back" is answerable. */
-  tickets_per_team: number;
+  /**
+   * How many tickets each player gets, once.
+   *
+   * Per player rather than per team: a team of nine gets nine and a team of
+   * fifteen gets fifteen, so the figure comes off the roster rather than a
+   * flat number that is wrong for every team but the average one.
+   */
+  tickets_per_player: number;
   /** Last year's figure, so "more than last year" is measurable. */
   previous_year_raised_cents: number;
   /** Whether the public pages ask for a donation at all. Off by default. */
@@ -48,7 +54,7 @@ export async function currentTournament(): Promise<Tournament | null> {
   return queryOne<Tournament>(
     `SELECT id, name, year, time_zone, starts_on::text, ends_on::text,
             day_start_time::text, day_end_time::text, umpire_score_entry,
-            ticket_covers, tickets_per_team, previous_year_raised_cents,
+            ticket_covers, tickets_per_player, previous_year_raised_cents,
             donations_open, donation_message,
             tagline, established_year, total_raised_cents, venue_city,
             contact_general, contact_entries, contact_sponsors, contact_volunteers

@@ -1040,6 +1040,84 @@ total is rarely four digits. A fundraising total is the opposite on both counts
 because overstating a charity's total by ninety-nine cents is still overstating
 it.
 
+### 2.59 An umpire on nothing is either a volunteer or a gap, and the difference is a column
+
+**Decision.** `umpire.volunteer boolean`, with a CHECK that a volunteer's rate
+is zero. The honorarium report shows "volunteer" where it would show a rate,
+and only chases a rate for umpires who are neither.
+
+**Why.** The crew is a mix — some paid, some not (`docs/ANSWERS.md`). Before
+this, both states were `rate_cents = 0`, so the pay screen either nagged about
+every volunteer or, if it stopped nagging, silently paid nothing to somebody
+who was owed. The screen's job on the Sunday night is to produce a list of
+people to hand envelopes to, and it cannot do that while two opposite meanings
+share one value.
+
+Setting a rate above zero clears the flag, and setting the flag zeroes the
+rate. Two fields that can contradict each other eventually will, and neither
+the domain nor a person reading the report can tell which one lied.
+
+### 2.60 Tickets come off the roster, not off a flat number
+
+**Decision.** `tournament.tickets_per_player` replaces `tickets_per_team`. A
+team's entitlement is that number times the players on its roster.
+
+**Why.** The tickets are handed to players. A flat number per team gives a
+squad of nine and a squad of fifteen the same thing, which is neither what
+happens nor what anybody would defend if asked. The roster is already the
+record of who is on the team — it locks before the weekend and it is what the
+Gold Glove draw runs from — so it is the right thing to count.
+
+The team page states the arithmetic rather than the answer alone: "14
+concession tickets came with your entry — one per player". A coach who thinks
+that is wrong can see immediately which half to argue with.
+
+### 2.61 CHEO issues the receipts; this repository records that it handed the details over
+
+**Decision.** A donor can ask for a receipt and give an address. `/hq/money/
+donations/receipts` produces a tab-separated list for the foundation and marks
+the batch as sent. Nothing is emailed or generated here.
+
+**Why.** The tournament is not a registered charity issuing its own receipts —
+CHEO is, and a receipt from the wrong organisation is worse than none. So the
+software's honest role is the clerical half: collect what a foundation needs to
+post one, hand it over, and remember that it did.
+
+The remembering is the part worth building. Without it the next export contains
+the same donors and somebody is receipted twice, or nobody can answer "which
+gifts are still outstanding" without reading a mailbox. `markReceiptsSent`
+skips rows already marked, so pressing the button twice does not move a date
+that was set last week.
+
+An address is asked for rather than required. Nobody giving twenty dollars
+should have to type their address, and a donor who asks for a receipt and then
+gives no address is surfaced by name on the screen — before the batch goes,
+rather than after a foundation writes back.
+
+### 2.62 One rules document, copied across, with the exceptions typed back
+
+**Decision.** A division's rules screen can copy its values onto every other
+division. The confirmation names each division and each value it would change,
+behind a `<details>` the director has to open.
+
+**Why.** The tournament publishes one rules document covering all thirteen
+divisions with a handful of stated exceptions. The previous screen said the
+opposite — "each division publishes its own rules, nothing here is shared" —
+which meant typing fifteen numbers thirteen times. That is how the numbers end
+up disagreeing with each other, and these numbers decide when a game is called
+and when the board goes red.
+
+The record stays per-division, because an exception has to live somewhere. What
+changed is the expectation: most of them should agree, and the screen now shows
+which do not.
+
+The confirmation is not a courtesy. This overwrites thirteen records from one
+button and there is no undo, so it says, in words, which divisions and which
+fields — `ruleDifferences()` is a pure function precisely so that what the
+screen promises and what the action does come from the same place. The reviewed
+flag travels with the values: if the document is shared, checking it once has
+checked it for all of them.
+
 ---
 
 ## 3. Deliberately not built
@@ -1047,7 +1125,7 @@ it.
 | Thing | Why |
 |---|---|
 | Raffle / 50-50 logic | §7.4 — likely needs an AGCO or municipal licence. Legal question for the committee, not a technical one. No draw functionality exists. |
-| Charitable receipting | §8A.4 — entry fees are generally not receiptable; who issues the receipt is unresolved. The schema separates payment types from day one so this is not painful later, but no receipting logic is written. |
+| Issuing a charitable receipt | §8A.4 — resolved: **CHEO issues them, not the tournament** (`docs/ANSWERS.md`). So no receipt is generated, numbered or emailed here. What exists is the clerical half — §2.61 — collecting a donor's address and recording that the details went across. Entry fees remain non-receiptable and are not in that list. |
 | Scheduling engine | §5.1 — explicitly out of scope for v1. |
 | Bracket generation | §5.6 — depends on §13 Q4 (how the schedule is actually built). |
 | Player rosters, stats, the public website | §2 — RAMP and WordPress keep these. Entry-taking is now ours; the rest of what RAMP does is not, and should not be. |

@@ -184,7 +184,30 @@ Genuinely unanswered. These are worth asking.
    watching is how a tournament loses its address.
 10. **Who owns sponsor and auction donor relationships?**
 11. **The real per-division rules.** One document covers them all; somebody has
-    to read it out while somebody types.
+    to read it out while somebody types. The typing is now cheap — set one
+    division, press *apply to every division*, then type the exceptions — so
+    what is needed is a reading, not an evening.
+
+---
+
+## What these answers changed
+
+Kept so that an answer can be traced to the thing it moved, and so nobody has
+to guess whether an answer was heard.
+
+| Answer | What it changed |
+|---|---|
+| Umpires are a mix, paid and not | `umpire.volunteer`, a CHECK tying it to a zero rate, and a pay screen that stops chasing a rate for people who never wanted one (§2.59) |
+| CHEO issues the receipts | A postal address on the donate page, `/hq/money/donations/receipts`, and a record of which batches went (§2.61) |
+| One rules document, with exceptions | *Apply to every division* on the rules screen, with a confirmation that names what it would overwrite (§2.62) |
+| The Gold Glove is a random draw from every registered player | `gold_glove_draw`, append-only, so a draw cannot be quietly re-run (§2.50) |
+| The bracket is built by hand on Saturday night | The bracket editor proposes and the director moves anybody anywhere |
+| The signed sheet goes to a site supervisor, not a diamond volunteer | `volunteer_shift.role = 'site_supervisor'` and a site column; the posting view joins a supervisor to every diamond at their site |
+| Concession tickets come with an entry | `pos_tender.kind = 'ticket'`, and — once it was clear they are handed to players — `tickets_per_player` (§2.60) |
+
+Still unbuilt from an answer already given: the **offline score queue** for
+whichever outlying park has the bad signal, and the **RAMP export**. Both wait
+on an open question above rather than on a decision.
 
 ---
 

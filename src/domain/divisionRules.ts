@@ -273,3 +273,48 @@ export function parseDivisionRules(raw: unknown): {
     defaulted,
   };
 }
+
+/**
+ * What one division's rules say that another's do not.
+ *
+ * The tournament publishes a single rules document with a handful of stated
+ * exceptions, so most divisions hold identical values and the interesting
+ * question is always which few do not. Used by the "apply to every division"
+ * confirmation, which has no business overwriting anything without first
+ * saying, in words, what it is about to overwrite.
+ */
+export interface RuleDifference {
+  key: keyof DivisionRules;
+  label: string;
+  from: string;
+  to: string;
+}
+
+/** A stored rule value as a human reads it, not as JSON prints it. */
+export function describeRuleValue(field: RuleField, value: unknown): string {
+  if (value === null || value === undefined) {
+    return field.kind === 'nullableNumber' ? 'unlimited' : '—';
+  }
+  if (field.kind === 'boolean') return value ? 'yes' : 'no';
+  if (field.kind === 'enum') {
+    const option = field.options.find((o) => o.value === value);
+    return option ? option.label : String(value);
+  }
+  return field.suffix ? `${value} ${field.suffix}` : String(value);
+}
+
+export function ruleDifferences(from: DivisionRules, to: DivisionRules): RuleDifference[] {
+  const differences: RuleDifference[] = [];
+  for (const field of RULE_FIELDS) {
+    const before = from[field.key];
+    const after = to[field.key];
+    if (before === after) continue;
+    differences.push({
+      key: field.key,
+      label: field.label,
+      from: describeRuleValue(field, before),
+      to: describeRuleValue(field, after),
+    });
+  }
+  return differences;
+}

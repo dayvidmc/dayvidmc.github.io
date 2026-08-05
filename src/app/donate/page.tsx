@@ -61,12 +61,12 @@ export default async function DonatePage({
             Every dollar of it goes to CHEO Cardiology. Nothing is taken out for running the
             tournament — that is what the entry fees and the canteen are for.
           </div>
-          {gift.donorEmail && (
-            <p className="sub">
-              A receipt will follow to {gift.donorEmail}. If it does not arrive, ring the tournament
-              rather than donating again.
-            </p>
-          )}
+          <p className="sub">
+            CHEO issues the receipts for donations, not the tournament. If you asked for one, your
+            details go to them and the receipt comes from the CHEO Foundation — so it may take a
+            little while, and it will not come from us. If it does not arrive, ring the tournament
+            rather than donating again.
+          </p>
           <a className="btn primary wide" href="/" style={{ minHeight: 48 }}>
             Back to the tournament
           </a>
@@ -204,6 +204,51 @@ export default async function DonatePage({
             <input
               id="message" name="message" type="text" maxLength={500}
               placeholder="optional — e.g. in memory of somebody"
+            />
+
+            {/* CHEO issues the receipts, so a foundation posting one needs an
+                address. Asked for rather than assumed: nobody giving twenty
+                dollars should have to type their address, and the fields only
+                matter to somebody who wants the receipt. */}
+            <label
+              htmlFor="receiptRequested"
+              style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginTop: 16 }}
+            >
+              <input
+                id="receiptRequested" name="receiptRequested" type="checkbox"
+                style={{ width: 24, height: 24, minHeight: 24, flex: '0 0 auto', marginTop: 2 }}
+              />
+              <span style={{ fontWeight: 400 }}>
+                I would like a receipt. CHEO issues these, so they need somewhere to post it —
+                fill in the address below if you tick this.
+              </span>
+            </label>
+
+            <label htmlFor="addressLine">Address</label>
+            <input
+              id="addressLine" name="addressLine" type="text" maxLength={200}
+              autoComplete="street-address" placeholder="only needed for a receipt"
+            />
+            <div className="row">
+              <div>
+                <label htmlFor="addressCity">Town or city</label>
+                <input
+                  id="addressCity" name="addressCity" type="text" maxLength={100}
+                  autoComplete="address-level2"
+                />
+              </div>
+              <div>
+                <label htmlFor="addressPostal">Postal code</label>
+                <input
+                  id="addressPostal" name="addressPostal" type="text" maxLength={12}
+                  autoComplete="postal-code" placeholder="K2K 0A1"
+                />
+              </div>
+            </div>
+            <label htmlFor="addressProvince">Province</label>
+            <input
+              id="addressProvince" name="addressProvince" type="text" maxLength={60}
+              autoComplete="address-level1" defaultValue="Ontario"
             />
 
             <label

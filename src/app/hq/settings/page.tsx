@@ -228,10 +228,10 @@ export default async function SettingsPage() {
           hint="In the words you would use at the counter — e.g. “a bag of chips and a drink, or a hot dog”. Shown on the till when a volunteer takes a ticket, so a fourteen-year-old does not have to guess."
         />
         <AutoSaveField
-          save={saveTournamentField} field="tickets_per_team" label="Tickets in a team's package"
+          save={saveTournamentField} field="tickets_per_player" label="Tickets per player"
           type="number"
-          defaultValue={String(tournament.tickets_per_team)}
-          hint="Only used to say how many of the ones you printed came back, which is what next year's print run is decided on. Zero if you would rather not track it."
+          defaultValue={String(tournament.tickets_per_player)}
+          hint="One each is the usual answer. A team of nine then gets nine and a team of fifteen gets fifteen — the number comes off the roster rather than a flat figure that is wrong for every team but the average one. Zero to turn tickets off."
         />
       </fieldset>
 

@@ -9,18 +9,25 @@ export const dynamic = 'force-dynamic';
 /**
  * Division rules, one record per division (§5.4).
  *
- * Every division publishes its own PDF, so nothing here is shared. A division
+ * One published document covers every division, with a handful of stated
+ * exceptions, so the record is still per-division — an exception has to live
+ * somewhere — but the expectation is that most of them agree. A division
  * created by a schedule import starts from Major's reference numbers and is
- * marked unreviewed until a human says otherwise — this list exists so that
+ * marked unreviewed until a human says otherwise; this list exists so that
  * "unreviewed" is visible rather than a boolean nobody ever sees.
  */
-export default async function RulesListPage() {
+export default async function RulesListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ applied?: string; error?: string }>;
+}) {
   const staff = await currentStaff();
   if (!canAccessHq(staff)) redirect('/signin');
 
   const tournament = await currentTournament();
   if (!tournament) return <div className="notice info">No tournament set up yet.</div>;
 
+  const params = await searchParams;
   const divisions = await listDivisions(tournament.id);
   const unreviewed = divisions.filter((d) => !d.rules_reviewed).length;
 
@@ -28,12 +35,25 @@ export default async function RulesListPage() {
     <>
       <h1>Division rules</h1>
       <p className="sub">
-        Each division publishes its own rules. Nothing here is shared between them.
+        One document covers every division, with exceptions. Open any division to copy its numbers
+        across the rest.
       </p>
 
       <a className="btn" href="/hq" style={{ marginBottom: 16 }}>
         ← Back to board
       </a>
+
+      {params.applied !== undefined && (
+        <div className="notice ok">
+          {params.applied === '0'
+            ? 'Nothing to copy — every other division already held those numbers.'
+            : `${params.applied} division${params.applied === '1' ? '' : 's'} updated. Any exception
+               that division publishes needs typing back in now.`}
+        </div>
+      )}
+      {params.error === 'director_only' && (
+        <div className="notice error">Only the tournament director can change rules.</div>
+      )}
 
       {unreviewed > 0 && (
         <div className="notice warn">

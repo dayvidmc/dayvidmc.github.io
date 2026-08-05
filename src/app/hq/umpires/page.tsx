@@ -3,7 +3,7 @@ import { canAccessHq, currentStaff } from '@/server/auth';
 import { currentTournament } from '@/server/repo';
 import { honorariaFor, issuesForTournament, umpireRoster } from '@/server/umpires';
 import { formatPhone } from '@/domain/contact';
-import { AutoSaveField } from '../../_components/AutoSave';
+import { AutoSaveField, AutoSaveToggle } from '../../_components/AutoSave';
 import { CopyLink } from '../../_components/CopyLink';
 import { addUmpireAction, saveUmpire } from './actions';
 
@@ -40,7 +40,7 @@ export default async function UmpiresPage() {
 
   const active = umpires.filter((u) => u.active);
   const missingPhone = active.filter((u) => !u.phone).length;
-  const noRate = active.filter((u) => u.rate_cents === 0).length;
+  const noRate = active.filter((u) => !u.volunteer && u.rate_cents === 0).length;
   const clashes = issues.filter((i) => i.severity === 'clash');
   const owedTotal = owed.reduce((sum, line) => sum + line.owedCents, 0);
 
@@ -84,7 +84,7 @@ export default async function UmpiresPage() {
           <div className="meta">
             owed so far across {owed.filter((l) => l.gamesWorked > 0).length} umpire
             {owed.filter((l) => l.gamesWorked > 0).length === 1 ? '' : 's'}
-            {noRate > 0 && ` · ${noRate} with no rate set, so counting as $0`}
+            {noRate > 0 && ` · ${noRate} paid but with no rate set`}
           </div>
           <a className="btn" href="/hq/umpires/pay" style={{ marginTop: 10 }}>
             The breakdown
@@ -151,12 +151,19 @@ export default async function UmpiresPage() {
               placeholder="e.g. Level 3"
               hint="Free text — the associations here do not agree on names."
             />
-            <AutoSaveField
-              save={save} field="rate" label="Rate per game" type="text"
-              defaultValue={umpire.rate_cents ? (umpire.rate_cents / 100).toFixed(2) : ''}
-              placeholder="40.00" suffix="per game"
-              hint="What they are paid for one game. Drives the honorarium report."
+            <AutoSaveToggle
+              save={save} field="volunteer" label="Umpires for nothing"
+              defaultChecked={umpire.volunteer}
+              hint="Some of these umpires are paid and some are not. Ticking this says they are not — which is different from nobody having set a rate yet, and stops the honorarium screen naming them in a warning forever."
             />
+            {!umpire.volunteer && (
+              <AutoSaveField
+                save={save} field="rate" label="Rate per game" type="text"
+                defaultValue={umpire.rate_cents ? (umpire.rate_cents / 100).toFixed(2) : ''}
+                placeholder="40.00" suffix="per game"
+                hint="What they are paid for one game. Drives the honorarium report."
+              />
+            )}
             <AutoSaveField
               save={save} field="notes" label="Notes" defaultValue={umpire.notes ?? ''}
               placeholder="optional — availability, preferences, who they travel with"

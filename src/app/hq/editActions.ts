@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { query, queryOne, transaction } from '@/db/client';
 import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
 import { recordEvent, recordEventIn } from '@/server/events';
-import { applyRuleEdit, parseDivisionRules } from '@/domain/divisionRules';
+import { applyRuleEdit, parseDivisionRules, ruleDifferences } from '@/domain/divisionRules';
 import { approveScore, recordProposal, setDispute } from '@/server/repo';
 import { localWallClock, toSqlTimestamp } from '@/domain/time';
 import { looksLikeEmail, normalisePhone } from '@/domain/contact';
@@ -112,6 +112,78 @@ export async function setRulesReviewed(formData: FormData): Promise<void> {
   revalidatePath(`/hq/rules/${divisionId}`);
 }
 
+/**
+ * Copy one division's rules onto every other division.
+ *
+ * The tournament publishes a single rules document covering all thirteen
+ * divisions, with a handful of stated exceptions. Typing fifteen numbers
+ * thirteen times to express that is how the numbers end up disagreeing with
+ * each other, and the numbers decide when a game is called.
+ *
+ * So: set one division, press this, then go back and type the exceptions. The
+ * screen names every division and every value it is about to change before
+ * this runs — the whole point is that it overwrites, and nobody should learn
+ * that afterwards.
+ *
+ * The reviewed flag travels with the values. It means "somebody has checked
+ * these against this year's document", and if the document is shared then
+ * checking it once has checked it for all of them.
+ */
+export async function applyRulesEverywhere(formData: FormData): Promise<void> {
+  const staff = await requireHq();
+  if (!isDirector(staff)) redirect('/hq/rules?error=director_only');
+
+  const divisionId = String(formData.get('divisionId') ?? '');
+  if (!divisionId) return;
+
+  const source = await queryOne<{ rules: unknown; rules_reviewed: boolean }>(
+    'SELECT rules, rules_reviewed FROM division WHERE id = $1 AND tournament_id = $2',
+    [divisionId, staff.tournamentId],
+  );
+  if (!source) redirect('/hq/rules');
+
+  const { rules } = parseDivisionRules(source!.rules);
+  const others = await query<{ id: string; rules: unknown; rules_reviewed: boolean }>(
+    'SELECT id, rules, rules_reviewed FROM division WHERE tournament_id = $1 AND id <> $2',
+    [staff.tournamentId, divisionId],
+  );
+
+  const changed = others.filter((other) => {
+    const differences = ruleDifferences(parseDivisionRules(other.rules).rules, rules);
+    return differences.length > 0 || other.rules_reviewed !== source!.rules_reviewed;
+  });
+
+  if (changed.length > 0) {
+    await transaction(async (client) => {
+      for (const other of changed) {
+        const before = parseDivisionRules(other.rules).rules;
+        await client.query(
+          'UPDATE division SET rules = $2::jsonb, rules_reviewed = $3 WHERE id = $1',
+          [other.id, JSON.stringify(rules), source!.rules_reviewed],
+        );
+        await recordEventIn(client, {
+          tournamentId: staff.tournamentId,
+          actor: staff.name,
+          actorRole: staff.role,
+          kind: 'division.rules_updated',
+          subjectType: 'division',
+          subjectId: other.id,
+          payload: {
+            copiedFrom: divisionId,
+            changed: ruleDifferences(before, rules).map((d) => d.key),
+          },
+        });
+        revalidatePath(`/hq/rules/${other.id}`);
+      }
+    });
+  }
+
+  revalidatePath('/hq/rules');
+  revalidatePath(`/hq/rules/${divisionId}`);
+  revalidatePath('/hq');
+  redirect(`/hq/rules?applied=${changed.length}`);
+}
+
 // --- Team contact details ---------------------------------------------------
 
 const TEAM_FIELDS: Record<string, { column: string; label: string }> = {
@@ -182,7 +254,7 @@ const TOURNAMENT_OPTIONAL_TEXT = new Set([
 ]);
 
 /** Settings that are a whole number. Blank means zero, not an error. */
-const TOURNAMENT_COUNTS = new Set(['tickets_per_team', 'established_year']);
+const TOURNAMENT_COUNTS = new Set(['tickets_per_player', 'established_year']);
 
 /** Settings typed in dollars and stored in cents, like every other amount here. */
 const TOURNAMENT_MONEY = new Set(['previous_year_raised_cents', 'total_raised_cents']);

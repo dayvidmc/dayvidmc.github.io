@@ -25,7 +25,7 @@ intake paths that feed it.
 | Score intake — 3 paths, one queue | §5.2 | Built, tested |
 | HQ screen for texts nobody could place | §5.2 | Built |
 | HQ board with overdue clock | §5.3 | Built, tested |
-| Division rules config | §5.4 | Built — auto-saving editor with a live overdue-clock preview |
+| Division rules config | §5.4 | Built — auto-saving editor with a live overdue-clock preview, and one document applied across every division since that is how they are published |
 | Standings and tiebreakers | §5.5 | Built, tested — the core deliverable; flags a pool the weather made uneven rather than seeding it |
 | Game count tracking (financial) | §5.8 | Built, tested |
 | Team links, no login | §5.7 | Built |
@@ -36,7 +36,7 @@ intake paths that feed it.
 | Concessions till, offline-capable | §8 | Built, tested — cash and Square hand-off; markdowns set by a lead, never typed at the till |
 | Public schedule with live status | §5.7 | Built, tested |
 | Playoff bracket — the map, drawn before it is played | §5.6 | Built, tested — structure must still be seeded by hand |
-| Umpires: roster, crews with conflict checks, their own link, honoraria | — | Built, tested — not in the spec at all; see `docs/BRAINSTORM.md` §4 |
+| Umpires: roster, crews with conflict checks, their own link, honoraria | — | Built, tested — not in the spec at all; see `docs/BRAINSTORM.md` §4. The crew is a mix of paid and volunteer, and the pay screen only chases a rate for the ones who should have one |
 | Registration and rosters, no payments | — | Built, tested — Module E's fees stay deferred |
 | Outbound SMS: sender, retries, opt-outs, failure screen | §5.7 | Built, tested — **dry run by default**; needs a Twilio account to reach a phone |
 | Money raised: every stream, cost of goods, gifts in kind, cash control | §8A | Built, tested — costs as receipts or per item; the raffle is still recorded by hand |
@@ -48,6 +48,7 @@ intake paths that feed it.
 | Volunteers: site supervisors covering a whole site | §6 | Built, tested — this is who the signed sheets actually reach, and their phone is recognised for every diamond at their site |
 | Concession tickets from the team packages | §8 | Built, tested — a third tender, so food given away is neither counted as takings nor lost from the books |
 | Donations: a public page, a live total against last year | §8A | Built, tested — off until the committee turns it on; nobody is thanked by name who did not ask to be |
+| Receipts for CHEO | §8A.4 | Built — CHEO issues them, so this collects the address, hands the list over and records that it went. Nothing is sent from here |
 | Cash that goes home overnight | §8A | Built, tested — who has it and since when, because that protects the volunteer as much as the money |
 | Trophies: the engraving list, and the Gold Glove draw | — | Built, tested — the draw records its pool size and seed so it can be shown to have been straight |
 | **The public website itself** | — | Built, tested — pages the committee edits, the honour roll, sponsors, directions, a volunteer sign-up. This is the site, not a tool beside it |
@@ -259,10 +260,12 @@ from winning a tiebreaker, so a director confirms it.
 
 ## Before this is used for anything real
 
-- Enter each division's actual rules from its published PDF. Every division
-  currently carries Major's 2026 numbers with `rules_reviewed = false`. **The
-  time limit drives the overdue clock**, so a wrong value quietly breaks the HQ
-  board.
+- Enter the tournament's actual rules from the published document. Every
+  division currently carries Major's 2026 numbers with `rules_reviewed =
+  false`. One document covers all the divisions, so the way to do this is to
+  type it into one division and press *apply to every division*, then go back
+  and type the exceptions. **The time limit drives the overdue clock**, so a
+  wrong value quietly breaks the HQ board.
 - Set `TWILIO_AUTH_TOKEN`. Without it the SMS webhook refuses all traffic in
   production — deliberately, since anyone who guesses the URL could otherwise
   post scores that decide who plays on Sunday.

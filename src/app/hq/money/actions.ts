@@ -12,7 +12,7 @@ import {
   recordCashMovement,
   recordPurchase,
 } from '@/server/fundraising';
-import { recordManualDonation, voidDonation } from '@/server/donations';
+import { markReceiptsSent, recordManualDonation, voidDonation } from '@/server/donations';
 import type { Movement, Stream } from '@/domain/fundraising';
 
 /**
@@ -278,6 +278,33 @@ export async function recordDonationAction(formData: FormData): Promise<void> {
   revalidatePath('/hq/money/donations');
   revalidatePath('/hq/money');
   redirect('/hq/money/donations?saved=1');
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Record that a batch of donor details has gone to CHEO.
+ *
+ * This sends nothing. It is the second half of handing a list over — without
+ * it, the next export contains the same donors and somebody at the foundation
+ * receipts them twice. `markReceiptsSent` skips rows already marked, so
+ * pressing the button twice does not move the date on a gift that went last
+ * week.
+ */
+export async function markReceiptsSentAction(formData: FormData): Promise<void> {
+  const staff = await requireHq();
+
+  const ids = formData
+    .getAll('id')
+    .map((value) => String(value))
+    .filter((value) => UUID.test(value));
+  if (ids.length === 0) redirect('/hq/money/donations/receipts');
+
+  const marked = await markReceiptsSent(staff.tournamentId, ids, staff.name);
+
+  revalidatePath('/hq/money/donations/receipts');
+  revalidatePath('/hq/money/donations');
+  redirect(`/hq/money/donations/receipts?sent=${marked}`);
 }
 
 /** A gift refunded or charged back. Kept on the record, marked as gone. */

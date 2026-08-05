@@ -79,11 +79,16 @@ export default async function TeamPage({
         </div>
       )}
 
-      {tournament && tournament.tickets_per_team > 0 && (
+      {/* Off the roster, not off a flat number. A team of nine gets nine. */}
+      {tournament && tournament.tickets_per_player > 0 && roster.length > 0 && (
         <div className="notice info">
           <strong>
-            {tournament.tickets_per_team} concession ticket
-            {tournament.tickets_per_team === 1 ? '' : 's'} came with your entry.
+            {tournament.tickets_per_player * roster.length} concession ticket
+            {tournament.tickets_per_player * roster.length === 1 ? '' : 's'} came with your entry
+            {tournament.tickets_per_player === 1
+              ? ' — one per player'
+              : ` — ${tournament.tickets_per_player} per player`}
+            .
           </strong>{' '}
           {tournament.ticket_covers ? `Each one is good for ${tournament.ticket_covers}. ` : ''}
           Hand them in at any stand — the volunteer knows what to do with them.

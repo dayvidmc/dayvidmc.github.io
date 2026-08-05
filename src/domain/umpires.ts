@@ -259,6 +259,16 @@ export interface HonorariumLine {
   umpireId: string;
   umpireName: string;
   rateCents: number;
+  /**
+   * They umpire for nothing, and that is the arrangement.
+   *
+   * Kept apart from a rate of zero, which means nobody has said what the
+   * arrangement is. The tournament's umpires are a mix of paid and unpaid, so
+   * treating every zero as an oversight names the same volunteers in an amber
+   * warning every time the screen is opened — which is how a committee learns
+   * to ignore amber warnings.
+   */
+  volunteer: boolean;
   gamesWorked: number;
   gamesAssigned: number;
   noShows: number;
@@ -267,8 +277,17 @@ export interface HonorariumLine {
   owedCents: number;
 }
 
+/** A paid umpire nobody has set a rate for. The only state worth chasing. */
+export function rateUnknown(line: HonorariumLine): boolean {
+  return !line.volunteer && line.rateCents === 0 && line.gamesWorked > 0;
+}
+
 export function honoraria(
-  assignments: readonly (UmpireAssignment & { rateCents: number; played: boolean })[],
+  assignments: readonly (UmpireAssignment & {
+    rateCents: number;
+    played: boolean;
+    volunteer?: boolean;
+  })[],
 ): HonorariumLine[] {
   const byUmpire = new Map<string, HonorariumLine>();
 
@@ -279,6 +298,7 @@ export function honoraria(
         umpireId: assignment.umpireId,
         umpireName: assignment.umpireName,
         rateCents: assignment.rateCents,
+        volunteer: assignment.volunteer ?? false,
         gamesWorked: 0,
         gamesAssigned: 0,
         noShows: 0,
@@ -295,7 +315,10 @@ export function honoraria(
   }
 
   for (const line of byUmpire.values()) {
-    line.owedCents = line.gamesWorked * line.rateCents;
+    // A volunteer's rate is zero by constraint, so the arithmetic is the same
+    // either way — but stating it means a rate accidentally set on a volunteer
+    // cannot quietly turn into money owed.
+    line.owedCents = line.volunteer ? 0 : line.gamesWorked * line.rateCents;
   }
 
   return [...byUmpire.values()].sort((a, b) => a.umpireName.localeCompare(b.umpireName));

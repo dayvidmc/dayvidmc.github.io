@@ -30,6 +30,7 @@ export interface UmpireRow {
   email: string | null;
   level: string | null;
   rate_cents: number;
+  volunteer: boolean;
   access_token: string;
   active: boolean;
   notes: string | null;
@@ -38,8 +39,8 @@ export interface UmpireRow {
 
 export async function umpireRoster(tournamentId: string): Promise<UmpireRow[]> {
   return query<UmpireRow>(
-    `SELECT u.id, u.name, u.phone, u.email, u.level, u.rate_cents, u.access_token,
-            u.active, u.notes,
+    `SELECT u.id, u.name, u.phone, u.email, u.level, u.rate_cents, u.volunteer,
+            u.access_token, u.active, u.notes,
             COUNT(gu.game_id)::int AS games
        FROM umpire u
        LEFT JOIN game_umpire gu ON gu.umpire_id = u.id
@@ -118,11 +119,30 @@ export async function saveUmpireField(
     // Entered in dollars, stored in cents, like everything else with money.
     const dollars = Number(value.replace(/[^0-9.]/g, ''));
     if (!Number.isFinite(dollars) || dollars < 0) return false;
+    // Setting a rate on somebody marked as umpiring for nothing is a
+    // contradiction the database refuses. Clearing the flag is what was meant.
     const result = await query(
-      'UPDATE umpire SET rate_cents = $3, updated_at = now() WHERE id = $2 AND tournament_id = $1',
+      `UPDATE umpire
+          SET rate_cents = $3, volunteer = CASE WHEN $3 > 0 THEN false ELSE volunteer END,
+              updated_at = now()
+        WHERE id = $2 AND tournament_id = $1`,
       [tournamentId, umpireId, Math.round(dollars * 100)],
     );
     return result.length >= 0;
+  }
+
+  if (field === 'volunteer') {
+    // They umpire for nothing, which is an arrangement rather than a missing
+    // rate. Marking it zeroes the rate, because the two cannot both be true.
+    const volunteer = value === 'true';
+    await query(
+      `UPDATE umpire
+          SET volunteer = $3, rate_cents = CASE WHEN $3 THEN 0 ELSE rate_cents END,
+              updated_at = now()
+        WHERE id = $2 AND tournament_id = $1`,
+      [tournamentId, umpireId, volunteer],
+    );
+    return true;
   }
 
   if (field === 'active') {
@@ -155,10 +175,15 @@ interface AssignmentRow {
   no_show: boolean;
   rules: unknown;
   rate_cents: number;
+  volunteer: boolean;
   played: boolean;
 }
 
-export type StoredAssignment = UmpireAssignment & { rateCents: number; played: boolean };
+export type StoredAssignment = UmpireAssignment & {
+  rateCents: number;
+  volunteer: boolean;
+  played: boolean;
+};
 
 const toAssignment = (row: AssignmentRow): StoredAssignment => ({
   umpireId: row.umpire_id,
@@ -174,6 +199,7 @@ const toAssignment = (row: AssignmentRow): StoredAssignment => ({
   site: row.site,
   noShow: row.no_show,
   rateCents: row.rate_cents,
+  volunteer: row.volunteer,
   played: row.played,
 });
 
@@ -182,7 +208,7 @@ export async function allAssignments(tournamentId: string) {
   const rows = await query<AssignmentRow>(
     `SELECT gu.umpire_id, u.name AS umpire_name, gu.game_id, g.external_game_id,
             gu.position, g.scheduled_start, dm.name AS diamond_name, dm.site,
-            gu.no_show, d.rules, u.rate_cents,
+            gu.no_show, d.rules, u.rate_cents, u.volunteer,
             (a.game_id IS NOT NULL) AS played
        FROM game_umpire gu
        JOIN umpire u   ON u.id = gu.umpire_id
@@ -201,7 +227,7 @@ export async function assignmentsForUmpire(umpireId: string) {
   const rows = await query<AssignmentRow>(
     `SELECT gu.umpire_id, u.name AS umpire_name, gu.game_id, g.external_game_id,
             gu.position, g.scheduled_start, dm.name AS diamond_name, dm.site,
-            gu.no_show, d.rules, u.rate_cents,
+            gu.no_show, d.rules, u.rate_cents, u.volunteer,
             (a.game_id IS NOT NULL) AS played
        FROM game_umpire gu
        JOIN umpire u   ON u.id = gu.umpire_id

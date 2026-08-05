@@ -224,9 +224,20 @@ What is left:
   recognise their phone, which had never actually worked in the demo before.
 - **Sponsor and donor relationships** — the rest of Module C, waiting on §13 Q7
   about who owns them.
+- **Email as a channel at all — the largest thing still missing.** Every
+  outbound message in this repository is SMS. `notification` has a `channel`
+  column and only ever holds `'sms'`; the sender speaks to one provider. But
+  coaches were collected by email as well as mobile, an entry confirmation is
+  something a coach wants to keep rather than scroll back to, a donor without a
+  postal address can only be reached one way, and a sponsor is an email
+  relationship and never a texted one. Four screens now say "worth an email
+  before this goes" and none of them can send it. The queue, the retry and the
+  audit trail are all built and channel-agnostic — what is missing is a second
+  sender and a template. It is the one gap that several finished modules are
+  each quietly working around.
 - **An email when an entry lands and when it is accepted.** The coach currently
-  has to keep their own reference. The text spine can carry this and nothing
-  else needs building for it.
+  has to keep their own reference. A special case of the above; nothing else
+  needs building for it once a mail sender exists.
 - **A merchant account**, if the committee wants cards. Everything on this side
   is written and dry-runs end to end; see `docs/DEPLOY.md`.
 
@@ -263,24 +274,26 @@ Recorded so they do not get re-proposed every year.
 Tickets, supervisors, donations and the small ones are built. Four things they
 made visible and did not finish:
 
-**A receipt for a donation is a sentence on a page, not an email.** The donate
-page promises one will follow and nothing sends it. The notification queue
-exists and the donor's address is stored, so this is a template and a call —
-but until it is written, that promise is being made and not kept, which is
-worse than not promising. Either send it or change the wording.
+**~~A receipt for a donation is a sentence on a page, not an email.~~**
+Answered and rebuilt: CHEO issues the receipts, so nothing is sent from here
+and the page no longer implies otherwise. What is left is the handover —
+`/hq/money/donations/receipts` — and the one thing it cannot do is chase a
+donor who asked for a receipt without leaving an address. It names them; a
+person still has to email them, and this repository has no email channel to do
+it with. See the notification-channel gap below.
 
-**A charitable receipt is a different thing again.** §8A.4 is still unresolved:
-who issues it, and under whose registration number. A donation to a tournament
-that gives everything to CHEO is not automatically receiptable by the
-tournament. Committee question, not a technical one, and the wording on the
-donate page deliberately says "a receipt" rather than "a tax receipt" until it
-is answered.
+**A charitable receipt is a different thing again.** Half-answered. *Who*
+issues it is settled — CHEO. *Whether* a gift to a tournament that passes
+everything to CHEO is receiptable at all, and under whose registration number,
+is not, and it is a committee question rather than a technical one. The donate
+page deliberately says "a receipt" rather than "a tax receipt" until it is.
 
-**Ticket counts are recorded and nothing reconciles them.** `tickets_per_team`
-times the number of teams is how many went out; `ticket_count` summed is how
-many came back. The two are never put next to each other on a screen. That is a
-ten-line report and the number it produces is what next year's print run is
-decided on.
+**Ticket counts are recorded and nothing reconciles them.**
+`tickets_per_player` times the players on every roster is how many went out;
+`ticket_count` summed is how many came back. The two are never put next to each
+other on a screen. That is a ten-line report and the number it produces is what
+next year's print run is decided on — and now that the count comes off the
+rosters, it can only be run once rosters are in.
 
 **The Gold Glove draw has no public page.** It is recorded, verifiable and
 visible only inside HQ. The point of storing the seed is that somebody who wants
@@ -333,9 +346,11 @@ where every other tournament's is a card with a name and a date on it.
 
 ## Recommended next three
 
-1. **The messaging spine** (§1). Without it the primary score path is
-   half-built, and everything else that promises a text is writing to a queue
-   nobody drains.
+1. **The messaging spine** (§1), and **email alongside it**. Without the spine
+   the primary score path is half-built and everything that promises a text is
+   writing to a queue nobody drains. Without email, four finished screens end
+   at "worth an email before this goes" and cannot send one — and coaches were
+   collected by email as much as by mobile.
 2. **Close the dead ends** (§2) — coin flips and diamond shifts. Small, and both
    are places the system currently promises something it cannot do.
 3. **Print views** (§5) and **an e2e smoke test** (§8). Together these are what

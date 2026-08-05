@@ -43,6 +43,11 @@ export async function donateAction(formData: FormData): Promise<void> {
       donorEmail: text(formData, 'donorEmail'),
       message: text(formData, 'message'),
       showPublicly: formData.get('showPublicly') === 'on',
+      receiptRequested: formData.get('receiptRequested') === 'on',
+      addressLine: text(formData, 'addressLine'),
+      addressCity: text(formData, 'addressCity'),
+      addressProvince: text(formData, 'addressProvince'),
+      addressPostal: text(formData, 'addressPostal'),
     },
     origin,
   );

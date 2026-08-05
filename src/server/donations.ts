@@ -117,6 +117,34 @@ export interface DonorDetails {
   donorEmail: string;
   message: string;
   showPublicly: boolean;
+  /**
+   * CHEO issues the receipts, and a foundation posting one needs an address.
+   *
+   * All optional. Somebody giving twenty dollars should not have to type their
+   * address, and an anonymous donor has none to give — so a receipt is asked
+   * for rather than assumed, and the address is only collected when it was.
+   */
+  receiptRequested?: boolean;
+  addressLine?: string;
+  addressCity?: string;
+  addressProvince?: string;
+  addressPostal?: string;
+}
+
+/** The columns a donation's address occupies, in the order they are written. */
+const ADDRESS_COLUMNS = 'address_line, address_city, address_province, address_postal, receipt_requested';
+
+function addressValues(input: DonorDetails): (string | boolean | null)[] {
+  // A receipt nobody asked for is not a receipt anybody will chase, and an
+  // address without a request is data held for no stated reason.
+  const wanted = input.receiptRequested === true;
+  return [
+    wanted ? input.addressLine?.trim().slice(0, 200) || null : null,
+    wanted ? input.addressCity?.trim().slice(0, 100) || null : null,
+    wanted ? input.addressProvince?.trim().slice(0, 60) || null : null,
+    wanted ? input.addressPostal?.trim().toUpperCase().slice(0, 12) || null : null,
+    wanted,
+  ];
 }
 
 /** The most anybody should be able to give through a web form in one go. */
@@ -152,8 +180,8 @@ export async function startDonationCheckout(
   const row = await queryOne<{ id: string }>(
     `INSERT INTO donation
        (tournament_id, amount_cents, donor_name, donor_email, message,
-        show_publicly, method, recorded_by)
-     VALUES ($1,$2,$3,$4,$5,$6,'card','public donate page')
+        show_publicly, method, recorded_by, ${ADDRESS_COLUMNS})
+     VALUES ($1,$2,$3,$4,$5,$6,'card','public donate page',$7,$8,$9,$10,$11)
      RETURNING id`,
     [
       tournamentId,
@@ -163,6 +191,7 @@ export async function startDonationCheckout(
       input.message.trim().slice(0, 500) || null,
       // Consent to be named is only meaningful attached to a name.
       input.showPublicly && input.donorName.trim().length > 0,
+      ...addressValues(input),
     ],
   );
   if (!row) return { ok: false, error: 'could not start' };
@@ -299,8 +328,8 @@ export async function recordManualDonation(
     const row = await client.query<{ id: string }>(
       `INSERT INTO donation
          (tournament_id, amount_cents, donor_name, donor_email, message,
-          show_publicly, method, confirmed_at, recorded_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,now(),$8)
+          show_publicly, method, confirmed_at, recorded_by, ${ADDRESS_COLUMNS})
+       VALUES ($1,$2,$3,$4,$5,$6,$7,now(),$8,$9,$10,$11,$12,$13)
        RETURNING id`,
       [
         tournamentId,
@@ -311,6 +340,7 @@ export async function recordManualDonation(
         input.showPublicly && input.donorName.trim().length > 0,
         input.method,
         actor,
+        ...addressValues(input),
       ],
     );
 
@@ -355,4 +385,91 @@ export async function voidDonation(
 export async function donationById(id: string): Promise<DonationRow | null> {
   const row = await queryOne<Raw>(`SELECT ${COLUMNS} FROM donation WHERE id = $1`, [id]);
   return row ? shape(row) : null;
+}
+
+// --- What CHEO needs ------------------------------------------------------------
+
+export interface ReceiptLine {
+  id: string;
+  donorName: string;
+  donorEmail: string | null;
+  addressLine: string | null;
+  addressCity: string | null;
+  addressProvince: string | null;
+  addressPostal: string | null;
+  amountCents: number;
+  receivedAt: Date;
+  method: string;
+  sentAt: Date | null;
+}
+
+/**
+ * The donors who asked for a receipt.
+ *
+ * CHEO issues them, so the tournament's job is to hand over a name, an address
+ * and an amount — and then to record that it did, so a second export does not
+ * post the same person twice and so somebody can see what is still outstanding.
+ *
+ * Anonymous gifts are not here. A donor who gave no name cannot be receipted
+ * and did not ask to be.
+ */
+export async function receiptsDue(
+  tournamentId: string,
+  includeSent = false,
+): Promise<ReceiptLine[]> {
+  const rows = await query<{
+    id: string;
+    donor_name: string;
+    donor_email: string | null;
+    address_line: string | null;
+    address_city: string | null;
+    address_province: string | null;
+    address_postal: string | null;
+    amount_cents: number;
+    received_at: Date;
+    method: string;
+    receipt_sent_at: Date | null;
+  }>(
+    `SELECT id, donor_name, donor_email, address_line, address_city, address_province,
+            address_postal, amount_cents, received_at, method, receipt_sent_at
+       FROM donation
+      WHERE tournament_id = $1
+        AND receipt_requested
+        AND confirmed_at IS NOT NULL
+        AND voided_at IS NULL
+        AND donor_name IS NOT NULL
+        ${includeSent ? '' : 'AND receipt_sent_at IS NULL'}
+      ORDER BY received_at`,
+    [tournamentId],
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    donorName: row.donor_name!,
+    donorEmail: row.donor_email,
+    addressLine: row.address_line,
+    addressCity: row.address_city,
+    addressProvince: row.address_province,
+    addressPostal: row.address_postal,
+    amountCents: row.amount_cents,
+    receivedAt: row.received_at,
+    method: row.method,
+    sentAt: row.receipt_sent_at,
+  }));
+}
+
+/** Mark a batch as handed over, so nobody is receipted twice. */
+export async function markReceiptsSent(
+  tournamentId: string,
+  ids: readonly string[],
+  actor: string,
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const rows = await query<{ id: string }>(
+    `UPDATE donation SET receipt_sent_at = now(), receipt_sent_by = $3
+      WHERE tournament_id = $1 AND id = ANY($2::uuid[]) AND receipt_sent_at IS NULL
+      RETURNING id`,
+    [tournamentId, [...ids], actor],
+  );
+  return rows.length;
 }

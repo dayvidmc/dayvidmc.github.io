@@ -1,11 +1,16 @@
 import { notFound, redirect } from 'next/navigation';
-import { queryOne } from '@/db/client';
+import { query, queryOne } from '@/db/client';
 import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
-import { parseDivisionRules, RULE_FIELDS, type RuleField } from '@/domain/divisionRules';
+import {
+  parseDivisionRules,
+  ruleDifferences,
+  RULE_FIELDS,
+  type RuleField,
+} from '@/domain/divisionRules';
 import { OVERDUE_ESCALATION_MINUTES } from '@/domain/types';
 import { addMinutes, formatTimeFriendly, localWallClock } from '@/domain/time';
 import { AutoSaveField, AutoSaveSelect, AutoSaveToggle } from '../../../_components/AutoSave';
-import { saveDivisionRule, setRulesReviewed } from '../../editActions';
+import { applyRulesEverywhere, saveDivisionRule, setRulesReviewed } from '../../editActions';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +33,20 @@ export default async function DivisionRulesPage({
 
   const { rules, defaulted } = parseDivisionRules(division.rules);
   const editable = isDirector(staff);
+
+  // Which other divisions this one disagrees with, and on what. The tournament
+  // publishes one rules document with exceptions, so a disagreement is either
+  // a real exception or a typo, and the only way to tell is to read them.
+  const others = await query<{ id: string; name: string; rules: unknown }>(
+    'SELECT id, name, rules FROM division WHERE tournament_id = $1 AND id <> $2 ORDER BY name',
+    [staff!.tournamentId, division.id],
+  );
+  const differing = others
+    .map((other) => ({
+      name: other.name,
+      differences: ruleDifferences(parseDivisionRules(other.rules).rules, rules),
+    }))
+    .filter((other) => other.differences.length > 0);
 
   // Bound to this division, so a field only ever needs to send its own name.
   const save = saveDivisionRule.bind(null, division.id);
@@ -150,6 +169,62 @@ export default async function DivisionRulesPage({
               : "I've checked these against this year's rules"}
           </button>
         </form>
+      )}
+
+      {editable && others.length > 0 && (
+        <>
+          <h2>Apply these to every division</h2>
+          <p className="sub">
+            The tournament publishes one rules document covering all the divisions, with a few
+            stated exceptions. Set the shared numbers here, copy them across, then go back and type
+            the exceptions.
+          </p>
+
+          {differing.length === 0 ? (
+            <div className="notice ok">
+              Every other division already holds these numbers. Nothing to copy.
+            </div>
+          ) : (
+            <details className="card">
+              <summary style={{ cursor: 'pointer', fontWeight: 600, padding: '4px 0' }}>
+                {differing.length} division{differing.length === 1 ? '' : 's'} would change — see
+                exactly what
+              </summary>
+
+              <div className="notice warn" style={{ marginTop: 12 }}>
+                This overwrites. Any exception already typed into the divisions below is replaced by{' '}
+                {division.name}&apos;s value, and there is no undo — the change is recorded in the
+                event log, but putting it back is retyping.
+              </div>
+
+              {differing.map((other) => (
+                <div key={other.name} className="row-item" style={{ alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{other.name}</div>
+                    {other.differences.map((difference) => (
+                      <div key={difference.key} className="meta">
+                        {difference.label}: {difference.from} → {difference.to}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <form action={applyRulesEverywhere} style={{ marginTop: 12 }}>
+                <input type="hidden" name="divisionId" value={division.id} />
+                <button type="submit" className="wide" style={{ minHeight: 48 }}>
+                  Copy {division.name}&apos;s rules to {differing.length} division
+                  {differing.length === 1 ? '' : 's'}
+                </button>
+                <p className="hint">
+                  {division.rules_reviewed
+                    ? 'They will be marked as checked too — one document, checked once.'
+                    : 'These are not marked as checked yet, so the divisions receiving them will not be either.'}
+                </p>
+              </form>
+            </details>
+          )}
+        </>
       )}
 
       <p className="sub" style={{ marginTop: 20 }}>

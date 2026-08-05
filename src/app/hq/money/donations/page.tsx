@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff } from '@/server/auth';
 import { currentTournament } from '@/server/repo';
-import { donations } from '@/server/donations';
+import { donations, receiptsDue } from '@/server/donations';
 import { formatMoney } from '@/domain/pos';
 import { formatDateFriendly } from '@/domain/time';
 import { recordDonationAction, voidDonationAction } from '../actions';
@@ -37,7 +37,7 @@ export default async function DonationsPage({
   if (!tournament) return <div className="notice info">No tournament set up yet.</div>;
 
   const params = await searchParams;
-  const all = await donations(tournament.id);
+  const [all, due] = await Promise.all([donations(tournament.id), receiptsDue(tournament.id)]);
 
   const counted = all.filter((gift) => gift.confirmedAt !== null && gift.voidedAt === null);
   const abandoned = all.filter((gift) => gift.confirmedAt === null && gift.voidedAt === null);
@@ -54,9 +54,19 @@ export default async function DonationsPage({
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <a className="btn" href="/hq/money" style={{ flex: 1 }}>← Money</a>
         <a className="btn" href="/donate" style={{ flex: 1 }}>The public page</a>
+        <a className="btn" href="/hq/money/donations/receipts" style={{ flex: 1 }}>
+          Receipts{due.length > 0 ? ` (${due.length})` : ''}
+        </a>
       </div>
 
       {params.saved && <div className="notice ok">Saved.</div>}
+      {due.length > 0 && (
+        <div className="notice info">
+          {due.length} donor{due.length === 1 ? '' : 's'} asked for a receipt and{' '}
+          {due.length === 1 ? 'has' : 'have'} not been passed to CHEO yet.{' '}
+          <a href="/hq/money/donations/receipts">Take the list across</a>.
+        </div>
+      )}
       {params.error && <div className="notice error">That did not work.</div>}
 
       {!tournament.donations_open && (

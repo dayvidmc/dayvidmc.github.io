@@ -231,7 +231,7 @@ export async function seedDemo(): Promise<DemoResult> {
     const inserted = await client.query<{ id: string }>(
       `INSERT INTO tournament
          (name, year, starts_on, ends_on,
-          ticket_covers, tickets_per_team,
+          ticket_covers, tickets_per_player,
           previous_year_raised_cents, donations_open, donation_message)
        VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8) RETURNING id`,
       [
@@ -240,7 +240,7 @@ export async function seedDemo(): Promise<DemoResult> {
         yesterday,
         tomorrow,
         'a bag of chips and a drink, or a hot dog at a field with a barbecue',
-        20,
+        1,
         // Last year's real figure, which is what "more than last year" means.
         4_500_000,
         'Twenty-nine years of this tournament have raised over $536,000 for CHEO Cardiology, ' +
@@ -485,23 +485,33 @@ export async function seedDemo(): Promise<DemoResult> {
  * catches that, and a demo where everything is tidy proves nothing.
  */
 async function seedUmpires(tournamentId: string): Promise<void> {
-  const crew: [string, string, number][] = [
-    // name, level, rate in dollars
-    ['Dana Reyes', 'Level 4', 45],
-    ['Sam Cote', 'Level 3', 40],
-    ['Priya Raman', 'Level 3', 40],
-    ['Marcus Bell', 'Level 2', 35],
-    ['Jo Tremblay', 'Level 2', 35],
+  // The crew is a mix of paid and volunteer, which is the real arrangement, and
+  // the honorarium report is only readable if the demo shows both — a volunteer
+  // on £0 and a paid umpire nobody has set a rate for look identical otherwise.
+  const crew: [string, string, number, boolean][] = [
+    // name, level, rate in dollars, volunteer
+    ['Dana Reyes', 'Level 4', 45, false],
+    ['Sam Cote', 'Level 3', 40, false],
+    ['Priya Raman', 'Level 3', 40, false],
+    ['Marcus Bell', 'Level 2', 35, false],
+    ['Jo Tremblay', 'Level 2', 35, false],
+    ['Chris Okafor', 'Level 2', 0, true],
+    ['Erin Doyle', 'Level 1', 0, true],
+    // Paid, but no rate typed in yet. The one state the pay screen chases.
+    ['Tom Nadeau', 'Level 3', 0, false],
   ];
 
   const used = new Set<string>();
   const ids: string[] = [];
 
-  for (const [name, level, rate] of crew) {
+  for (const [name, level, rate, volunteer] of crew) {
     const [row] = await query<{ id: string }>(
-      `INSERT INTO umpire (tournament_id, name, level, rate_cents, phone, access_token)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [tournamentId, name, level, rate * 100, fakePhone(name, used), newAccessToken()],
+      `INSERT INTO umpire (tournament_id, name, level, rate_cents, volunteer, phone, access_token)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [
+        tournamentId, name, level, rate * 100, volunteer,
+        fakePhone(name, used), newAccessToken(),
+      ],
     );
     ids.push(row!.id);
   }
@@ -1367,34 +1377,71 @@ export async function seedBracket(tournamentId: string, base: Date): Promise<voi
  * matching a provider statement needs to see it counts for nothing.
  */
 async function seedDonations(tournamentId: string): Promise<void> {
-  const gifts: [
-    amount: number,
-    name: string | null,
-    email: string | null,
-    message: string | null,
-    show: boolean,
-    method: string,
-    confirmed: boolean,
-  ][] = [
-    [10_000, 'The Barrett family', 'barretts@example.com', 'For the cardiology ward. Thank you all.', true, 'card', true],
-    [2_500, null, null, null, false, 'card', true],
-    [25_000, 'Kanata Home Hardware', 'giving@example.com', 'In memory of Scott.', true, 'card', true],
-    [5_000, 'A grandparent at Deevy Pines', null, null, true, 'cash', true],
+  interface Gift {
+    amount: number;
+    name: string | null;
+    email: string | null;
+    message: string | null;
+    show: boolean;
+    method: string;
+    confirmed: boolean;
+    /** CHEO issues the receipts, so a request means an address is needed. */
+    receipt?: boolean;
+    address?: [line: string, city: string, postal: string];
+    sent?: boolean;
+  }
+
+  const gifts: Gift[] = [
+    {
+      amount: 10_000, name: 'The Barrett family', email: 'barretts@example.com',
+      message: 'For the cardiology ward. Thank you all.', show: true,
+      method: 'card', confirmed: true,
+      receipt: true, address: ['118 Weslock Way', 'Kanata', 'K2K 3G4'],
+    },
+    { amount: 2_500, name: null, email: null, message: null, show: false, method: 'card', confirmed: true },
+    {
+      amount: 25_000, name: 'Kanata Home Hardware', email: 'giving@example.com',
+      message: 'In memory of Scott.', show: true, method: 'card', confirmed: true,
+      receipt: true, address: ['499 Terry Fox Drive', 'Kanata', 'K2T 1H7'], sent: true,
+    },
+    {
+      amount: 5_000, name: 'A grandparent at Deevy Pines', email: null, message: null,
+      show: true, method: 'cash', confirmed: true,
+    },
+    // Asked for a receipt on a phone at the gate and did not fill the address
+    // in. The receipts screen exists to surface exactly this before the batch
+    // goes to CHEO, rather than after.
+    {
+      amount: 7_500, name: 'Devon Marchand', email: 'devon@example.com', message: null,
+      show: false, method: 'etransfer', confirmed: true, receipt: true,
+    },
     // Opened the payment page on a phone with one bar and never came back.
-    [5_000, 'Someone', null, null, false, 'card', false],
+    { amount: 5_000, name: 'Someone', email: null, message: null, show: false, method: 'card', confirmed: false },
   ];
 
-  for (const [amount, name, email, message, show, method, confirmed] of gifts) {
+  for (const gift of gifts) {
     await query(
       `INSERT INTO donation
          (tournament_id, amount_cents, donor_name, donor_email, message, show_publicly,
-          method, external_ref, confirmed_at, recorded_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8, CASE WHEN $9 THEN now() END, $10)`,
+          method, external_ref, confirmed_at, recorded_by,
+          receipt_requested, address_line, address_city, address_province, address_postal,
+          receipt_sent_at, receipt_sent_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8, CASE WHEN $9 THEN now() END, $10,
+               $11,$12,$13,$14,$15,
+               CASE WHEN $16 THEN now() END, CASE WHEN $16 THEN 'Tournament Treasurer' END)`,
       [
-        tournamentId, amount, name, email, message, show, method,
-        confirmed && method === 'card' ? `demo_${amount}_${name ?? 'anon'}` : null,
-        confirmed,
-        method === 'card' ? 'public donate page' : 'Tournament Director',
+        tournamentId, gift.amount, gift.name, gift.email, gift.message, gift.show, gift.method,
+        gift.confirmed && gift.method === 'card'
+          ? `demo_${gift.amount}_${gift.name ?? 'anon'}`
+          : null,
+        gift.confirmed,
+        gift.method === 'card' ? 'public donate page' : 'Tournament Director',
+        gift.receipt ?? false,
+        gift.address?.[0] ?? null,
+        gift.address?.[1] ?? null,
+        gift.address ? 'Ontario' : null,
+        gift.address?.[2] ?? null,
+        gift.sent ?? false,
       ],
     );
   }
