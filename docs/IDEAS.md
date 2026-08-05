@@ -302,6 +302,34 @@ most likely to want that are not the people with a PIN.
 
 ---
 
+## 12a. What the full walk turned up, and what it left
+
+Every screen, as all six roles, at 320, 390, 768 and 1280 — 1,132 page visits.
+Most of it was fixed in the same pass (§2.63–§2.65). Three things were not.
+
+**A closed `<details>` still ships its contents to the browser.** Folding the
+long lists shut fixed the reading, not the payload: ninety teams still means
+ninety teams' worth of HTML on the wire, and the phones this is read on are on
+a park's worth of shared signal. Pagination or a search box would fix it
+properly. Not urgent — the pages are tens of kilobytes, not hundreds — but it
+is the difference between a screen that reads well and a screen that arrives.
+
+**The public menu offers HQ and the till to everybody.** It is honest and both
+are PIN-guarded, so nothing leaks. But a parent looking for the schedule is
+shown two links to a locked door, and a volunteer who needs the till has to
+find it under a heading about running the weekend. Worth a committee opinion
+rather than a unilateral decision — it may be exactly what they want.
+
+**Nothing marks where you are in the staff menu.** See §2.65 for why. If a
+reason ever appears to add middleware, this is the thing to add with it.
+
+Two smaller ones, both now done and recorded here so the next walk does not
+re-find them: three screens overflowed sideways at 320px because a table has a
+minimum width and a native date input has a stubborn one, and the site had no
+favicon at all — a 404 on every page load and a blank square in every tab.
+
+---
+
 ## 13. The website, now that it is one
 
 Merging the public site in closed some gaps and opened others.

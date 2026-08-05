@@ -1118,6 +1118,74 @@ screen promises and what the action does come from the same place. The reviewed
 flag travels with the values: if the document is shared, checking it once has
 checked it for all of them.
 
+### 2.63 The navigation is a pure module, held against the guards by a test
+
+**Decision.** `domain/navigation.ts` holds one list of what each role is
+offered and where signing in lands them. `domain/navigation.test.ts` carries a
+copy of what every screen's own guard actually allows, and asserts the two
+agree.
+
+**Why.** Walking the whole tool as each of the six roles turned up a class of
+bug no unit test could have: the permissions were right and the navigation did
+not know about them.
+
+- The **auction lead** had a sign-in tile, a PIN and a role named after a job —
+  and every screen under `/hq/auction` asked `canAccessHq`, which is director
+  and HQ only. They could sign in and reach nothing at all.
+- **Four of the seven tiles** landed on the public home page. Signed in, no
+  indication of it, no link to anything they were allowed to open.
+- **Signing out existed on one screen**, the board, which three of the six
+  roles cannot open — on phones that get passed between shifts.
+- The sign-in tiles showed `concession_lead` and `concession_volunteer`
+  verbatim, because the label map on that page had four entries for six roles.
+
+Every one of those is two lists disagreeing. So there is one list now, it is
+pure, and the test is the thing that keeps the guards and the menu honest —
+when a guard changes, the table in the test has to change with it or the build
+goes red. A menu item that leads to a redirect is worse than no menu item, and
+a screen somebody may use but is never offered might as well not exist.
+
+`/hq/messages` was very nearly lost in this change: it was reachable only from
+the button wall the same commit deleted. That is the second half of the same
+test — everything the tool can do has to be reachable from somewhere.
+
+### 2.64 A long list is folded shut
+
+**Decision.** Where a screen would render every field of every record at once —
+teams, umpires, the price list, the orders — each row is a `<details>` whose
+closed state carries what somebody scanning is looking for.
+
+**Why.** The teams screen rendered four inputs, three buttons and a repeated
+hint sentence per team. Twenty-two demo teams made it about a thousand words;
+ninety real ones would make it four thousand and roughly five hundred controls.
+Nobody scans that, so nobody finds the team they came for.
+
+Two smaller things fell out of it. The per-field explanations were being printed
+once per record — six sentences, eleven times over on the concession menu — so
+they moved to one place at the top, which is also where somebody reads them.
+And on the orders screen every row carried a live *Refund $320.00* button;
+folding the form shut means the one action that moves money outwards now takes
+a deliberate tap rather than sitting under a scrolling thumb a few dozen times.
+
+A closed `<details>` is not `display: none` in Chrome — its contents keep
+layout boxes. A test that asks "is this field visible" has to ask
+`closest('details:not([open]))'`, not `offsetParent` and not a bounding rect.
+Both of the first two attempts passed against a screen that was working.
+
+### 2.65 The tool's own bar is not the public site's header
+
+**Decision.** `StaffBar` renders above `/hq/*` and `/pos/*` only. The public
+header stays exactly as it was.
+
+**Why.** They belong to different things: the public bar is the website, the
+staff bar is the tool. Keeping them apart is what stops a parent reading the
+schedule from being shown a menu of staff screens — and it is why the board
+could drop sixteen buttons without anything becoming unreachable.
+
+It carries no "you are here" marker. That needs the pathname, which in a server
+layout means either middleware on every request or a client bundle, and the
+page's own heading already says where you are.
+
 ---
 
 ## 3. Deliberately not built

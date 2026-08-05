@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
+import { canRunAuction, currentStaff, isDirector } from '@/server/auth';
 import {
   addItem,
   bidsFor,
@@ -34,7 +34,7 @@ import type { SaveResult } from '../../_components/AutoSave';
 
 async function requireHq() {
   const staff = await currentStaff();
-  if (!canAccessHq(staff)) redirect('/signin');
+  if (!canRunAuction(staff)) redirect('/signin');
   return staff!;
 }
 
@@ -75,7 +75,7 @@ export async function saveItemField(
   value: string,
 ): Promise<SaveResult> {
   const staff = await currentStaff();
-  if (!canAccessHq(staff) || !staff) return { ok: false, error: 'Not signed in.' };
+  if (!canRunAuction(staff) || !staff) return { ok: false, error: 'Not signed in.' };
 
   const moneyFields = new Set(['fair_market_value_cents', 'minimum_bid_cents', 'bid_increment_cents']);
 

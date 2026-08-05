@@ -111,13 +111,24 @@ export default async function UmpiresPage() {
         </div>
       )}
 
+      {/* Said once. Each of these sentences used to sit under a field in every
+          umpire's card — eight times over on the demo roster, and the roster is
+          bigger than that in July. */}
+      {umpires.length > 0 && (
+        <p className="hint">
+          Tap anybody to fill in their details. A mobile is stored as +1613…, which is the form an
+          incoming text has to match, and the level is free text because the associations here do
+          not agree on names.
+        </p>
+      )}
+
       {umpires.map((umpire) => {
         const save = saveUmpire.bind(null, umpire.id);
         const line = owed.find((l) => l.umpireId === umpire.id);
 
         return (
-          <div key={umpire.id} className="card" style={{ opacity: umpire.active ? 1 : 0.55 }}>
-            <div className="top">
+          <details key={umpire.id} className="card" style={{ opacity: umpire.active ? 1 : 0.55 }}>
+            <summary className="row-summary">
               <div>
                 <div className="teams">{umpire.name}</div>
                 <div className="meta">
@@ -132,7 +143,7 @@ export default async function UmpiresPage() {
               ) : (
                 !umpire.phone && <span className="pill warn">No mobile</span>
               )}
-            </div>
+            </summary>
 
             <AutoSaveField
               save={save} field="name" label="Name" defaultValue={umpire.name}
@@ -140,7 +151,6 @@ export default async function UmpiresPage() {
             <AutoSaveField
               save={save} field="phone" label="Mobile" type="tel"
               defaultValue={umpire.phone ?? ''} placeholder="613 555 0142"
-              hint="Stored as +1613…, which is what an incoming text has to match."
             />
             <AutoSaveField
               save={save} field="email" label="Email" type="email"
@@ -149,12 +159,11 @@ export default async function UmpiresPage() {
             <AutoSaveField
               save={save} field="level" label="Level" defaultValue={umpire.level ?? ''}
               placeholder="e.g. Level 3"
-              hint="Free text — the associations here do not agree on names."
             />
             <AutoSaveToggle
               save={save} field="volunteer" label="Umpires for nothing"
               defaultChecked={umpire.volunteer}
-              hint="Some of these umpires are paid and some are not. Ticking this says they are not — which is different from nobody having set a rate yet, and stops the honorarium screen naming them in a warning forever."
+              hint="Different from nobody having set a rate yet, and it stops the honorarium screen naming them in a warning forever."
             />
             {!umpire.volunteer && (
               <AutoSaveField
@@ -177,7 +186,7 @@ export default async function UmpiresPage() {
                   : 'Their link — their games and the rules for each'
               }
             />
-          </div>
+          </details>
         );
       })}
     </>

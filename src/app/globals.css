@@ -301,11 +301,37 @@ label {
   align-items: flex-end;
 }
 
+/*
+ * `min-width: 0` because a flex item will not shrink below its own content by
+ * default, and a native date or time input carries a stubborn intrinsic width.
+ * Two of them side by side needed 344px, so at 320 the whole page slid sideways
+ * rather than the two fields getting narrower.
+ */
 .row > * {
   flex: 1;
+  min-width: 0;
+}
+
+.row input,
+.row select {
+  max-width: 100%;
 }
 
 /* --- Standings ---------------------------------------------------------- */
+
+/*
+ * A table that will not fit scrolls itself, rather than the page.
+ *
+ * A five-column money table needs about 350px and the smallest phone anybody
+ * still uses is 320. Without this the whole page shifts sideways — every
+ * heading, every button, the lot — which is how a screen becomes unusable on
+ * one device and fine on every other, so nobody testing on their own phone
+ * ever sees it.
+ */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 
 table {
   width: 100%;
@@ -1337,7 +1363,9 @@ legend {
   font-size: 15px;
   font-weight: 600;
   color: var(--blue);
-  min-height: 40px;
+  /* 44px, not 40: this is the control that opens the only way to most of the
+     site, and it is tapped one-handed while walking between diamonds. */
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
 }
@@ -1394,6 +1422,86 @@ legend {
 
 .menu-panel section:last-child li:last-child a {
   border-bottom: none;
+}
+
+/*
+ * A list row that opens.
+ *
+ * Used where a screen would otherwise render every field of every record at
+ * once — ninety teams, each with four inputs, is not a list anybody can scan.
+ * The closed row carries the two facts somebody scanning is looking for.
+ */
+.row-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  min-height: 44px;
+  font-weight: 600;
+}
+
+.row-summary .meta {
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+/* --- The staff bar ----------------------------------------------------------- */
+
+/*
+ * Who you are, one way out, and one way to everywhere else you are allowed.
+ *
+ * It sits above the page's own heading rather than inside the public header,
+ * because it belongs to a different thing: the public bar is the site, this is
+ * the tool. Keeping them apart is also what stops a parent reading the schedule
+ * from being shown a menu of staff screens.
+ */
+.staff-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 0 0;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+
+.staff-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: space-between;
+}
+
+.staff-who .meta {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* Small, because signing out is not what anybody came here to do — but a real
+   tap target, because on a shared phone it is the last thing a shift does. */
+button.staff-signout {
+  min-height: 44px;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.staff-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.menu-panel li a small {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.3;
 }
 
 /* --- The footer, which is the whole site on one screen ----------------------- */

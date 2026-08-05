@@ -186,6 +186,7 @@ export default async function MoneyPage({
       {summary.streams.length === 0 ? (
         <div className="empty">Nothing recorded yet.</div>
       ) : (
+        <div className="table-wrap">
         <table>
           <thead>
             <tr>
@@ -218,6 +219,7 @@ export default async function MoneyPage({
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       <p className="sub">

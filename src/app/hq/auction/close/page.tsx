@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { canAccessHq, currentStaff } from '@/server/auth';
+import { canRunAuction, currentStaff } from '@/server/auth';
 import { currentTournament } from '@/server/repo';
 import { board } from '@/server/auction';
 import { closeFromSheetsAction } from '../actions';
@@ -32,7 +32,7 @@ export default async function ClosePage({
   }>;
 }) {
   const staff = await currentStaff();
-  if (!canAccessHq(staff)) redirect('/signin');
+  if (!canRunAuction(staff)) redirect('/signin');
 
   const tournament = await currentTournament();
   if (!tournament) return <div className="notice info">No tournament set up yet.</div>;

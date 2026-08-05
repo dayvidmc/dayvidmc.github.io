@@ -98,6 +98,7 @@ export default async function HonorariaPage() {
       {lines.length > 0 && (
         <>
           <h2>The working</h2>
+          <div className="table-wrap">
           <table>
             <thead>
               <tr>
@@ -133,6 +134,7 @@ export default async function HonorariaPage() {
               ))}
             </tbody>
           </table>
+          </div>
 
           <p className="sub">
             Some of these umpires are paid and some do it for nothing; both are on the list, and a

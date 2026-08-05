@@ -3,7 +3,6 @@ import { canAccessHq, currentStaff } from '@/server/auth';
 import { boardForDate, currentTournament, openUnmatchedCount } from '@/server/repo';
 import { STATUS_LABEL, STATUS_MARKER, type BoardEntry } from '@/domain/gameStatus';
 import { formatDate, formatDateFriendly, formatTimeFriendly, toWallClock } from '@/domain/time';
-import { signOut } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,17 +48,11 @@ export default async function HqBoardPage({
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1>HQ board</h1>
-        <form action={signOut}>
-          <button type="submit" style={{ minHeight: 44, padding: '8px 14px', fontSize: 14 }}>
-            Sign out
-          </button>
-        </form>
-      </div>
+      {/* The name and the sign-out live in the staff bar now, on every screen
+          rather than only this one. */}
+      <h1>HQ board</h1>
       <p className="sub">
-        {staff!.name} · {formatDateFriendly(new Date(`${date}T00:00:00Z`))} ·{' '}
-        {formatTimeFriendly(now)}
+        {formatDateFriendly(new Date(`${date}T00:00:00Z`))} · {formatTimeFriendly(now)}
       </p>
 
       {params.error === 'director_only' && (
@@ -123,56 +116,11 @@ export default async function HqBoardPage({
         </a>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/rules" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          Rules
-        </a>
-        <a className="btn" href="/hq/teams" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          Teams
-        </a>
-        <a className="btn" href="/hq/entries" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          Entries
-        </a>
-        <a className="btn" href="/hq/registration" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          Rosters
-        </a>
-        <a className="btn" href="/hq/import" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          Schedule
-        </a>
-        <a className="btn" href="/hq/brackets" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          Brackets
-        </a>
-        <a className="btn" href="/hq/umpires" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          Umpires
-        </a>
-        <a className="btn" href="/hq/volunteers" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          Volunteers
-        </a>
-        <a className="btn" href="/hq/concessions" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          Concessions
-        </a>
-        <a className="btn" href="/hq/messages" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          Texts
-        </a>
-        <a className="btn" href="/hq/money" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          Money raised
-        </a>
-        <a className="btn" href="/hq/auction" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          Auction
-        </a>
-        <a className="btn" href="/hq/sponsors" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          Sponsors
-        </a>
-        <a className="btn" href="/hq/trophies" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          Trophies
-        </a>
-        <a className="btn" href="/hq/site" style={{ flex: '1 1 30%', minHeight: 44, fontSize: 15 }}>
-          The website
-        </a>
-        <a className="btn" href="/hq/settings" style={{ flex: '1 1 100%', minHeight: 44, fontSize: 15 }}>
-          Settings and readiness
-        </a>
-      </div>
+      {/* Everything else moved into the staff menu above.
+          Sixteen identical grey buttons used to sit here, between the counts
+          and the games — roughly a phone screen of chrome on the one page the
+          director reads fastest, at the moment they are reading it fastest.
+          The two above are here because they are the two the board is *for*. */}
 
       {entries.length === 0 ? (
         <div className="empty">

@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { canAccessHq, currentStaff } from '@/server/auth';
+import { canRunAuction, currentStaff } from '@/server/auth';
 import { currentTournament } from '@/server/repo';
 import { items } from '@/server/auction';
 
@@ -25,7 +25,7 @@ const money = (cents: number) =>
  */
 export default async function SheetsPage() {
   const staff = await currentStaff();
-  if (!canAccessHq(staff)) redirect('/signin');
+  if (!canRunAuction(staff)) redirect('/signin');
 
   const tournament = await currentTournament();
   if (!tournament) return <div className="notice info">No tournament set up yet.</div>;

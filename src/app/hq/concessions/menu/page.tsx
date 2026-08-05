@@ -63,13 +63,33 @@ export default async function MenuPage({
         <div className="notice error">Only a concession lead can change the menu.</div>
       )}
 
+      {/* Said once. These six sentences were printed under every item, which is
+          eleven times over on the demo menu and made a settings screen read
+          like a manual. */}
+      {editable && items.length > 0 && (
+        <details className="card">
+          <summary className="row-summary">What each field is for</summary>
+          <p className="hint">
+            <strong>Price</strong> is what the customer pays, all in.{' '}
+            <strong>Marked down to</strong> is for Sunday afternoon with forty freezies left — it
+            applies at every till immediately and the button shows it, and clearing it puts the
+            price back. <strong>What it costs us</strong> is per unit; without it the money screen
+            cannot tell taken from raised and reports the total as a ceiling.{' '}
+            <strong>Donated by</strong> is set when the stock was given rather than bought — it
+            costs nothing and the money screen credits the donor with what it earned.{' '}
+            <strong>Group</strong> and <strong>position</strong> only change how the buttons sit on
+            the till.
+          </p>
+        </details>
+      )}
+
       {items.length === 0 && <div className="empty">Nothing on the menu yet.</div>}
 
       {items.map((item) => {
         const save = saveMenuItem.bind(null, item.id);
         return (
-          <div key={item.id} className="card" style={{ opacity: item.active ? 1 : 0.55 }}>
-            <div className="top">
+          <details key={item.id} className="card" style={{ opacity: item.active ? 1 : 0.55 }}>
+            <summary className="row-summary">
               <div>
                 <div className="teams">{item.name}</div>
                 <div className="meta">
@@ -93,7 +113,7 @@ export default async function MenuPage({
                 </div>
               </div>
               {!item.active && <span className="pill warn">Off the menu</span>}
-            </div>
+            </summary>
 
             {editable && (
               <>
@@ -111,18 +131,18 @@ export default async function MenuPage({
                       : (item.clearance_price_cents / 100).toFixed(2)
                   }
                   placeholder="blank = ordinary price"
-                  hint="Sunday afternoon with forty freezies left. Applies at every till immediately, and the button shows it. Clear it to put the price back."
+                  hint="Applies at every till immediately, and the button shows it. Clear it to put the price back."
                 />
                 <AutoSaveField
                   save={save} field="cost_cents" label="What it costs us"
                   defaultValue={item.cost_cents === null ? '' : (item.cost_cents / 100).toFixed(2)}
                   placeholder="leave blank if unknown"
-                  hint="Per unit. Without this the money screen cannot tell taken from raised, and reports the total as a ceiling."
+                  hint="Per unit. Without it the money screen reports the total as a ceiling."
                 />
                 <AutoSaveField
                   save={save} field="donated_by" label="Donated by"
                   defaultValue={item.donated_by ?? ''} placeholder="e.g. Montana's"
-                  hint="Set when the stock was given rather than bought. Costs nothing, and the money screen credits the donor with what it earned."
+                  hint="Set when the stock was given rather than bought."
                 />
                 <AutoSaveField
                   save={save} field="category" label="Group it under"
@@ -144,7 +164,7 @@ export default async function MenuPage({
                 </form>
               </>
             )}
-          </div>
+          </details>
         );
       })}
 

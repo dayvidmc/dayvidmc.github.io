@@ -160,6 +160,7 @@ export default async function EntriesPage({
                 {accepted} in{waiting > 0 ? `, ${waiting} waiting` : ''}
               </span>
             </h3>
+            <div className="table-wrap">
             <table>
               <thead>
                 <tr>
@@ -199,6 +200,7 @@ export default async function EntriesPage({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         );
       })}

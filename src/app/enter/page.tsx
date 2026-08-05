@@ -142,6 +142,7 @@ export default async function EnterPage({
         grouped.map((group) => (
           <div key={group.ageGroup ?? 'other'} style={{ marginBottom: 18 }}>
             <h3 style={{ fontSize: 17, margin: '0 0 6px' }}>{group.ageGroup ?? 'Other'}</h3>
+            <div className="table-wrap">
             <table>
               <thead>
                 <tr>
@@ -177,6 +178,7 @@ export default async function EnterPage({
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         ))
       )}

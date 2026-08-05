@@ -82,8 +82,15 @@ export default async function OrdersPage({
               </p>
             )}
 
+            {/* Folded shut. Open, every order on this screen carried a live
+                "Refund $320.00" button, so scrolling a busy Saturday's takings
+                meant scrolling past a few dozen of them. A refund is the one
+                action on this screen that moves money outwards, and it should
+                take a deliberate tap to reach, not a mis-tap. */}
             {allowed && remaining > 0 && (
-              <form action={refundSale}>
+              <details>
+                <summary className="row-summary">Refund this sale</summary>
+                <form action={refundSale}>
                 <input type="hidden" name="orderId" value={order.id} />
                 <div className="row">
                   <div>
@@ -125,7 +132,8 @@ export default async function OrdersPage({
                 <button type="submit" className="wide" style={{ marginTop: 10 }}>
                   Refund {formatMoney(remaining)}
                 </button>
-              </form>
+                </form>
+              </details>
             )}
           </div>
         );

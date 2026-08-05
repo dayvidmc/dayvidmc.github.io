@@ -137,6 +137,7 @@ export default async function SetupPage({
           {demo && staff.some((s) => s.demo_pin) && (
             <>
               <h2>Who you can sign in as</h2>
+              <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -155,6 +156,7 @@ export default async function SetupPage({
                   ))}
                 </tbody>
               </table>
+              </div>
             </>
           )}
 

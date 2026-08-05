@@ -106,6 +106,7 @@ export default async function ConcessionsPage({
       {byLocation.length === 0 ? (
         <div className="empty">No sales yet.</div>
       ) : (
+        <div className="table-wrap">
         <table>
           <thead>
             <tr><th>Stand</th><th>Sales</th><th>Cash</th><th>Card</th><th>Net</th></tr>
@@ -122,12 +123,14 @@ export default async function ConcessionsPage({
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       <h2>What sold</h2>
       {byItem.length === 0 ? (
         <div className="empty">Nothing sold yet.</div>
       ) : (
+        <div className="table-wrap">
         <table>
           <thead><tr><th>Item</th><th>Qty</th><th>Gross</th></tr></thead>
           <tbody>
@@ -140,6 +143,7 @@ export default async function ConcessionsPage({
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       <h2>Cash reconciliation</h2>

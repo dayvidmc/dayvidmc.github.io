@@ -17,6 +17,13 @@ export const dynamic = 'force-dynamic';
  *
  * A team with no number is not a small gap: it means that coach cannot be told
  * about a rain delay, so the count is on screen rather than buried.
+ *
+ * Each team is folded shut. Open, this screen carried four inputs, three
+ * buttons and a repeated hint sentence per team — fine for the twenty-two in
+ * the demo, and about five hundred and forty controls at the ninety teams this
+ * tournament actually takes. The row says the two things somebody scanning
+ * needs (who they are, whether they can be reached) and the typing is one tap
+ * away.
  */
 export default async function TeamsPage({
   searchParams,
@@ -40,7 +47,8 @@ export default async function TeamsPage({
     <>
       <h1>Teams</h1>
       <p className="sub">
-        {all.length} team{all.length === 1 ? '' : 's'}. Contact details save as you type.
+        {all.length} team{all.length === 1 ? '' : 's'}. Tap a team to fill in its contacts —
+        they save as you type.
       </p>
 
       <a className="btn" href="/hq" style={{ marginBottom: 16 }}>
@@ -82,6 +90,13 @@ export default async function TeamsPage({
         </div>
       )}
 
+      {/* Said once, at the top, rather than under all ninety phone fields. */}
+      {teams.length > 0 && (
+        <p className="hint">
+          A mobile is stored as +1613…, which is the form an incoming text has to match.
+        </p>
+      )}
+
       {teams.length === 0 && (
         <div className="empty">
           No teams yet. <a href="/hq/import">Import a schedule</a> to create them.
@@ -91,14 +106,18 @@ export default async function TeamsPage({
       {teams.map((team) => {
         const save = saveTeamField.bind(null, team.id);
         return (
-          <div key={team.id} className="card">
-            <div className="top">
-              <div>
-                <div className="teams">{team.name}</div>
-                <div className="meta">{team.division_name}</div>
-              </div>
-              {!team.coach_phone && <span className="pill warn">No mobile</span>}
-            </div>
+          <details key={team.id} className="card">
+            <summary className="row-summary">
+              <span>
+                <span className="teams">{team.name}</span>
+                <span className="meta"> · {team.division_name}</span>
+              </span>
+              {team.coach_phone ? (
+                <span className="meta">{team.coach_name || 'coach unnamed'}</span>
+              ) : (
+                <span className="pill warn">No mobile</span>
+              )}
+            </summary>
 
             <AutoSaveField
               save={save} field="coach_name" label="Coach"
@@ -107,7 +126,6 @@ export default async function TeamsPage({
             <AutoSaveField
               save={save} field="coach_phone" label="Coach mobile" type="tel"
               defaultValue={team.coach_phone ?? ''} placeholder="613 555 0142"
-              hint="Stored as +1613…, which is what an incoming text has to match."
             />
             <AutoSaveField
               save={save} field="coach_email" label="Coach email" type="email"
@@ -125,7 +143,7 @@ export default async function TeamsPage({
             <a className="btn" href={`/hq/registration/${team.id}`} style={{ minHeight: 44 }}>
               Registration and roster
             </a>
-          </div>
+          </details>
         );
       })}
     </>

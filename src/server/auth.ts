@@ -23,13 +23,13 @@ const scrypt = promisify(scryptCallback) as (
 const SESSION_COOKIE = 'tokessy_staff';
 const SESSION_HOURS = 18; // a long tournament day, then sign in again
 
-export type StaffRole =
-  | 'director'
-  | 'hq'
-  | 'volunteer_coordinator'
-  | 'auction_lead'
-  | 'concession_lead'
-  | 'concession_volunteer';
+/**
+ * Roles live in the pure layer, beside the navigation that has to agree with
+ * these guards. Two lists of roles is how a role gets a screen it may not open,
+ * or a permission nothing ever offers it — both of which had happened.
+ */
+export type { StaffRole } from '@/domain/navigation';
+import type { StaffRole } from '@/domain/navigation';
 
 export interface StaffSession {
   staffId: string;
@@ -213,6 +213,29 @@ export function canAccessHq(session: StaffSession | null): boolean {
 /** Only the director overrides a score that is already approved, or a bracket. */
 export function isDirector(session: StaffSession | null): boolean {
   return session?.role === 'director';
+}
+
+/**
+ * The auction screens.
+ *
+ * The `auction_lead` role existed, had a tile on the sign-in screen and a PIN,
+ * and every screen named after it turned them away — the guards all asked
+ * `canAccessHq`, which is director and HQ only. So the person who runs the
+ * auction could sign in and reach nothing at all.
+ *
+ * They get the auction and nothing else. Closing it and marking a lot paid are
+ * theirs; the money roll-up those lots report into is not.
+ */
+export function canRunAuction(session: StaffSession | null): boolean {
+  return canAccessHq(session) || session?.role === 'auction_lead';
+}
+
+/**
+ * The volunteer screens, which the coordinator could already open — kept here
+ * so the check has a name rather than being spelled out at four call sites.
+ */
+export function canManageVolunteers(session: StaffSession | null): boolean {
+  return canAccessHq(session) || session?.role === 'volunteer_coordinator';
 }
 
 /**

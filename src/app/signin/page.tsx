@@ -1,6 +1,11 @@
 import { query } from '@/db/client';
 import { currentTournament } from '@/server/repo';
 import { signIn } from '../hq/actions';
+// One list of role labels, shared with the staff menu. The two that were
+// missing here — the concession lead and the concession volunteer — fell
+// through to the raw column value, so the first screen every till volunteer
+// sees introduced them to themselves as "concession_volunteer".
+import { ROLE_LABEL, type StaffRole } from '@/domain/navigation';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,13 +46,6 @@ export default async function SignInPage({
 
   const selected = staff.find((s) => s.id === params.staff);
 
-  const ROLE_LABEL: Record<string, string> = {
-    director: 'Tournament director',
-    hq: 'HQ',
-    volunteer_coordinator: 'Volunteers',
-    auction_lead: 'Auction',
-  };
-
   return (
     <>
       <h1>Sign in</h1>
@@ -83,7 +81,7 @@ export default async function SignInPage({
               {staff.map((member) => (
                 <a key={member.id} className="btn tile" href={`/signin?staff=${member.id}`}>
                   {member.name}
-                  <small>{ROLE_LABEL[member.role] ?? member.role}</small>
+                  <small>{ROLE_LABEL[member.role as StaffRole] ?? member.role}</small>
                   {member.demo_pin && <small>PIN {member.demo_pin}</small>}
                 </a>
               ))}
@@ -93,7 +91,7 @@ export default async function SignInPage({
       ) : (
         <form action={signIn}>
           <p className="sub">
-            {selected.name} — {ROLE_LABEL[selected.role] ?? selected.role}
+            {selected.name} — {ROLE_LABEL[selected.role as StaffRole] ?? selected.role}
             {selected.demo_pin ? ` · demo PIN ${selected.demo_pin}` : ''}
           </p>
           <input type="hidden" name="staffId" value={selected.id} />

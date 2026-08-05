@@ -29,7 +29,7 @@ intake paths that feed it.
 | Standings and tiebreakers | §5.5 | Built, tested — the core deliverable; flags a pool the weather made uneven rather than seeding it |
 | Game count tracking (financial) | §5.8 | Built, tested |
 | Team links, no login | §5.7 | Built |
-| Tile + PIN staff access | §10 | Built |
+| Tile + PIN staff access | §10 | Built — each role signs in to the first screen of their own job, with a menu of what they may open and a way out from every screen |
 | Game detail: correct, dispute, reschedule, history | §5.3 | Built |
 | Team contacts and per-team links | §5.7 | Built — auto-saving |
 | Settings and pre-weekend readiness checklist | — | Built |

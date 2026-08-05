@@ -68,6 +68,7 @@ export default async function StandingsPage({
             </div>
           )}
 
+          <div className="table-wrap">
           <table>
             <thead>
               <tr>
@@ -123,6 +124,7 @@ export default async function StandingsPage({
               ))}
             </tbody>
           </table>
+          </div>
         </section>
       ))}
 

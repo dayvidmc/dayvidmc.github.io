@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
+import { canRunAuction, currentStaff, isDirector } from '@/server/auth';
 import { currentTournament } from '@/server/repo';
 import { bidsFor, item as loadItem } from '@/server/auction';
 import { STATUS_LABEL, lotState, nextMinimumBid } from '@/domain/auction';
@@ -47,7 +47,7 @@ export default async function LotPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const staff = await currentStaff();
-  if (!canAccessHq(staff)) redirect('/signin');
+  if (!canRunAuction(staff)) redirect('/signin');
 
   const tournament = await currentTournament();
   if (!tournament) return <div className="notice info">No tournament set up yet.</div>;

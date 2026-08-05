@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Tokessy Tournament">
+  <!--
+    A diamond seen from behind home plate, which is the shape of the thing.
+
+    Drawn rather than photographed: this repository has nowhere to serve an
+    image from, and a browser tab with no icon is a 404 on every single page
+    load plus a blank square beside the name. Vector costs nothing and scales
+    from a 16px tab to a phone home screen.
+  -->
+  <rect width="64" height="64" rx="12" fill="#0b5cad"/>
+  <path d="M32 14 L50 32 L32 50 L14 32 Z" fill="none" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="32" cy="50" r="4.5" fill="#ffffff"/>
+</svg>

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { cookies, headers } from 'next/headers';
 import { queryOne } from '@/db/client';
+import { homeFor } from '@/domain/navigation';
 import {
   canAccessHq,
   checkPinAttempt,
@@ -91,7 +92,10 @@ export async function signIn(formData: FormData): Promise<void> {
     subjectId: staff.id,
   });
 
-  redirect(staff.role === 'director' || staff.role === 'hq' ? '/hq' : '/');
+  // The first screen of their actual job. Four of the seven roles used to land
+  // on the public home page — signed in, with nothing to show for it and no
+  // link to anything they were allowed to open.
+  redirect(homeFor(staff.role));
 }
 
 export async function signOut(): Promise<void> {

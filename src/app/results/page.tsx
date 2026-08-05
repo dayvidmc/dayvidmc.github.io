@@ -57,6 +57,7 @@ export default async function ResultsPage() {
               No final has been played yet. Champions appear here as each one finishes.
             </div>
           ) : (
+            <div className="table-wrap">
             <table>
               <thead>
                 <tr>
@@ -75,6 +76,7 @@ export default async function ResultsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
 
           {stillPlaying.length > 0 && (
@@ -112,6 +114,7 @@ export default async function ResultsPage() {
             {year.champions.length === 0 ? (
               <div className="empty">No winners recorded for this year.</div>
             ) : (
+              <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -130,6 +133,7 @@ export default async function ResultsPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </section>
         ))
