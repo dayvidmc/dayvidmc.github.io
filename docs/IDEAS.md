@@ -301,6 +301,18 @@ that is an object store, an upload path, and a size limit, and it is a real
 piece of work rather than an afternoon. Worth doing before this replaces
 anything public.
 
+The logo, photographs and sponsor logos all exist on the current site and the
+committee is happy for them to be used. Two things stand in the way. This
+environment cannot reach that site — its network policy refuses arbitrary hosts
+— so somebody has to put the files in the repository. And photographs of
+children need the naming decision in `docs/ANSWERS.md` answered first.
+
+**The domain is going to point here.** That makes a redirect map part of the
+work rather than a nicety: `/2024-results/`, `/scotts-story/`,
+`/links-and-info/maps/`, `/tournament-sponsors/` and the per-year results pages
+are all links that exist in the world — in emails, in Facebook posts, in other
+clubs' newsletters — and every one of them currently lands on a 404 here.
+
 **Nothing has a printable form.** A sponsor asking for the pamphlet, a coach
 wanting the rules on paper, a director wanting the honour roll for the
 engraver — all of them currently print a web page with a menu on it.
