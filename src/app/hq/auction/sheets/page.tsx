@@ -43,9 +43,9 @@ export default async function SheetsPage() {
           out.
         </p>
 
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-          <a className="btn" href="/hq/auction" style={{ flex: 1 }}>← Auction</a>
-          <a className="btn" href="/hq/auction/close" style={{ flex: 1 }}>Close lots</a>
+        <div className="subnav">
+          <a className="btn back" href="/hq/auction">← Auction</a>
+          <a className="btn" href="/hq/auction/close">Close lots</a>
         </div>
 
         {all.length === 0 && (

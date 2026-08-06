@@ -4,7 +4,15 @@
  * The design bar is a specific person: a parent standing at Deevy Pines at 2pm
  * in July, holding a phone in one hand and a clipboard in the other, in direct
  * sun. That means large type, high contrast, tap targets you cannot miss, and
- * no interaction that needs two hands or precision.
+ * no interaction that needs two hands or precision. Everything in this file is
+ * sized for them unless it says otherwise.
+ *
+ * There is a second person, added later and further down (§2.71–§2.74): the
+ * same volunteer in February, at a kitchen table, on a laptop, keying in ninety
+ * entries. The phone sizing is right for the weekend and wrong for that, so the
+ * tool's screens change shape at `min-width: 1000px` *and* `pointer: fine` —
+ * both together, because either alone catches the wrong device. The public
+ * website does not change: it is prose, and prose has a line length (§2.75).
  */
 
 :root {
@@ -75,6 +83,20 @@ body {
   max-width: 780px;
   margin: 0 auto;
   padding: 16px 16px 64px;
+}
+
+/*
+ * The tool gets the width; the website keeps the column.
+ *
+ * 780px is a reading measure and it is right for the public pages, which are
+ * mostly prose. It is wrong for the tool, whose screens are lists and tables
+ * and which was rendering a narrow ribbon down the middle of a 1440px window
+ * with the rest of the screen empty — and then hiding a table's columns behind
+ * a horizontal scrollbar inside that ribbon.
+ */
+body.staff .wrap {
+  max-width: 1400px;
+  padding-bottom: 48px;
 }
 
 header.bar {
@@ -1457,29 +1479,70 @@ legend {
  * the tool. Keeping them apart is also what stops a parent reading the schedule
  * from being shown a menu of staff screens.
  */
+/*
+ * The tool's own chrome: a bar at the top, and a navigation column beside the
+ * page once there is room for one.
+ *
+ * The phone shape came first and is right for the weekend. The desktop shape
+ * exists because the phone shape was actively bad on a large screen: thirty
+ * destinations inside a 320px dropdown that scrolled internally and covered
+ * the page behind it, on a 1440px window with six hundred pixels of unused
+ * margin either side.
+ *
+ * Which shape you get is a media query. Both are in the HTML; one is hidden.
+ * Navigation that had to measure the window before it could draw itself would
+ * flicker on every load and vanish without JavaScript.
+ */
 .staff-bar {
+  grid-area: bar;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 10px 16px;
   flex-wrap: wrap;
-  padding: 10px 0 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 10px;
+  margin-bottom: 16px;
 }
 
 .staff-who {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 12px;
   flex: 1 1 auto;
   min-width: 0;
-  justify-content: space-between;
+  flex-wrap: wrap;
 }
 
-.staff-who .meta {
+.staff-home {
+  font-weight: 700;
+  font-size: 17px;
+  white-space: nowrap;
+}
+
+.staff-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.staff-who .meta,
+.staff-name .meta {
   color: var(--muted);
   font-size: 15px;
+}
+
+.staff-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.staff-public {
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 /* Small, because signing out is not what anybody came here to do — but a real
@@ -1489,6 +1552,61 @@ button.staff-signout {
   padding: 6px 12px;
   font-size: 14px;
   font-weight: 400;
+}
+
+/*
+ * On a phone the bar has to earn every row it takes.
+ *
+ * Adding the wordmark and a link to the public site pushed it to three lines —
+ * more chrome above the board than the version it replaced, on the screen
+ * where chrome costs the most. Both are dropped below 700px: the wordmark
+ * because the page's own heading says where you are, and the public-site link
+ * because it is already the last item in the menu beside it.
+ */
+@media (max-width: 700px) {
+  .staff-home,
+  .staff-public {
+    display: none;
+  }
+
+  /* One row, not two: the name gives up width before anything wraps. */
+  .staff-bar {
+    flex-wrap: nowrap;
+    padding: 8px 0;
+    margin-bottom: 12px;
+    gap: 8px;
+  }
+
+  .staff-who {
+    flex: 1 1 40px;
+    min-width: 0;
+  }
+
+  .staff-menu,
+  .staff-actions {
+    flex: 0 0 auto;
+  }
+
+  /* The summary carries the current screen's name, which is useful and can be
+     "Trophies and the Gold Glove". It truncates rather than pushing the bar
+     wider than the phone. */
+  .staff-menu > summary {
+    padding: 8px 10px;
+    max-width: 46vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+    line-height: 28px;
+  }
+}
+
+/* And on a narrow phone the role is dropped too — somebody signed in as
+   themselves does not need to be told what they are twice. */
+@media (max-width: 420px) {
+  .staff-name .meta {
+    display: none;
+  }
 }
 
 .staff-menu {
@@ -1502,6 +1620,123 @@ button.staff-signout {
   font-size: 13px;
   font-weight: 400;
   line-height: 1.3;
+}
+
+/* The current page, in the dropdown as well as the column. */
+.menu-panel li a.here,
+.staff-side li a.here {
+  font-weight: 700;
+}
+
+/* --- The navigation column, on a screen wide enough to hold one ------------- */
+
+.staff-shell {
+  display: grid;
+  grid-template-areas: 'bar' 'page';
+  /*
+   * `minmax(0, 1fr)`, not the implicit `auto`. A grid column sized `auto`
+   * grows to its widest child's min-content, and the top bar refuses to wrap
+   * on a phone — so at 320px the whole shell became 308px wide inside a 288px
+   * container and every staff screen slid sideways. This is the one-line
+   * version of the same lesson as `.row > *`: a track has to be told it may
+   * be narrower than its contents.
+   */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Hidden by default: a phone gets the dropdown. */
+.staff-side {
+  display: none;
+  grid-area: side;
+}
+
+.staff-page {
+  grid-area: page;
+  min-width: 0; /* so a wide table scrolls itself rather than the grid */
+}
+
+@media (min-width: 1000px) {
+  .staff-shell {
+    grid-template-areas:
+      'bar  bar'
+      'side page';
+    grid-template-columns: 232px minmax(0, 1fr);
+    column-gap: 32px;
+  }
+
+  .staff-side {
+    display: block;
+    /* Follows the page down. A director scrolling eighty games should not have
+       to scroll back to the top to reach the score queue. */
+    position: sticky;
+    top: 16px;
+    align-self: start;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    padding-bottom: 24px;
+    border-right: 1px solid var(--border);
+    padding-right: 16px;
+  }
+
+  /* One control replaced by a whole column. */
+  .staff-menu {
+    display: none;
+  }
+
+  .staff-side h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin: 18px 0 4px;
+  }
+
+  .staff-side section:first-child h2 {
+    margin-top: 0;
+  }
+
+  .staff-side ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .staff-side li a {
+    display: block;
+    padding: 7px 10px;
+    margin: 1px 0;
+    border-radius: var(--radius);
+    font-size: 15px;
+    line-height: 1.25;
+    color: var(--text);
+  }
+
+  .staff-side li a:hover {
+    background: var(--blue-bg);
+    text-decoration: none;
+  }
+
+  /* The whole reason the column is worth having over a dropdown: it can say
+     where you are. */
+  .staff-side li a.here {
+    background: var(--blue-bg);
+    color: var(--blue);
+    box-shadow: inset 3px 0 0 var(--blue);
+  }
+
+  /* The hints are useful when a menu is a rare, deliberate act. In a column
+     that is on screen all day they are noise — except under the current item,
+     where they say what you are looking at. */
+  .staff-side li a small {
+    display: none;
+  }
+
+  .staff-side li a.here small {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 400;
+  }
 }
 
 /* --- The footer, which is the whole site on one screen ----------------------- */
@@ -1608,4 +1843,218 @@ button.staff-signout {
   font-size: 13px;
   color: var(--muted);
   margin-top: 2px;
+}
+
+/* --- A mouse on a large screen ------------------------------------------------ */
+
+/*
+ * Everything in this file is sized for a thumb in direct sunlight, which is
+ * the right default: the weekend is run from phones and the cost of getting
+ * that wrong is a volunteer mis-tapping at a diamond.
+ *
+ * It is the wrong size for the other half of the work. Entries are keyed in on
+ * a laptop in February, the money is reconciled on a laptop in August, and the
+ * website is written on a laptop in between. A 48px button and 17px type on a
+ * 1440px screen is not generous, it is a third of the rows fitting where all of
+ * them could — and a mouse can hit a 36px target without thinking about it.
+ *
+ * Both conditions, deliberately. `pointer: fine` alone would catch a tablet
+ * with a stylus; a width alone would catch a phone held sideways. Together they
+ * mean "somebody at a desk".
+ */
+@media (min-width: 1000px) and (pointer: fine) {
+  body.staff {
+    font-size: 16px;
+  }
+
+  body.staff button,
+  body.staff .btn {
+    min-height: 38px;
+    padding: 7px 14px;
+    font-size: 15px;
+  }
+
+  /* The one exception. A primary action is still the biggest thing on screen —
+     the size difference is what makes it findable, not the colour alone. */
+  body.staff button.primary,
+  body.staff .btn.primary {
+    min-height: 42px;
+    font-size: 16px;
+  }
+
+  body.staff input,
+  body.staff select,
+  body.staff textarea {
+    min-height: 38px;
+    padding: 7px 10px;
+    font-size: 15px;
+  }
+
+  body.staff textarea {
+    min-height: 140px;
+  }
+
+  body.staff label {
+    margin: 10px 0 4px;
+  }
+
+  body.staff h1 {
+    font-size: 24px;
+    margin: 0 0 4px;
+  }
+
+  body.staff h2 {
+    font-size: 18px;
+    margin: 22px 0 6px;
+  }
+
+  body.staff .card {
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+
+  /* A visible focus ring, because on a desktop the keyboard is a real way to
+     use this and the browser default disappears against a tinted row. */
+  body.staff a:focus-visible,
+  body.staff button:focus-visible,
+  body.staff input:focus-visible,
+  body.staff select:focus-visible,
+  body.staff textarea:focus-visible,
+  body.staff summary:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+
+  /* A row that is a link should say so under the cursor. Touch has no hover,
+     so this was never noticed. */
+  body.staff a.card:hover,
+  body.staff a.game:hover {
+    border-color: var(--blue);
+    background: var(--blue-bg);
+  }
+
+  body.staff .row-summary:hover {
+    color: var(--blue);
+  }
+
+  /*
+   * A one-line row should be one line tall.
+   *
+   * The collapsible list rows are sized for a thumb: 44px of target plus 14px
+   * of card padding above and below makes 78px for a team's name and division.
+   * Twenty-two of those is a lot of scrolling and ninety is a different screen
+   * entirely. With a mouse, 34px is comfortable and shows twice as many.
+   */
+  body.staff details.card > .row-summary,
+  body.staff .card > .row-item {
+    min-height: 32px;
+  }
+
+  body.staff details.card {
+    padding: 8px 12px;
+    margin-bottom: 4px;
+  }
+
+  body.staff details.card[open] {
+    padding-bottom: 14px;
+    margin-bottom: 10px;
+  }
+
+  /* A list of rows reads as a list when the rows touch, rather than as a
+     stack of separate cards each floating in its own space. */
+  body.staff details.card + details.card {
+    margin-top: -1px;
+  }
+}
+
+/* --- A screen's own sub-navigation -------------------------------------------- */
+
+/*
+ * The strip of links to a screen's siblings.
+ *
+ * These were rows of full-size buttons, which wrapped: the money screen showed
+ * six across and a seventh alone on the next line, full width, looking like a
+ * heading rather than the last of a set. They are navigation, not actions, and
+ * they should look like it — and the way back should not sit among its own
+ * children as though it were one of them.
+ */
+.subnav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.subnav a,
+.subnav a.btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 6px 12px;
+  /* A link, not a button: no border, no raised surface. These were rendering
+     as eight identical boxes, which made a row of navigation look like a row
+     of things to press. */
+  border: none;
+  background: none;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--blue);
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.subnav a:hover {
+  background: var(--blue-bg);
+  text-decoration: none;
+}
+
+.subnav a.here {
+  background: var(--blue-bg);
+  color: var(--blue);
+}
+
+/* The way back, set apart from the siblings it is not one of. */
+.subnav .back {
+  margin-right: auto;
+  color: var(--muted);
+}
+
+@media (min-width: 1000px) and (pointer: fine) {
+  .subnav a,
+  .subnav a.btn {
+    min-height: 32px;
+    padding: 4px 10px;
+    font-size: 14px;
+  }
+}
+
+/*
+ * A row of actions should not stretch to fill a desk monitor.
+ *
+ * Several screens size their buttons with an inline `flex: 1 1 45%`, which is
+ * right on a phone — two half-width targets, no aiming required — and absurd
+ * at 1400px, where it produces two 700px buttons. On a wide screen with a
+ * mouse they take the width of their own words.
+ */
+@media (min-width: 1000px) and (pointer: fine) {
+  body.staff .btn[style*="45%"],
+  body.staff .btn[style*="30%"],
+  body.staff .btn[style*="flex: 1"] {
+    flex: 0 0 auto !important;
+  }
+
+  body.staff button.wide,
+  body.staff .btn.wide {
+    width: auto;
+    min-width: 220px;
+  }
+}
+
+/* A button is never underlined, whatever element it is made of. */
+a.btn:hover {
+  text-decoration: none;
 }

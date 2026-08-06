@@ -74,8 +74,8 @@ export default async function DivisionRulesPage({
           : 'Read only — only the tournament director can change rules.'}
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/rules">
+      <div className="subnav">
+        <a className="btn back" href="/hq/rules">
           ← All divisions
         </a>
       </div>

@@ -51,9 +51,11 @@ export default async function TeamsPage({
         they save as you type.
       </p>
 
-      <a className="btn" href="/hq" style={{ marginBottom: 16 }}>
-        ← Back to board
-      </a>
+      <div className="subnav">
+        <a className="btn back" href="/hq">
+          ← Back to board
+        </a>
+      </div>
 
       {missingPhone > 0 && (
         <div className="notice warn">

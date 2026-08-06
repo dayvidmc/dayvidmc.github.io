@@ -88,9 +88,9 @@ export default async function MessagesPage({
         {channel === 'sms' && status.segments > 0 ? ` · ${status.segments} segments` : ''}
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq" style={{ flex: 1 }}>← Board</a>
-        <a className="btn" href="/hq/settings" style={{ flex: 1 }}>Settings</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq">← Board</a>
+        <a className="btn" href="/hq/settings">Settings</a>
       </div>
 
       {/* Two channels, two queues, two providers — and one of them is always

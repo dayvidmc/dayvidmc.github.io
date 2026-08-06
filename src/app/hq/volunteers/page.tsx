@@ -67,10 +67,10 @@ export default async function VolunteersPage({
         shift{summary.shifts === 1 ? '' : 's'} · {people.length} on the list
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq" style={{ flex: 1 }}>← Board</a>
-        <a className="btn" href="/hq/volunteers/people" style={{ flex: 1 }}>The list</a>
-        <a className="btn" href="/hq/volunteers/shifts" style={{ flex: 1 }}>Shifts</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq">← Board</a>
+        <a className="btn" href="/hq/volunteers/people">The list</a>
+        <a className="btn" href="/hq/volunteers/shifts">Shifts</a>
       </div>
 
       {params.error && (

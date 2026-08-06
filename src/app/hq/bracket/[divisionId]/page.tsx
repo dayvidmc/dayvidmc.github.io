@@ -62,9 +62,9 @@ export default async function HqBracketPage({
             }`}
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq" style={{ flex: 1 }}>← Board</a>
-        <a className="btn" href={`/bracket/${division.id}`} style={{ flex: 1 }}>Public view</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq">← Board</a>
+        <a className="btn" href={`/bracket/${division.id}`}>Public view</a>
       </div>
 
       {rounds.length === 0 && (

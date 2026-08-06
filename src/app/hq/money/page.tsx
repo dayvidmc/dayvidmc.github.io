@@ -60,15 +60,15 @@ export default async function MoneyPage({
       <h1>Money raised</h1>
       <p className="sub">Everything the weekend has brought in, less what it cost to bring in.</p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq" style={{ flex: 1 }}>← Board</a>
-        <a className="btn" href="/hq/money/cash" style={{ flex: 1 }}>Cash</a>
-        <a className="btn" href="/hq/money/gifts" style={{ flex: 1 }}>Gifts in kind</a>
-        <a className="btn" href="/hq/auction" style={{ flex: 1 }}>Auction</a>
-        <a className="btn" href="/hq/entries" style={{ flex: 1 }}>Entries</a>
-        <a className="btn" href="/hq/money/purchases" style={{ flex: 1 }}>What it cost</a>
-        <a className="btn" href="/hq/sponsors" style={{ flex: 1 }}>Sponsors</a>
-        <a className="btn" href="/hq/money/donations" style={{ flex: 1 }}>Donations</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq">← Board</a>
+        <a className="btn" href="/hq/money/cash">Cash</a>
+        <a className="btn" href="/hq/money/gifts">Gifts in kind</a>
+        <a className="btn" href="/hq/auction">Auction</a>
+        <a className="btn" href="/hq/entries">Entries</a>
+        <a className="btn" href="/hq/money/purchases">What it cost</a>
+        <a className="btn" href="/hq/sponsors">Sponsors</a>
+        <a className="btn" href="/hq/money/donations">Donations</a>
       </div>
 
       {params.error === 'director_only' && (

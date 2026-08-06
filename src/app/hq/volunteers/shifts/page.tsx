@@ -61,9 +61,9 @@ export default async function ShiftsPage({
         {shifts.reduce((sum, shift) => sum + shift.needed, 0)} places to fill
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/volunteers" style={{ flex: 1 }}>← Coverage</a>
-        <a className="btn" href="/hq/volunteers/people" style={{ flex: 1 }}>The list</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq/volunteers">← Coverage</a>
+        <a className="btn" href="/hq/volunteers/people">The list</a>
       </div>
 
       {params.error && <div className="notice error">{ERROR[params.error] ?? 'That did not work.'}</div>}

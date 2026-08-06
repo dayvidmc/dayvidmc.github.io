@@ -69,9 +69,9 @@ export default async function PurchasesPage({
         {shops.length} purchase{shops.length === 1 ? '' : 's'} · {money(total)} spent
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/money" style={{ flex: 1 }}>← Money</a>
-        <a className="btn" href="/hq/concessions" style={{ flex: 1 }}>Canteens</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq/money">← Money</a>
+        <a className="btn" href="/hq/concessions">Canteens</a>
       </div>
 
       {params.error && <div className="notice error">{ERROR[params.error] ?? 'That did not work.'}</div>}

@@ -55,10 +55,10 @@ export default async function SponsorVisibilityScreen({
         {shown} of {sponsors.length} shown publicly
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/site" style={{ flex: 1 }}>← The website</a>
-        <a className="btn" href="/hq/sponsors" style={{ flex: 1 }}>The relationships</a>
-        <a className="btn" href="/sponsors" style={{ flex: 1 }}>See it live</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq/site">← The website</a>
+        <a className="btn" href="/hq/sponsors">The relationships</a>
+        <a className="btn" href="/sponsors">See it live</a>
       </div>
 
       {params.saved && <div className="notice ok">Saved.</div>}

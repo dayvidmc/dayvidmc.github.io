@@ -92,9 +92,9 @@ export default async function EntryPage({
         <strong style={{ fontVariantNumeric: 'tabular-nums' }}>{entry.reference}</strong>
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/entries" style={{ flex: 1 }}>← Entries</a>
-        <a className="btn" href={`/enter/${entry.reference}`} style={{ flex: 1 }}>
+      <div className="subnav">
+        <a className="btn back" href="/hq/entries">← Entries</a>
+        <a className="btn" href={`/enter/${entry.reference}`}>
           What they see
         </a>
       </div>

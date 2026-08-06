@@ -67,9 +67,9 @@ export default async function TrophiesPage({
         {decided.length} of {divisions.length} division{divisions.length === 1 ? '' : 's'} decided
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq" style={{ flex: 1 }}>← Board</a>
-        <a className="btn" href="/hq/brackets" style={{ flex: 1 }}>Brackets</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq">← Board</a>
+        <a className="btn" href="/hq/brackets">Brackets</a>
       </div>
 
       {params.error && <div className="notice error">{ERROR[params.error] ?? 'That did not work.'}</div>}

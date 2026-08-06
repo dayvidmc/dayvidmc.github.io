@@ -51,10 +51,10 @@ export default async function DonationsPage({
         {counted.length} gift{counted.length === 1 ? '' : 's'} · {formatMoney(total)}
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/money" style={{ flex: 1 }}>← Money</a>
-        <a className="btn" href="/donate" style={{ flex: 1 }}>The public page</a>
-        <a className="btn" href="/hq/money/donations/receipts" style={{ flex: 1 }}>
+      <div className="subnav">
+        <a className="btn back" href="/hq/money">← Money</a>
+        <a className="btn" href="/donate">The public page</a>
+        <a className="btn" href="/hq/money/donations/receipts">
           Receipts{due.length > 0 ? ` (${due.length})` : ''}
         </a>
       </div>

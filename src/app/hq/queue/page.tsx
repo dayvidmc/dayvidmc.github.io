@@ -42,9 +42,11 @@ export default async function QueuePage() {
           : `${reports.length} score${reports.length === 1 ? '' : 's'} to approve. Approving updates standings immediately and queues a text to both teams.`}
       </p>
 
-      <a className="btn" href="/hq" style={{ marginBottom: 16 }}>
-        ← Back to board
-      </a>
+      <div className="subnav">
+        <a className="btn back" href="/hq">
+          ← Back to board
+        </a>
+      </div>
 
       {reports.length === 0 ? (
         <div className="empty">All caught up.</div>

@@ -65,8 +65,8 @@ export default async function ReceiptsScreen({
         {due.length} waiting · {formatMoney(total)} · {sent.length} already sent
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/money/donations" style={{ flex: 1 }}>← Donations</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq/money/donations">← Donations</a>
       </div>
 
       {params.sent && (

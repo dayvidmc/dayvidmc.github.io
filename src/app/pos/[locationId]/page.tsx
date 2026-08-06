@@ -158,12 +158,12 @@ export default async function TillPage({
         }))}
       />
 
-      <div style={{ display: 'flex', gap: 10, marginTop: 24, flexWrap: 'wrap' }}>
-        <a className="btn" href="/pos" style={{ flex: 1 }}>
+      <div className="subnav">
+        <a className="btn" href="/pos">
           Switch stand
         </a>
         {canCloseRegister(staff) && (
-          <a className="btn" href={`/pos/${locationId}?close=1`} style={{ flex: 1 }}>
+          <a className="btn" href={`/pos/${locationId}?close=1`}>
             Close the till
           </a>
         )}

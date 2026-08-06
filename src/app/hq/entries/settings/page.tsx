@@ -58,9 +58,9 @@ export default async function EntrySettingsPage({
       <h1>Fees and dates</h1>
       <p className="sub">What it costs to enter, how many can, and when the door opens.</p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/entries" style={{ flex: 1 }}>← Entries</a>
-        <a className="btn" href="/enter" style={{ flex: 1 }}>The public page</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq/entries">← Entries</a>
+        <a className="btn" href="/enter">The public page</a>
       </div>
 
       {params.saved && <div className="notice ok">Saved.</div>}

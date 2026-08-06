@@ -56,10 +56,10 @@ export default async function RegistrationPage({
         {summary.players === 1 ? '' : 's'} on rosters
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq" style={{ flex: 1 }}>← Board</a>
-        <a className="btn" href="/hq/entries" style={{ flex: 1 }}>Entries and fees</a>
-        <a className="btn" href="/hq/teams" style={{ flex: 1 }}>Contacts</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq">← Board</a>
+        <a className="btn" href="/hq/entries">Entries and fees</a>
+        <a className="btn" href="/hq/teams">Contacts</a>
       </div>
 
       {params.error === 'director_only' && (

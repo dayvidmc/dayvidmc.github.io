@@ -50,10 +50,10 @@ export default async function EditPageScreen({
         /p/{page.slug} · {page.published ? 'live on the public site' : 'a draft, visible only here'}
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/site" style={{ flex: 1 }}>← All pages</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq/site">← All pages</a>
         {page.published && (
-          <a className="btn" href={`/p/${page.slug}`} style={{ flex: 1 }}>
+          <a className="btn" href={`/p/${page.slug}`}>
             See it live
           </a>
         )}

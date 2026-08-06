@@ -156,9 +156,11 @@ export default async function SettingsPage() {
         {editable ? 'Changes save as you go.' : 'Read only — only the director can change these.'}
       </p>
 
-      <a className="btn" href="/hq" style={{ marginBottom: 16 }}>
-        ← Back to board
-      </a>
+      <div className="subnav">
+        <a className="btn back" href="/hq">
+          ← Back to board
+        </a>
+      </div>
 
       <fieldset disabled={!editable}>
         <legend>Tournament</legend>

@@ -70,10 +70,10 @@ export default async function EntriesPage({
         {summary.waiting} waiting · {money(summary.takenCents)} taken
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq" style={{ flex: 1 }}>← Board</a>
-        <a className="btn" href="/hq/entries/settings" style={{ flex: 1 }}>Fees and dates</a>
-        <a className="btn" href="/hq/registration" style={{ flex: 1 }}>Rosters</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq">← Board</a>
+        <a className="btn" href="/hq/entries/settings">Fees and dates</a>
+        <a className="btn" href="/hq/registration">Rosters</a>
       </div>
 
       {/* --- The front door --------------------------------------------------- */}

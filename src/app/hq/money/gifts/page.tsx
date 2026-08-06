@@ -47,9 +47,9 @@ export default async function GiftsPage({
         {money(summary.goodsValueCents + summary.servicesValueCents)} of goods and time
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/money" style={{ flex: 1 }}>← Money</a>
-        <a className="btn" href="/hq/money/cash" style={{ flex: 1 }}>Cash</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq/money">← Money</a>
+        <a className="btn" href="/hq/money/cash">Cash</a>
       </div>
 
       {params.error === 'bad_value' && (

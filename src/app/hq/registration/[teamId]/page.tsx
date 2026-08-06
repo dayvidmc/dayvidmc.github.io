@@ -59,9 +59,9 @@ export default async function TeamRegistrationPage({
           : ''}
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/registration" style={{ flex: 1 }}>← Registration</a>
-        <a className="btn" href="/hq/teams" style={{ flex: 1 }}>Contacts</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq/registration">← Registration</a>
+        <a className="btn" href="/hq/teams">Contacts</a>
       </div>
 
       {search.error === 'unreadable' && (

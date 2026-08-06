@@ -62,9 +62,9 @@ export default async function EditResultsScreen({
         {roll.reduce((sum, year) => sum + year.champions.length, 0)} champions
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/site" style={{ flex: 1 }}>← The website</a>
-        <a className="btn" href="/results" style={{ flex: 1 }}>See it live</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq/site">← The website</a>
+        <a className="btn" href="/results">See it live</a>
       </div>
 
       {params.error && <div className="notice error">{ERROR[params.error] ?? 'That did not work.'}</div>}

@@ -48,11 +48,11 @@ export default async function SitePagesScreen({
         {pages.filter((page) => page.published).length} published
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq" style={{ flex: 1 }}>← Board</a>
-        <a className="btn" href="/hq/site/results" style={{ flex: 1 }}>Honour roll</a>
-        <a className="btn" href="/hq/site/sponsors" style={{ flex: 1 }}>Sponsors</a>
-        <a className="btn" href="/" style={{ flex: 1 }}>See the site</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq">← Board</a>
+        <a className="btn" href="/hq/site/results">Honour roll</a>
+        <a className="btn" href="/hq/site/sponsors">Sponsors</a>
+        <a className="btn" href="/">See the site</a>
       </div>
 
       {params.error === 'director_only' && (

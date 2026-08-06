@@ -1175,16 +1175,17 @@ Both of the first two attempts passed against a screen that was working.
 ### 2.65 The tool's own bar is not the public site's header
 
 **Decision.** `StaffBar` renders above `/hq/*` and `/pos/*` only. The public
-header stays exactly as it was.
+header stays exactly as it was — and, since §2.70, the public header no longer
+renders on staff screens at all.
 
 **Why.** They belong to different things: the public bar is the website, the
 staff bar is the tool. Keeping them apart is what stops a parent reading the
 schedule from being shown a menu of staff screens — and it is why the board
 could drop sixteen buttons without anything becoming unreachable.
 
-It carries no "you are here" marker. That needs the pathname, which in a server
-layout means either middleware on every request or a client bundle, and the
-page's own heading already says where you are.
+*(This entry originally ended by declining to add a "you are here" marker,
+because it needs the pathname and that meant middleware. §2.71 reverses that
+for a reason that did not exist yet.)*
 
 ### 2.66 Email is a second channel through the same queue, not a second queue
 
@@ -1243,6 +1244,109 @@ deposit in January and is accepted in March would have been asked for the whole
 fee again — the single most expensive kind of wrong an email from a charity can
 be, because the coach either pays twice or loses trust in every figure the
 system produces.
+
+### 2.70 One chrome per thing: the website's header is off the tool's screens
+
+**Decision.** The root layout reads the path and renders `SiteNav`/`SiteFooter`
+only on public pages. Staff screens get `StaffBar` and nothing else.
+
+**Why.** Every HQ screen carried both. The public header — the tournament's
+name, a Schedule link, a Donate button — sat above the staff bar, so a
+director reading the board at 6pm was shown two navigation bars, one above the
+other, neither of which could reach what the other could. The top one could not
+open a single staff screen; the bottom one could not reach the public site.
+
+Two rows of chrome is also two rows of games pushed off the screen, on the one
+page where what matters is how many rows fit.
+
+One link each way replaces it: "The public site" in the staff bar, and HQ in
+the site's own menu.
+
+### 2.71 A navigation column on a desk, the same list in a dropdown on a phone
+
+**Decision.** At 1000px and above, `sectionsFor()` renders as a column beside
+the page, with the current screen marked. Below that it stays the `<details>`
+dropdown. Both are in the HTML; a media query decides which is shown.
+
+**Why.** The dropdown was built for a phone and is right there. On a desktop it
+was actively worse than nothing: thirty destinations inside a 320px box that
+scrolled internally and covered the page behind it, on a 1440px window with six
+hundred pixels of unused margin either side. Everything a large screen and a
+mouse are for — seeing the whole structure at once, knowing where you are in
+it, getting between two places in one click — that shape gives up.
+
+**Which one is shown is CSS, not JavaScript**, deliberately. Navigation that
+measured the window before drawing itself would flicker on every load and
+disappear entirely without JavaScript, and this project's whole posture is that
+every screen works as a form post on a bad connection.
+
+The column is `position: sticky`. A director scrolling eighty games should not
+have to scroll back up to reach the score queue.
+
+### 2.72 The pathname comes from middleware, which §2.65 said was not worth it
+
+**Decision.** `src/middleware.ts` copies the request path into an `x-pathname`
+header; `currentPath()` reads it.
+
+**Why the reversal.** §2.65 declined this on the grounds that the only thing it
+bought was a "you are here" marker on a dropdown, and the page's own heading
+already said where you were. That was a fair trade for a dropdown.
+
+It is not a fair trade for a permanent column. A list of thirty destinations
+that is on screen all day, with nothing marking the current one, shows you
+everything except the thing you most need. The same header also decides whether
+the public chrome renders (§2.70), which nothing else could answer from a
+layout.
+
+The matcher keeps it off the API and off static files, so it runs on page
+requests and copies one string.
+
+### 2.73 A mouse at a desk is a different user from a thumb in the sun
+
+**Decision.** At `min-width: 1000px` *and* `pointer: fine`, staff screens use
+16px type, 38px controls and tighter rows. Everywhere else is unchanged.
+
+**Why.** The 48px targets and 17px type are correct and stay correct: the
+weekend is run from phones and the cost of a mis-tap at a diamond is real.
+
+But half this tool's working life is not the weekend. Entries are keyed in on a
+laptop in February, the money is reconciled on a laptop in August, and the
+website is written in between. At 1440px a 48px button is not generous — it is
+a third of the rows fitting where all of them could. The teams list went from
+seven visible to eleven with no loss of anything.
+
+**Both conditions, not either.** `pointer: fine` alone catches a tablet with a
+stylus; a width alone catches a phone held sideways. Together they mean
+"somebody sitting at a desk", which is the actual thing being detected.
+
+### 2.74 A screen's siblings are a strip of links, not a row of buttons
+
+**Decision.** The `.subnav` class, applied to the thirty screens that had a
+wrapping row of `.btn` links. The way back is set apart from the siblings it is
+not one of.
+
+**Why.** The money screen showed six full-size buttons across and a seventh
+alone on the next line, full width, reading as a heading rather than the last
+of a set — with "← Board" sitting among its own children as though it were a
+peer. They are navigation, not actions, and eight identical raised boxes said
+the opposite.
+
+**The 320px lesson, twice.** Making the phone bar a single row gave it a
+min-content width the grid then honoured, and every staff screen slid sideways
+at 320px — the same failure as `.row > *` and for the same reason: a track has
+to be told it may be narrower than its contents. `grid-template-columns:
+minmax(0, 1fr)` is the fix, and it is worth knowing that `auto` is not.
+
+### 2.75 The public site keeps its reading measure
+
+**Decision.** `.wrap` stays at 780px for the website. Only `body.staff` widens,
+to 1400px.
+
+**Why.** 780px is not a leftover from the phone build, it is a line length. The
+public pages are mostly prose — Scott's story, the rules, visiting Kanata — and
+at 17px a 1400px line is around 200 characters, which nobody can read
+comfortably. Filling a monitor is not a goal; the tool's screens widen because
+they are lists and tables, not because the pixels were there.
 
 ---
 

@@ -66,9 +66,9 @@ export default async function SponsorsPage({
         cash · {money(totals.goodsValueCents)} in goods
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/money" style={{ flex: 1 }}>← Money</a>
-        <a className="btn" href="/hq/money/gifts" style={{ flex: 1 }}>Gifts in kind</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq/money">← Money</a>
+        <a className="btn" href="/hq/money/gifts">Gifts in kind</a>
       </div>
 
       {params.error && <div className="notice error">{ERROR[params.error] ?? 'That did not work.'}</div>}

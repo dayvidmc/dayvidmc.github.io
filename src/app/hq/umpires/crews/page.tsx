@@ -93,9 +93,9 @@ export default async function CrewsPage({
       <h1>Crews</h1>
       <p className="sub">{formatDateFriendly(new Date(`${date}T00:00:00Z`))}</p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/umpires" style={{ flex: 1 }}>← Roster</a>
-        <a className="btn" href="/hq" style={{ flex: 1 }}>Board</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq/umpires">← Roster</a>
+        <a className="btn" href="/hq">Board</a>
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>

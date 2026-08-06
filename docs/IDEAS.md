@@ -317,14 +317,28 @@ a park's worth of shared signal. Pagination or a search box would fix it
 properly. Not urgent — the pages are tens of kilobytes, not hundreds — but it
 is the difference between a screen that reads well and a screen that arrives.
 
+**And a list of ninety still has no way to find one.** The desktop pass made
+the lists twice as dense, which helps and does not solve it: the teams screen
+filters by division and nothing else, and the umpire, volunteer and entry lists
+have no filter at all. A type-to-filter box on each — a form post like
+everything else, no JavaScript needed — is the single largest remaining thing
+between this and being pleasant to use at real scale.
+
+**No keyboard shortcuts anywhere.** A desk user who does the same thing eighty
+times on a Saturday evening — open a queued score, approve, next — does it
+entirely with a mouse. `j`/`k` down a list and `Enter` to open would be worth
+more than it costs, and it is the first thing in this repository that would
+genuinely need a client bundle.
+
 **The public menu offers HQ and the till to everybody.** It is honest and both
 are PIN-guarded, so nothing leaks. But a parent looking for the schedule is
 shown two links to a locked door, and a volunteer who needs the till has to
 find it under a heading about running the weekend. Worth a committee opinion
 rather than a unilateral decision — it may be exactly what they want.
 
-**Nothing marks where you are in the staff menu.** See §2.65 for why. If a
-reason ever appears to add middleware, this is the thing to add with it.
+**~~Nothing marks where you are in the staff menu.~~** Done — the reason
+appeared as soon as the menu became a permanent column (§2.71–§2.72), and the
+middleware came with it.
 
 Two smaller ones, both now done and recorded here so the next walk does not
 re-find them: three screens overflowed sideways at 320px because a table has a

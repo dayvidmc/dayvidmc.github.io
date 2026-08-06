@@ -55,9 +55,9 @@ export default async function CashPage({
       <h1>Cash</h1>
       <p className="sub">Float out, counted back, and banked — everywhere money is taken.</p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/money" style={{ flex: 1 }}>← Money</a>
-        <a className="btn" href="/hq/concessions" style={{ flex: 1 }}>Canteens</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq/money">← Money</a>
+        <a className="btn" href="/hq/concessions">Canteens</a>
       </div>
 
       {params.error === 'bad_amount' && (

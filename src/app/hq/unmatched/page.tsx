@@ -57,9 +57,11 @@ export default async function UnmatchedPage() {
             'Read what they sent, pick the game, and it joins the score queue.'}
       </p>
 
-      <a className="btn" href="/hq" style={{ marginBottom: 16 }}>
-        ← Back to board
-      </a>
+      <div className="subnav">
+        <a className="btn back" href="/hq">
+          ← Back to board
+        </a>
+      </div>
 
       {messages.length === 0 ? (
         <div className="empty">All caught up.</div>

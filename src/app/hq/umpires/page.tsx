@@ -58,10 +58,10 @@ export default async function UmpiresPage() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq" style={{ flex: 1 }}>← Board</a>
-        <a className="btn" href="/hq/umpires/crews" style={{ flex: 1 }}>Crews by day</a>
-        <a className="btn" href="/hq/umpires/pay" style={{ flex: 1 }}>Honoraria</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq">← Board</a>
+        <a className="btn" href="/hq/umpires/crews">Crews by day</a>
+        <a className="btn" href="/hq/umpires/pay">Honoraria</a>
       </div>
 
       {clashes.length > 0 && (

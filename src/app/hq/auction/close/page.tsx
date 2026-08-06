@@ -48,9 +48,9 @@ export default async function ClosePage({
         {open.length} still open · {money(summary.raisedCents)} in so far
       </p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <a className="btn" href="/hq/auction" style={{ flex: 1 }}>← Auction</a>
-        <a className="btn" href="/hq/auction/sheets" style={{ flex: 1 }}>Bid sheets</a>
+      <div className="subnav">
+        <a className="btn back" href="/hq/auction">← Auction</a>
+        <a className="btn" href="/hq/auction/sheets">Bid sheets</a>
       </div>
 
       {params.closed && Number(params.closed) > 0 && (
