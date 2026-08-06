@@ -1,5 +1,5 @@
 import { currentTournament } from '../repo';
-import { drainQueue } from './drain';
+import { drainQueue, mailChannel } from './drain';
 import { currentProvider } from './provider';
 
 /**
@@ -45,11 +45,16 @@ async function main() {
       if (!tournament) {
         console.log('sender: no tournament yet, waiting');
       } else {
-        const result = await drainQueue(tournament.id, { tickSeconds: TICK_SECONDS });
-        if (result.attempted > 0 || result.optedOut > 0) {
-          console.log(
-            `sender: sent=${result.sent} failed=${result.failed} opted_out=${result.optedOut}`,
-          );
+        for (const [label, options] of [
+          ['sms', { tickSeconds: TICK_SECONDS }],
+          ['email', { tickSeconds: TICK_SECONDS, channel: mailChannel() }],
+        ] as const) {
+          const result = await drainQueue(tournament.id, options);
+          if (result.attempted > 0 || result.optedOut > 0) {
+            console.log(
+              `sender[${label}]: sent=${result.sent} failed=${result.failed} opted_out=${result.optedOut}`,
+            );
+          }
         }
       }
     } catch (error) {

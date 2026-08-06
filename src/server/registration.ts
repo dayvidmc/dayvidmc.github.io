@@ -22,7 +22,10 @@ import {
   type WindowState,
 } from '@/domain/registration';
 import { normalisePhone } from '@/domain/contact';
-import { toWallClock } from '@/domain/time';
+import { formatDateFriendly, toWallClock } from '@/domain/time';
+import { formatMoney } from '@/domain/pos';
+import { balanceReminder, entryDecided, entryReceived } from '@/domain/email';
+import { queueEmail, queueEmailIn } from './mail/queue';
 
 /**
  * Entries, persisted.
@@ -430,12 +433,21 @@ export type CreateResult =
 export async function createEntry(
   tournamentId: string,
   draft: EntryDraft,
+  /**
+   * Where this site is reachable, for the link in the confirmation email. An
+   * empty string queues the email without a status link rather than one
+   * pointing at localhost.
+   */
+  origin = '',
 ): Promise<CreateResult> {
   const phone = draft.coachPhone.trim() ? normalisePhone(draft.coachPhone) : null;
 
   return transaction(async (client) => {
-    const settings = await client.query<SettingsRow>(
-      `SELECT entries_open_at, entries_close_at, age_groups
+    const settings = await client.query<
+      SettingsRow & { name: string; contact_entries: string | null; contact_general: string | null }
+    >(
+      `SELECT entries_open_at, entries_close_at, age_groups, default_deposit_cents,
+              name, contact_entries, contact_general
          FROM tournament WHERE id = $1 FOR SHARE`,
       [tournamentId],
     );
@@ -459,8 +471,8 @@ export async function createEntry(
     );
     if (state.phase !== 'open') return { ok: false, error: 'closed' } as CreateResult;
 
-    const division = await client.query<{ id: string }>(
-      'SELECT id FROM division WHERE id = $1 AND tournament_id = $2',
+    const division = await client.query<{ id: string; name: string }>(
+      'SELECT id, name FROM division WHERE id = $1 AND tournament_id = $2',
       [draft.divisionId, tournamentId],
     );
     if (division.rows.length === 0) return { ok: false, error: 'bad_division' } as CreateResult;
@@ -498,6 +510,29 @@ export async function createEntry(
           subjectType: 'entry',
           subjectId: entryId,
           payload: { teamName: draft.teamName.trim(), divisionId: draft.divisionId },
+        });
+
+        // The reference, in something the coach keeps.
+        //
+        // Until now it appeared on a page after submitting and nowhere else,
+        // and it is what an e-transfer sent three days later from a laptop has
+        // to quote. Queued inside the same transaction so a rolled-back entry
+        // cannot leave behind an email saying somebody applied.
+        await queueEmailIn(client, {
+          tournamentId,
+          kind: 'entry_received',
+          to: draft.coachEmail,
+          email: entryReceived({
+            tournamentName: row.name,
+            contactEmail: row.contact_entries ?? row.contact_general ?? undefined,
+            siteUrl: origin || undefined,
+            contactName: draft.coachName.trim(),
+            teamName: draft.teamName.trim(),
+            divisionName: division.rows[0]!.name,
+            reference,
+            statusUrl: origin ? `${origin}/enter/${reference}` : `/enter/${reference}`,
+            depositDue: row.default_deposit_cents > 0 ? formatMoney(row.default_deposit_cents) : null,
+          }),
         });
 
         return { ok: true, reference, entryId } as CreateResult;
@@ -561,13 +596,24 @@ export async function decide(
   actor: string,
   actorRole: string,
   note: string,
+  /** For the link in the email that tells the coach. */
+  origin = '',
 ): Promise<{ ok: boolean; error?: string; teamId?: string }> {
   return transaction(async (client) => {
     const found = await client.query<
-      EntryRow & { balance_due_days: number; balance_due_date: string | null }
+      EntryRow & {
+        balance_due_days: number;
+        balance_due_date: string | null;
+        tournament_name: string;
+        contact_entries: string | null;
+        contact_general: string | null;
+        default_entry_fee_cents: number;
+      }
     >(
       `SELECT ${ENTRY_COLUMNS}, t.balance_due_days,
-              t.balance_due_date::text AS balance_due_date
+              t.balance_due_date::text AS balance_due_date,
+              t.name AS tournament_name, t.contact_entries, t.contact_general,
+              t.default_entry_fee_cents
          FROM entry e
          JOIN division d ON d.id = e.division_id
          JOIN tournament t ON t.id = e.tournament_id
@@ -641,8 +687,129 @@ export async function decide(
       payload: { status, teamName: entry.team_name, teamId, note: note.trim() || null },
     });
 
+    // What is actually still owed, rather than the headline fee. A team that
+    // paid its deposit in January and is accepted in March owes the fee minus
+    // the deposit, and an email quoting the whole fee would have them send it
+    // twice.
+    const paid = await client.query<{ total: string | null }>(
+      `SELECT COALESCE(SUM(CASE WHEN kind = 'refund' THEN -amount_cents ELSE amount_cents END), 0)
+                AS total
+         FROM entry_payment WHERE entry_id = $1`,
+      [entryId],
+    );
+    const owing = entry.default_entry_fee_cents - Number(paid.rows[0]?.total ?? 0);
+
+    // Tell the coach.
+    //
+    // The three outcomes are three different messages rather than one with a
+    // word swapped — a declined coach should not have to read a paragraph
+    // about paying a balance to work out they are not in. HQ's note goes at
+    // the bottom verbatim, because when a director writes one it is usually
+    // the sentence that actually explains the decision.
+    await queueEmailIn(client, {
+      tournamentId,
+      kind: 'entry_decided',
+      to: entry.coach_email,
+      teamId: teamId ?? null,
+      email: entryDecided({
+        tournamentName: entry.tournament_name,
+        contactEmail: entry.contact_entries ?? entry.contact_general ?? undefined,
+        siteUrl: origin || undefined,
+        contactName: entry.coach_name,
+        teamName: entry.team_name,
+        divisionName: entry.division_name,
+        reference: entry.reference,
+        outcome: status === 'accepted' ? 'accepted' : status === 'waitlisted' ? 'waitlisted' : 'declined',
+        statusUrl: origin ? `${origin}/enter/${entry.reference}` : `/enter/${entry.reference}`,
+        balanceDue: status === 'accepted' && owing > 0 ? formatMoney(owing) : null,
+        note: note.trim() || null,
+      }),
+    });
+
     return { ok: true, teamId: teamId ?? undefined };
   });
+}
+
+/**
+ * Email the teams whose balance is outstanding.
+ *
+ * The entries screen has listed these since it was built, under a heading
+ * saying each one is holding a place somebody else wanted, and the only thing
+ * a director could do about it was pick up a phone.
+ *
+ * One message per team, deduplicated on the subject line — which carries the
+ * amount, so a team whose balance has changed since the last chase is written
+ * to again and a team whose has not is left alone. Chasing the same coach for
+ * the same money every time somebody opens the screen is how a charity's email
+ * ends up in a spam folder.
+ */
+export async function chaseBalances(
+  tournamentId: string,
+  entryIds: readonly string[],
+  origin = '',
+): Promise<{ asked: number; noEmail: number }> {
+  if (entryIds.length === 0) return { asked: 0, noEmail: 0 };
+
+  const rows = await query<{
+    id: string;
+    reference: string;
+    team_name: string;
+    coach_name: string;
+    coach_email: string | null;
+    balance_due_on: string | null;
+    owing: string;
+    tournament_name: string;
+    contact_entries: string | null;
+    contact_general: string | null;
+    etransfer_address: string | null;
+  }>(
+    `SELECT e.id, e.reference, e.team_name, e.coach_name, e.coach_email,
+            e.balance_due_on::text AS balance_due_on,
+            (t.default_entry_fee_cents - COALESCE((
+               SELECT SUM(CASE WHEN p.kind = 'refund' THEN -p.amount_cents ELSE p.amount_cents END)
+                 FROM entry_payment p WHERE p.entry_id = e.id), 0)) AS owing,
+            t.name AS tournament_name, t.contact_entries, t.contact_general, t.etransfer_address
+       FROM entry e
+       JOIN tournament t ON t.id = e.tournament_id
+      WHERE e.tournament_id = $1 AND e.id = ANY($2::uuid[]) AND e.status = 'accepted'`,
+    [tournamentId, [...entryIds]],
+  );
+
+  let asked = 0;
+  let noEmail = 0;
+  for (const row of rows) {
+    const owing = Number(row.owing);
+    // A team that has since paid is not chased, whatever the screen said when
+    // the button was pressed.
+    if (owing <= 0) continue;
+
+    const outcome = await queueEmail({
+      tournamentId,
+      kind: 'balance_reminder',
+      to: row.coach_email,
+      once: row.id,
+      email: balanceReminder({
+        tournamentName: row.tournament_name,
+        contactEmail: row.contact_entries ?? row.contact_general ?? undefined,
+        siteUrl: origin || undefined,
+        contactName: row.coach_name,
+        teamName: row.team_name,
+        reference: row.reference,
+        balanceDue: formatMoney(owing),
+        payBy: row.balance_due_on
+          ? formatDateFriendly(new Date(`${row.balance_due_on}T00:00:00Z`))
+          : null,
+        statusUrl: origin ? `${origin}/enter/${row.reference}` : `/enter/${row.reference}`,
+        howToPay: row.etransfer_address
+          ? `An e-transfer to ${row.etransfer_address} is the way that costs the ward nothing.`
+          : null,
+      }),
+    });
+    if (outcome.queued) asked += 1;
+    else if (outcome.reason === 'no address') noEmail += 1;
+  }
+
+  return { asked, noEmail };
 }
 
 // --- Money ------------------------------------------------------------------

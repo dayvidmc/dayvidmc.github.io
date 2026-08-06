@@ -11,7 +11,8 @@ import {
   type QueueHealth,
   type Queued,
 } from '@/domain/messaging';
-import { currentProvider, type SmsProvider } from './provider';
+import { currentProvider, type SendResult, type SmsProvider } from './provider';
+import { currentMailProvider, type MailProvider } from '../mail/provider';
 
 /**
  * Draining the outbound queue.
@@ -33,12 +34,62 @@ import { currentProvider, type SmsProvider } from './provider';
  *   4. **Fail loudly and locally.** A message that cannot be sent keeps the
  *      provider's own error text, so the failure screen says "not a mobile
  *      number" rather than "failed".
+ *
+ * Email arrived later and is drained by the same code through a small adapter
+ * rather than a second copy of it. The four rules above are identical for both
+ * — and the two things that genuinely differ, who counts as opted out and how
+ * a message is handed to a provider, are exactly what the adapter is.
  */
+
+/**
+ * What one channel does differently. Everything else is shared.
+ */
+interface Channel {
+  readonly name: 'sms' | 'email';
+  readonly providerName: string;
+  /** Why nothing can be sent on this channel, or null. */
+  readiness(): string | null;
+  /** Of these recipients, who has asked not to be contacted this way. */
+  optedOut(recipients: readonly string[]): Promise<Set<string>>;
+  send(row: Row): Promise<SendResult>;
+  /** How fast this channel's provider will accept messages. */
+  readonly perSecond: number;
+}
+
+export function smsChannel(provider: SmsProvider = currentProvider()): Channel {
+  return {
+    name: 'sms',
+    providerName: provider.name,
+    readiness: () => provider.readiness(),
+    optedOut: (recipients) => activeOptOuts(recipients),
+    send: (row) => provider.send(row.recipient, row.body),
+    perSecond: DEFAULT_PER_SECOND,
+  };
+}
+
+export function mailChannel(provider: MailProvider = currentMailProvider()): Channel {
+  return {
+    name: 'email',
+    providerName: provider.name,
+    readiness: () => provider.readiness(),
+    optedOut: (recipients) => activeEmailOptOuts(recipients),
+    send: (row) =>
+      // A queued email with no subject is a bug upstream, not something to
+      // send with an empty subject line and hope.
+      row.subject
+        ? provider.send(row.recipient, row.subject, row.body)
+        : Promise.resolve({ ok: false, error: 'no subject', retryable: false }),
+    // An API-based provider is not rate-limited the way a long code is. Ninety
+    // acceptance emails should go out in one tick, not in ninety seconds.
+    perSecond: 10,
+  };
+}
 
 interface Row {
   id: string;
   tournament_id: string;
   recipient: string;
+  subject: string | null;
   body: string;
   kind: string;
   status: Queued['status'];
@@ -77,13 +128,18 @@ export interface DrainResult {
  */
 export async function drainQueue(
   tournamentId: string,
-  options: { tickSeconds?: number; perSecond?: number; provider?: SmsProvider } = {},
+  options: {
+    tickSeconds?: number;
+    perSecond?: number;
+    provider?: SmsProvider;
+    channel?: Channel;
+  } = {},
 ): Promise<DrainResult> {
-  const provider = options.provider ?? currentProvider();
-  const blocked = provider.readiness();
+  const channel = options.channel ?? smsChannel(options.provider ?? currentProvider());
+  const blocked = channel.readiness();
 
   const result: DrainResult = {
-    provider: provider.name,
+    provider: channel.providerName,
     blocked,
     attempted: 0,
     sent: 0,
@@ -92,26 +148,27 @@ export async function drainQueue(
   };
   if (blocked) return result;
 
-  const limit = batchSize(options.perSecond ?? DEFAULT_PER_SECOND, options.tickSeconds ?? 10);
+  const limit = batchSize(options.perSecond ?? channel.perSecond, options.tickSeconds ?? 10);
 
   // The due set, decided by the database so a large queue is not loaded into
   // memory to find ten rows.
   const due = await query<Row>(
-    `SELECT id, tournament_id, recipient, body, kind, status, attempts, next_attempt_at, created_at
+    `SELECT id, tournament_id, recipient, subject, body, kind, status, attempts,
+            next_attempt_at, created_at
        FROM notification
       WHERE tournament_id = $1
-        AND channel = 'sms'
+        AND channel = $4
         AND status IN ('queued', 'failed')
         AND attempts < $2
         AND (next_attempt_at IS NULL OR next_attempt_at <= now())
       ORDER BY created_at
       LIMIT $3`,
-    [tournamentId, MAX_ATTEMPTS, limit],
+    [tournamentId, MAX_ATTEMPTS, limit, channel.name],
   );
 
   if (due.length === 0) return result;
 
-  const optedOut = await activeOptOuts(due.map((row) => row.recipient));
+  const optedOut = await channel.optedOut(due.map((row) => row.recipient));
 
   for (const row of due) {
     // Claim it. The status guard is what makes two concurrent drainers safe:
@@ -139,14 +196,14 @@ export async function drainQueue(
     }
 
     result.attempted += 1;
-    const outcome = await provider.send(row.recipient, row.body);
+    const outcome = await channel.send(row);
 
     if (outcome.ok) {
       await query(
         `UPDATE notification
             SET status = 'sent', sent_at = now(), provider = $2, provider_id = $3, error = NULL
           WHERE id = $1`,
-        [row.id, provider.name, outcome.providerId ?? null],
+        [row.id, channel.providerName, outcome.providerId ?? null],
       );
       result.sent += 1;
       continue;
@@ -162,7 +219,7 @@ export async function drainQueue(
       `UPDATE notification
           SET status = 'failed', provider = $2, error = $3, next_attempt_at = $4
         WHERE id = $1`,
-      [row.id, provider.name, outcome.error ?? 'send failed', nextAt],
+      [row.id, channel.providerName, outcome.error ?? 'send failed', nextAt],
     );
     result.failed += 1;
   }
@@ -175,11 +232,45 @@ export async function drainQueue(
       kind: 'notification.sent',
       subjectType: 'tournament',
       subjectId: tournamentId,
-      payload: { ...result },
+      payload: { ...result, channel: channel.name },
     });
   }
 
   return result;
+}
+
+/**
+ * Who has asked not to be emailed.
+ *
+ * A separate table from `sms_opt_out` and deliberately so — see migration 022.
+ * A coach who texts STOP has not asked to stop being told whether their entry
+ * was accepted, and one consent standing in for the other would either
+ * over-send or swallow the message they were waiting for.
+ */
+async function activeEmailOptOuts(addresses: readonly string[]): Promise<Set<string>> {
+  if (addresses.length === 0) return new Set();
+  const rows = await query<{ email: string }>(
+    'SELECT email FROM email_opt_out WHERE opted_in_at IS NULL AND email = ANY($1)',
+    [[...new Set(addresses)]],
+  );
+  return new Set(rows.map((row) => row.email));
+}
+
+export async function emailOptOut(email: string, source: string): Promise<void> {
+  await transaction(async (client) => {
+    await client.query(
+      `INSERT INTO email_opt_out (email, source) VALUES ($1, $2)
+       ON CONFLICT (email) DO UPDATE SET
+         opted_out_at = now(), source = EXCLUDED.source, opted_in_at = NULL`,
+      [email.toLowerCase(), source.slice(0, 60)],
+    );
+    await client.query(
+      `UPDATE notification
+          SET status = 'cancelled', cancelled_reason = 'recipient opted out'
+        WHERE channel = 'email' AND recipient = $1 AND status IN ('queued', 'failed')`,
+      [email.toLowerCase()],
+    );
+  });
 }
 
 async function activeOptOuts(phones: readonly string[]): Promise<Set<string>> {
@@ -236,26 +327,33 @@ export interface OutboundStatus extends QueueHealth {
   optedOutCount: number;
 }
 
-export async function outboundStatus(tournamentId: string): Promise<OutboundStatus> {
+export async function outboundStatus(
+  tournamentId: string,
+  channelName: 'sms' | 'email' = 'sms',
+): Promise<OutboundStatus> {
   const [rows, optOuts] = await Promise.all([
     query<Row>(
-      `SELECT id, tournament_id, recipient, body, kind, status, attempts, next_attempt_at, created_at
-         FROM notification WHERE tournament_id = $1 AND channel = 'sms'`,
-      [tournamentId],
+      `SELECT id, tournament_id, recipient, subject, body, kind, status, attempts,
+              next_attempt_at, created_at
+         FROM notification WHERE tournament_id = $1 AND channel = $2`,
+      [tournamentId, channelName],
     ),
-    query<{ n: string }>('SELECT count(*) AS n FROM sms_opt_out WHERE opted_in_at IS NULL'),
+    channelName === 'sms'
+      ? query<{ n: string }>('SELECT count(*) AS n FROM sms_opt_out WHERE opted_in_at IS NULL')
+      : query<{ n: string }>('SELECT count(*) AS n FROM email_opt_out WHERE opted_in_at IS NULL'),
   ]);
 
-  const provider = currentProvider();
+  const channel = channelName === 'sms' ? smsChannel() : mailChannel();
   return {
     ...queueHealth(rows.map(toQueued), new Date()),
-    provider: provider.name,
-    blocked: provider.readiness(),
+    provider: channel.providerName,
+    blocked: channel.readiness(),
     optedOutCount: Number(optOuts[0]?.n ?? 0),
   };
 }
 
 export interface QueueEntry extends Queued {
+  subject?: string | null;
   cost: ReturnType<typeof messageCost>;
   error: string | null;
   cancelledReason: string | null;
@@ -266,6 +364,7 @@ export interface QueueEntry extends Queued {
 export async function queueEntries(
   tournamentId: string,
   filter: 'all' | 'waiting' | 'failed' | 'sent',
+  channelName: 'sms' | 'email' = 'sms',
 ): Promise<QueueEntry[]> {
   const clause =
     filter === 'waiting'
@@ -277,17 +376,19 @@ export async function queueEntries(
           : '';
 
   const rows = await query<Row & { error: string | null; cancelled_reason: string | null; sent_at: Date | null }>(
-    `SELECT id, tournament_id, recipient, body, kind, status, attempts, next_attempt_at,
+    `SELECT id, tournament_id, recipient, subject, body, kind, status, attempts, next_attempt_at,
             created_at, error, cancelled_reason, sent_at
        FROM notification
-      WHERE tournament_id = $1 AND channel = 'sms' ${clause}
+      WHERE tournament_id = $1 AND channel = $2 ${clause}
       ORDER BY created_at DESC
       LIMIT 200`,
-    [tournamentId],
+    [tournamentId, channelName],
   );
 
   return rows.map((row) => ({
     ...toQueued(row),
+    subject: row.subject,
+    // Segment arithmetic is an SMS billing fact and means nothing for email.
     cost: messageCost(row.body),
     error: row.error,
     cancelledReason: row.cancelled_reason,

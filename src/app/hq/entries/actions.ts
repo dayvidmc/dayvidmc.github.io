@@ -4,13 +4,17 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff, isDirector } from '@/server/auth';
 import {
+  chaseBalances,
   decide,
   recordManualPayment,
   saveDivisionFees,
   saveEntrySettings,
 } from '@/server/registration';
+import { requestOrigin } from '@/server/origin';
 import type { EntryStatus } from '@/domain/registration';
 import { localWallClock, toSqlTimestamp } from '@/domain/time';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function requireHq() {
   const staff = await currentStaff();
@@ -56,6 +60,7 @@ export async function decideAction(status: string, formData: FormData): Promise<
     staff.name,
     staff.role,
     text(formData, 'note'),
+    await requestOrigin(),
   );
 
   if (!result.ok) redirect(`/hq/entries/${id}?error=${result.error}`);
@@ -64,6 +69,28 @@ export async function decideAction(status: string, formData: FormData): Promise<
   revalidatePath(`/hq/entries/${id}`);
   revalidatePath('/hq/registration');
   redirect(`/hq/entries/${id}?decided=${status}`);
+}
+
+/**
+ * Write to the teams whose balance is outstanding.
+ *
+ * Open to anyone at HQ rather than the director. Chasing a balance is ordinary
+ * desk work, the message says nothing a coach was not already told, and a
+ * control only one person can operate is a control nobody operates.
+ */
+export async function chaseBalancesAction(formData: FormData): Promise<void> {
+  const staff = await requireHq();
+
+  const ids = formData
+    .getAll('entryId')
+    .map((value) => String(value))
+    .filter((value) => UUID.test(value));
+  if (ids.length === 0) redirect('/hq/entries');
+
+  const result = await chaseBalances(staff.tournamentId, ids, await requestOrigin());
+
+  revalidatePath('/hq/entries');
+  redirect(`/hq/entries?chased=${result.asked}&noEmail=${result.noEmail}`);
 }
 
 export async function recordPaymentAction(formData: FormData): Promise<void> {

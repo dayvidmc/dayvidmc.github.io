@@ -40,7 +40,13 @@ const STATUS_CLASS: Record<string, string> = {
 export default async function MessagesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ show?: string; sent?: string; failed?: string; error?: string }>;
+  searchParams: Promise<{
+    show?: string;
+    sent?: string;
+    failed?: string;
+    error?: string;
+    channel?: string;
+  }>;
 }) {
   const staff = await currentStaff();
   if (!canAccessHq(staff)) redirect('/signin');
@@ -52,30 +58,70 @@ export default async function MessagesPage({
   const show = (['all', 'waiting', 'failed', 'sent'] as const).includes(params.show as never)
     ? (params.show as 'all' | 'waiting' | 'failed' | 'sent')
     : 'waiting';
+  const channel: 'sms' | 'email' = params.channel === 'email' ? 'email' : 'sms';
 
-  const [status, entries, optOuts] = await Promise.all([
-    outboundStatus(tournament.id),
-    queueEntries(tournament.id, show),
-    query<{ phone: string; opted_out_at: Date; keyword: string | null }>(
-      `SELECT phone, opted_out_at, keyword FROM sms_opt_out
-        WHERE opted_in_at IS NULL ORDER BY opted_out_at DESC LIMIT 50`,
-    ),
+  const [status, entries, optOuts, otherWaiting] = await Promise.all([
+    outboundStatus(tournament.id, channel),
+    queueEntries(tournament.id, show, channel),
+    channel === 'sms'
+      ? query<{ who: string; opted_out_at: Date; how: string | null }>(
+          `SELECT phone AS who, opted_out_at, keyword AS how FROM sms_opt_out
+            WHERE opted_in_at IS NULL ORDER BY opted_out_at DESC LIMIT 50`,
+        )
+      : query<{ who: string; opted_out_at: Date; how: string | null }>(
+          `SELECT email AS who, opted_out_at, source AS how FROM email_opt_out
+            WHERE opted_in_at IS NULL ORDER BY opted_out_at DESC LIMIT 50`,
+        ),
+    // How much is waiting on the channel not being looked at, so somebody who
+    // opens this screen for the texts still finds out that ninety acceptance
+    // emails have been sitting in the queue since March.
+    outboundStatus(tournament.id, channel === 'sms' ? 'email' : 'sms'),
   ]);
 
   const live = status.provider !== 'console' && !status.blocked;
 
   return (
     <>
-      <h1>Texts</h1>
+      <h1>{channel === 'email' ? 'Email' : 'Texts'}</h1>
       <p className="sub">
         {status.queued} waiting · {status.sent} sent · {status.failed} failed
-        {status.segments > 0 && ` · ${status.segments} segments`}
+        {channel === 'sms' && status.segments > 0 ? ` · ${status.segments} segments` : ''}
       </p>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <a className="btn" href="/hq" style={{ flex: 1 }}>← Board</a>
         <a className="btn" href="/hq/settings" style={{ flex: 1 }}>Settings</a>
       </div>
+
+      {/* Two channels, two queues, two providers — and one of them is always
+          the one somebody is not looking at. */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+        <a
+          className="btn"
+          href="/hq/messages"
+          style={{ flex: 1, minHeight: 44, fontWeight: channel === 'sms' ? 700 : 400 }}
+        >
+          Texts
+        </a>
+        <a
+          className="btn"
+          href="/hq/messages?channel=email"
+          style={{ flex: 1, minHeight: 44, fontWeight: channel === 'email' ? 700 : 400 }}
+        >
+          Email
+        </a>
+      </div>
+
+      {otherWaiting.queued > 0 && (
+        <a
+          className="notice warn"
+          href={channel === 'sms' ? '/hq/messages?channel=email' : '/hq/messages'}
+          style={{ display: 'block' }}
+        >
+          {otherWaiting.queued} {channel === 'sms' ? 'email' : 'text'}
+          {otherWaiting.queued === 1 ? '' : 's'} waiting on the other channel. →
+        </a>
+      )}
 
       {/* --- Is sending on at all? ------------------------------------------ */}
 
@@ -91,8 +137,10 @@ export default async function MessagesPage({
       ) : (
         <div className="notice warn">
           <strong>Dry run.</strong> Messages are written to the server log and marked sent; nobody
-          is texted. That is the right setting for a rehearsal and the wrong one for the weekend —
-          set <code>SMS_PROVIDER=twilio</code> with its credentials to send for real.
+          is {channel === 'email' ? 'emailed' : 'texted'}. That is the right setting for a rehearsal
+          and the wrong one for the weekend — set{' '}
+          <code>{channel === 'email' ? 'MAIL_PROVIDER=resend' : 'SMS_PROVIDER=twilio'}</code> with
+          its credentials to send for real.
         </div>
       )}
 
@@ -121,7 +169,9 @@ export default async function MessagesPage({
         </div>
       )}
 
-      <form action={sendNowAction}>
+      {/* Bound rather than posted as a value: a submitter button's name and
+          value do not reach a Next.js server action. */}
+      <form action={sendNowAction.bind(null, channel)}>
         <button className="primary wide" type="submit" style={{ minHeight: 48 }}>
           Send what is due now
         </button>
@@ -188,6 +238,9 @@ export default async function MessagesPage({
               </span>
             </div>
 
+            {entry.subject && (
+              <p style={{ fontWeight: 600, margin: '4px 0' }}>{entry.subject}</p>
+            )}
             <p className="raw">{entry.body}</p>
 
             {entry.error && (
@@ -238,8 +291,9 @@ export default async function MessagesPage({
 
       <h2>Opted out ({status.optedOutCount})</h2>
       <p className="sub">
-        Anyone who texted STOP. They get nothing until they text START, or ask you to put them back
-        on. This is a legal obligation, not a preference — do not use it to clear a list.
+        {channel === 'email'
+          ? 'Anyone who has asked not to be emailed. Kept separately from the text opt-outs on purpose — somebody who stops the texts has not asked to stop being told whether their entry was accepted.'
+          : 'Anyone who texted STOP. They get nothing until they text START, or ask you to put them back on. This is a legal obligation, not a preference — do not use it to clear a list.'}
       </p>
 
       {optOuts.length === 0 ? (
@@ -247,20 +301,24 @@ export default async function MessagesPage({
       ) : (
         <div className="card">
           {optOuts.map((row) => (
-            <div key={row.phone} className="row-item">
+            <div key={row.who} className="row-item">
               <div>
-                <div style={{ fontWeight: 600 }}>{formatPhone(row.phone) || row.phone}</div>
+                <div style={{ fontWeight: 600, wordBreak: 'break-all' }}>
+                  {channel === 'sms' ? formatPhone(row.who) || row.who : row.who}
+                </div>
                 <div className="meta">
                   {formatDateFriendly(toWallClock(row.opted_out_at))}
-                  {row.keyword ? ` · texted “${row.keyword}”` : ''}
+                  {row.how ? ` · ${channel === 'sms' ? `texted “${row.how}”` : row.how}` : ''}
                 </div>
               </div>
-              <form action={optInAction}>
-                <input type="hidden" name="phone" value={row.phone} />
-                <button type="submit" style={{ minHeight: 44, padding: '8px 12px', fontSize: 14 }}>
-                  They asked to go back on
-                </button>
-              </form>
+              {channel === 'sms' && (
+                <form action={optInAction}>
+                  <input type="hidden" name="phone" value={row.who} />
+                  <button type="submit" style={{ minHeight: 44, padding: '8px 12px', fontSize: 14 }}>
+                    They asked to go back on
+                  </button>
+                </form>
+              )}
             </div>
           ))}
         </div>

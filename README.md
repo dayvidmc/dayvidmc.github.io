@@ -39,6 +39,7 @@ intake paths that feed it.
 | Umpires: roster, crews with conflict checks, their own link, honoraria | — | Built, tested — not in the spec at all; see `docs/BRAINSTORM.md` §4. The crew is a mix of paid and volunteer, and the pay screen only chases a rate for the ones who should have one |
 | Registration and rosters, no payments | — | Built, tested — Module E's fees stay deferred |
 | Outbound SMS: sender, retries, opt-outs, failure screen | §5.7 | Built, tested — **dry run by default**; needs a Twilio account to reach a phone |
+| Outbound email: entry confirmations, decisions, balance chases | §5.7 | Built, tested — same queue and failure screen as the texts, its own unsubscribe list. **Dry run by default**; needs a verified sending domain |
 | Money raised: every stream, cost of goods, gifts in kind, cash control | §8A | Built, tested — costs as receipts or per item; the raffle is still recorded by hand |
 | What it cost, and who fronted it | §8A | Built, tested — one line per shop, and volunteers owed money are named until paid back |
 | Sponsors: what was promised, the pamphlet list, the thank-you list | §7 | Built, tested — links a gift to what it fetched at the auction |

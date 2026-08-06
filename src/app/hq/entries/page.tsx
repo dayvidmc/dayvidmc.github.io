@@ -4,6 +4,7 @@ import { currentTournament } from '@/server/repo';
 import { board, byAgeGroup, currentWindow, entryDivisions } from '@/server/registration';
 import { STATUS_LABEL, divisionLabel, owing, untilPhrase } from '@/domain/registration';
 import { formatDateFriendly, formatTimeFriendly } from '@/domain/time';
+import { chaseBalancesAction } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +34,7 @@ const STATUS_CLASS: Record<string, string> = {
 export default async function EntriesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ division?: string }>;
+  searchParams: Promise<{ chased?: string; noEmail?: string; division?: string }>;
 }) {
   const staff = await currentStaff();
   if (!canAccessHq(staff)) redirect('/signin');
@@ -113,6 +114,17 @@ export default async function EntriesPage({
         </div>
       )}
 
+      {params.chased !== undefined && (
+        <div className="notice ok">
+          {params.chased === '0'
+            ? 'Nobody new to write to — everybody with an email has already been chased for this amount.'
+            : `${params.chased} team${params.chased === '1' ? '' : 's'} written to. The message is queued; it goes out with the next send.`}
+          {params.noEmail && params.noEmail !== '0'
+            ? ` ${params.noEmail} left no email address, so those still need a phone call.`
+            : ''}
+        </div>
+      )}
+
       {overdue.length > 0 && (
         <div className="notice error">
           <strong>{overdue.length} accepted team{overdue.length === 1 ? '' : 's'}</strong> past the
@@ -125,6 +137,22 @@ export default async function EntriesPage({
               </li>
             ))}
           </ul>
+          {/* Until email existed this list was something a director had to
+              work through with a phone. A team that has paid since the page
+              loaded is skipped, and nobody is chased twice for the same
+              amount. */}
+          <form action={chaseBalancesAction} style={{ marginTop: 10 }}>
+            {overdue.map((chase) => (
+              <input key={chase.entryId} type="hidden" name="entryId" value={chase.entryId} />
+            ))}
+            <button type="submit" className="wide" style={{ minHeight: 48 }}>
+              Email all {overdue.length} about the balance
+            </button>
+            <p className="hint">
+              One message each, saying the amount, the reference and the date. It invites a coach
+              in difficulty to reply rather than disappear.
+            </p>
+          </form>
         </div>
       )}
 

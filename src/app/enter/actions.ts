@@ -1,11 +1,11 @@
 'use server';
 
-import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { currentTournament } from '@/server/repo';
 import { claimEtransfer, createEntry, startCheckout } from '@/server/registration';
 import { normaliseReference } from '@/domain/registration';
+import { requestOrigin } from '@/server/origin';
 
 /**
  * The public write paths.
@@ -41,7 +41,7 @@ export async function submitEntryAction(formData: FormData): Promise<void> {
     alternateName: text(formData, 'alternateName'),
     alternateContact: text(formData, 'alternateContact'),
     notes: text(formData, 'notes'),
-  });
+  }, await requestOrigin());
 
   if (!result.ok) {
     const problems = result.problems?.length
@@ -68,10 +68,7 @@ export async function payAction(formData: FormData): Promise<void> {
 
   // The public origin, so the coach comes back to the site they left rather
   // than to whatever hostname the container happens to know itself by.
-  const headerList = await headers();
-  const host = headerList.get('x-forwarded-host') ?? headerList.get('host') ?? '';
-  const proto = headerList.get('x-forwarded-proto') ?? 'https';
-  const origin = host ? `${proto}://${host}` : '';
+  const origin = await requestOrigin();
 
   const result = await startCheckout(reference, kind, origin);
   if (!result.ok || !result.url) {

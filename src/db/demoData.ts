@@ -6,6 +6,7 @@ import { applySchedule } from '@/server/scheduleStore';
 import { approveScore, parkUnmatchedMessage, recordProposal, setDispute } from '@/server/repo';
 import { materialiseBracket } from '@/server/brackets';
 import { addMinutes, formatDate, formatTime, toSqlTimestamp, toWallClock } from '@/domain/time';
+import { entryDecided, entryReceived } from '@/domain/email';
 
 /**
  * A tournament mid-Saturday, for showing someone what this looks like.
@@ -1173,6 +1174,90 @@ async function seedEntries(tournamentId: string): Promise<void> {
   await query(
     `UPDATE entry SET balance_due_on = current_date - 5 WHERE id = $1`,
     [created.get('TK-4NMC-8VQJ')],
+  );
+
+  // The email each of these entries would have generated.
+  //
+  // Written through the real templates rather than as invented strings, so the
+  // demo shows what a coach actually receives and a wording change shows up
+  // here too. The two most recent are left queued so the messages screen has
+  // something waiting rather than an empty list nobody can judge.
+  const letter = {
+    tournamentName: '30th Annual Scott Tokessy Memorial Gold Glove Tournament',
+    contactEmail: 'entries@example.com',
+  };
+
+  const rows = await query<{
+    id: string;
+    reference: string;
+    team_name: string;
+    coach_name: string;
+    coach_email: string;
+    status: string;
+    division_name: string;
+  }>(
+    `SELECT e.id, e.reference, e.team_name, e.coach_name, e.coach_email, e.status,
+            d.name AS division_name
+       FROM entry e JOIN division d ON d.id = e.division_id
+      WHERE e.tournament_id = $1 ORDER BY e.submitted_at`,
+    [tournamentId],
+  );
+
+  for (const [index, entry] of rows.entries()) {
+    const mail = entryReceived({
+      ...letter,
+      contactName: entry.coach_name,
+      teamName: entry.team_name,
+      divisionName: entry.division_name,
+      reference: entry.reference,
+      statusUrl: `/enter/${entry.reference}`,
+      depositDue: '$200.00',
+    });
+    // Everything but the last two has gone; the last two are still waiting.
+    const sent = index < rows.length - 2;
+    await query(
+      `INSERT INTO notification (tournament_id, channel, kind, recipient, subject, body,
+                                 status, provider, sent_at, created_at)
+       VALUES ($1, 'email', 'entry_received', $2, $3, $4,
+               CASE WHEN $5 THEN 'sent' ELSE 'queued' END,
+               CASE WHEN $5 THEN 'console' END,
+               CASE WHEN $5 THEN now() - interval '1 day' END,
+               now() - interval '1 day')`,
+      [tournamentId, entry.coach_email, mail.subject, mail.body, sent],
+    );
+
+    if (entry.status === 'accepted' || entry.status === 'waitlisted' || entry.status === 'declined') {
+      const decision = entryDecided({
+        ...letter,
+        contactName: entry.coach_name,
+        teamName: entry.team_name,
+        divisionName: entry.division_name,
+        reference: entry.reference,
+        outcome: entry.status as 'accepted' | 'waitlisted' | 'declined',
+        statusUrl: `/enter/${entry.reference}`,
+        balanceDue: entry.status === 'accepted' ? '$500.00' : null,
+      });
+      await query(
+        `INSERT INTO notification (tournament_id, channel, kind, recipient, subject, body,
+                                   status, provider, sent_at, created_at)
+         VALUES ($1, 'email', 'entry_decided', $2, $3, $4, 'sent', 'console',
+                 now() - interval '12 hours', now() - interval '12 hours')`,
+        [tournamentId, entry.coach_email, decision.subject, decision.body],
+      );
+    }
+  }
+
+  // One address that bounced, so the failure screen has a real failure on it
+  // rather than only ever being tested by somebody breaking something.
+  await query(
+    `UPDATE notification
+        SET status = 'failed', attempts = 5, error = '422 recipient domain does not exist',
+            provider = 'console'
+      WHERE tournament_id = $1 AND channel = 'email' AND status = 'queued'
+      AND id = (SELECT id FROM notification
+                 WHERE tournament_id = $1 AND channel = 'email' AND status = 'queued'
+                 ORDER BY created_at LIMIT 1)`,
+    [tournamentId],
   );
 }
 

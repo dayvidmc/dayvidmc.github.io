@@ -12,7 +12,13 @@ import {
   recordCashMovement,
   recordPurchase,
 } from '@/server/fundraising';
-import { markReceiptsSent, recordManualDonation, voidDonation } from '@/server/donations';
+import {
+  askForReceiptAddress,
+  markReceiptsSent,
+  recordManualDonation,
+  voidDonation,
+} from '@/server/donations';
+import { requestOrigin } from '@/server/origin';
 import type { Movement, Stream } from '@/domain/fundraising';
 
 /**
@@ -305,6 +311,31 @@ export async function markReceiptsSentAction(formData: FormData): Promise<void> 
   revalidatePath('/hq/money/donations/receipts');
   revalidatePath('/hq/money/donations');
   redirect(`/hq/money/donations/receipts?sent=${marked}`);
+}
+
+/**
+ * Email the donors who asked for a receipt and left no address.
+ *
+ * The receipts screen has named these people since it was built and could not
+ * do anything about them. It queues one message each; nothing is sent from
+ * here, and a donor who has already been asked is skipped rather than asked
+ * twice.
+ */
+export async function askForAddressesAction(formData: FormData): Promise<void> {
+  const staff = await requireHq();
+
+  const ids = formData
+    .getAll('id')
+    .map((value) => String(value))
+    .filter((value) => UUID.test(value));
+  if (ids.length === 0) redirect('/hq/money/donations/receipts');
+
+  const result = await askForReceiptAddress(staff.tournamentId, ids, await requestOrigin());
+
+  revalidatePath('/hq/money/donations/receipts');
+  redirect(
+    `/hq/money/donations/receipts?asked=${result.asked}&noEmail=${result.noEmail}`,
+  );
 }
 
 /** A gift refunded or charged back. Kept on the record, marked as gone. */

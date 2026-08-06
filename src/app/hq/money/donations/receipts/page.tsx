@@ -5,7 +5,7 @@ import { receiptsDue } from '@/server/donations';
 import { formatMoney } from '@/domain/pos';
 import { formatDateFriendly } from '@/domain/time';
 import { CopyText } from '../../../../_components/CopyText';
-import { markReceiptsSentAction } from '../../actions';
+import { askForAddressesAction, markReceiptsSentAction } from '../../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +24,7 @@ export const dynamic = 'force-dynamic';
 export default async function ReceiptsScreen({
   searchParams,
 }: {
-  searchParams: Promise<{ sent?: string }>;
+  searchParams: Promise<{ sent?: string; asked?: string; noEmail?: string }>;
 }) {
   const staff = await currentStaff();
   if (!canAccessHq(staff)) redirect('/signin');
@@ -75,6 +75,17 @@ export default async function ReceiptsScreen({
         </div>
       )}
 
+      {params.asked && (
+        <div className="notice ok">
+          {params.asked === '0'
+            ? 'Nobody new to ask — everybody with an email has already been written to.'
+            : `${params.asked} donor${params.asked === '1' ? '' : 's'} asked for their address. The message is queued; it goes out with the next send.`}
+          {params.noEmail && params.noEmail !== '0'
+            ? ` ${params.noEmail} left no email address either, so those can only be chased by hand.`
+            : ''}
+        </div>
+      )}
+
       <div className="notice info">
         <strong>CHEO issues these, not the tournament.</strong> The job here is to hand over the
         details and record that it was done. Nothing on this screen sends anything by itself.
@@ -82,9 +93,26 @@ export default async function ReceiptsScreen({
 
       {noAddress.length > 0 && (
         <div className="notice warn">
-          {noAddress.length} donor{noAddress.length === 1 ? '' : 's'} asked for a receipt without a
-          full address: {noAddress.map((line) => line.donorName).join(', ')}. A foundation cannot
-          post to a name alone — worth an email before this batch goes.
+          <p>
+            {noAddress.length} donor{noAddress.length === 1 ? '' : 's'} asked for a receipt without
+            a full address: {noAddress.map((line) => line.donorName).join(', ')}. A foundation
+            cannot post to a name alone.
+          </p>
+          {/* The button this notice asked for and, until email existed, could
+              not have. It queues one message each and skips anybody already
+              written to. */}
+          <form action={askForAddressesAction}>
+            {noAddress.map((line) => (
+              <input key={line.id} type="hidden" name="id" value={line.id} />
+            ))}
+            <button type="submit" className="wide" style={{ minHeight: 48, marginTop: 8 }}>
+              Email {noAddress.length === 1 ? 'them' : 'them all'} and ask
+            </button>
+            <p className="hint">
+              {noAddress.filter((line) => line.donorEmail).length} of {noAddress.length} left an
+              email address. The rest can only be chased by hand — nothing here can reach them.
+            </p>
+          </form>
         </div>
       )}
 

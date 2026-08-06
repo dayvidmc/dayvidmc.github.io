@@ -1,10 +1,10 @@
 'use server';
 
-import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { currentTournament } from '@/server/repo';
 import { startDonationCheckout } from '@/server/donations';
 import { parseMoney } from '@/domain/pos';
+import { requestOrigin } from '@/server/origin';
 
 /**
  * The one public write path for donations.
@@ -30,10 +30,7 @@ export async function donateAction(formData: FormData): Promise<void> {
   const amountCents = parseMoney(typed || text(formData, 'amount'));
   if (amountCents === null) redirect('/donate?error=bad_amount');
 
-  const headerList = await headers();
-  const host = headerList.get('x-forwarded-host') ?? headerList.get('host') ?? '';
-  const proto = headerList.get('x-forwarded-proto') ?? 'https';
-  const origin = host ? `${proto}://${host}` : '';
+  const origin = await requestOrigin();
 
   const result = await startDonationCheckout(
     tournament.id,

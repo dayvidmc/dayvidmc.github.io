@@ -39,6 +39,7 @@ export default async function SettingsPage() {
   ]);
 
   const outbound = await outboundStatus(tournament.id);
+  const mail = await outboundStatus(tournament.id, 'email');
   const c = counts[0]!;
   const queued = Number(c.queued);
   const unreviewed = divisions.filter((d) => !d.rules_reviewed);
@@ -109,15 +110,41 @@ export default async function SettingsPage() {
       href: '/hq/messages',
     },
     {
+      // Same two claims for email, and the same distinction. An entry
+      // confirmation written to a log file is not an entry confirmation.
+      done: mail.provider !== 'console' && mail.blocked === null,
+      label:
+        mail.blocked !== null
+          ? 'Email cannot be sent'
+          : mail.provider === 'console'
+            ? 'Email is in dry-run — nobody is being emailed'
+            : 'Email is going out',
+      detail:
+        mail.blocked !== null
+          ? `${mail.blocked} ${mail.queued} message${mail.queued === 1 ? '' : 's'} waiting.`
+          : mail.provider === 'console'
+            ? `Entry confirmations and decisions are written to the server log and marked sent. ` +
+              `${mail.queued} waiting. Set MAIL_PROVIDER=resend with its credentials before ` +
+              `entries open — a coach who never gets their reference cannot pay.`
+            : `Through ${mail.provider}. ${mail.queued} waiting, ${mail.sent} sent` +
+              `${mail.stuck > 0 ? `, ${mail.stuck} given up on` : ''}.`,
+      href: '/hq/messages?channel=email',
+    },
+    {
       // A queue that is due and not moving means nothing is calling the drain,
       // which looks identical to "everything is fine" from every other screen.
-      done: outbound.oldestWaitingMinutes === null || outbound.oldestWaitingMinutes <= 15,
+      // Either channel stalling is the same fault, so this asks about both.
+      done:
+        (outbound.oldestWaitingMinutes === null || outbound.oldestWaitingMinutes <= 15) &&
+        (mail.oldestWaitingMinutes === null || mail.oldestWaitingMinutes <= 15),
       label: 'Something is calling the sender',
       detail:
-        outbound.oldestWaitingMinutes === null
+        outbound.oldestWaitingMinutes === null && mail.oldestWaitingMinutes === null
           ? 'Nothing is waiting.'
-          : `Oldest message has waited ${outbound.oldestWaitingMinutes} minutes. Either the cron ` +
-            `is not running or the sender cannot send.`,
+          : `Oldest message has waited ${Math.max(
+              outbound.oldestWaitingMinutes ?? 0,
+              mail.oldestWaitingMinutes ?? 0,
+            )} minutes. Either the cron is not running or the sender cannot send.`,
       href: '/hq/messages',
     },
   ];

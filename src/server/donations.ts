@@ -3,6 +3,9 @@ import { query, queryOne, transaction } from '@/db/client';
 import { recordEvent, recordEventIn } from './events';
 import { currentProvider } from './payments/provider';
 import type { PaymentEvent } from './payments/provider';
+import { receiptAddress } from '@/domain/email';
+import { formatMoney } from '@/domain/pos';
+import { queueEmail } from './mail/queue';
 
 /**
  * Donations, and the running total a stranger sees.
@@ -456,6 +459,68 @@ export async function receiptsDue(
     method: row.method,
     sentAt: row.receipt_sent_at,
   }));
+}
+
+/**
+ * Ask a donor for the address CHEO needs.
+ *
+ * The gap this closes: somebody ticks "I would like a receipt" on a phone at
+ * the gate and leaves the address blank. The receipts screen has named those
+ * donors since it was built and said "worth an email before this batch goes",
+ * and there was no way to send one — every outbound message in this repository
+ * was a text, and a donor's mobile is not something the donate page collects.
+ *
+ * Deduplicated on the subject line, so pressing the button twice in a week
+ * does not ask the same person twice.
+ */
+export async function askForReceiptAddress(
+  tournamentId: string,
+  ids: readonly string[],
+  origin: string,
+): Promise<{ asked: number; noEmail: number }> {
+  if (ids.length === 0) return { asked: 0, noEmail: 0 };
+
+  const rows = await query<{
+    id: string;
+    donor_name: string | null;
+    donor_email: string | null;
+    amount_cents: number;
+  }>(
+    `SELECT d.id, d.donor_name, d.donor_email, d.amount_cents
+       FROM donation d
+      WHERE d.tournament_id = $1 AND d.id = ANY($2::uuid[])
+        AND d.receipt_requested AND d.receipt_sent_at IS NULL
+        AND d.confirmed_at IS NOT NULL AND d.voided_at IS NULL`,
+    [tournamentId, [...ids]],
+  );
+
+  const tournament = await queryOne<{ name: string; contact_general: string | null }>(
+    'SELECT name, contact_general FROM tournament WHERE id = $1',
+    [tournamentId],
+  );
+  if (!tournament) return { asked: 0, noEmail: rows.length };
+
+  let asked = 0;
+  let noEmail = 0;
+  for (const row of rows) {
+    const outcome = await queueEmail({
+      tournamentId,
+      kind: 'receipt_address',
+      to: row.donor_email,
+      once: row.id,
+      email: receiptAddress({
+        tournamentName: tournament.name,
+        contactEmail: tournament.contact_general ?? undefined,
+        siteUrl: origin || undefined,
+        donorName: row.donor_name ?? '',
+        amount: formatMoney(row.amount_cents),
+      }),
+    });
+    if (outcome.queued) asked += 1;
+    else if (outcome.reason === 'no address') noEmail += 1;
+  }
+
+  return { asked, noEmail };
 }
 
 /** Mark a batch as handed over, so nobody is receipted twice. */

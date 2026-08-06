@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff } from '@/server/auth';
-import { cancelMessage, drainQueue, optIn, retryMessage } from '@/server/sms/drain';
+import { cancelMessage, drainQueue, mailChannel, optIn, retryMessage } from '@/server/sms/drain';
 
 async function requireHq() {
   const staff = await currentStaff();
@@ -19,16 +19,21 @@ async function requireHq() {
  * really for is the moment after somebody fixes a wrong phone number and wants
  * to see the message go rather than wonder whether it will.
  */
-export async function sendNowAction(): Promise<void> {
+export async function sendNowAction(channel: 'sms' | 'email'): Promise<void> {
   const staff = await requireHq();
-  const result = await drainQueue(staff.tournamentId, { tickSeconds: 8 });
+  const result = await drainQueue(staff.tournamentId, {
+    tickSeconds: 8,
+    ...(channel === 'email' ? { channel: mailChannel() } : {}),
+  });
 
   revalidatePath('/hq/messages');
   revalidatePath('/hq/settings');
+
+  const back = channel === 'email' ? '/hq/messages?channel=email&' : '/hq/messages?';
   redirect(
     result.blocked
-      ? '/hq/messages?error=blocked'
-      : `/hq/messages?sent=${result.sent}&failed=${result.failed}`,
+      ? `${back}error=blocked`
+      : `${back}sent=${result.sent}&failed=${result.failed}`,
   );
 }
 

@@ -99,8 +99,30 @@ lying in the environment cannot start texting ninety coaches by accident.
 | `TWILIO_AUTH_TOKEN` | from the Twilio console |
 | `TWILIO_FROM_NUMBER` | the number you bought, `+1613…` |
 
+**1b. And a provider that can send email.** The same arrangement, one channel
+along. Four messages go out by email — the entry confirmation carrying the
+coach's reference, the accept/waitlist/decline decision, the balance chase, and
+the request for a posting address that CHEO's receipts need. Without
+`MAIL_PROVIDER=resend` all of them are written to the log and marked sent.
+
+| Variable | For real sending |
+|---|---|
+| `MAIL_PROVIDER` | `resend` |
+| `RESEND_API_KEY` | from the Resend dashboard |
+| `MAIL_FROM` | `Tokessy Tournament <entries@your-domain>` |
+| `MAIL_REPLY_TO` | optional; where replies land |
+
+**This one blocks entry-taking rather than degrading it.** A coach who never
+receives their reference cannot send an e-transfer that the treasurer can
+match. It needs a verified sending domain — SPF and DKIM records published on
+whatever domain the messages come from — so it is a DNS conversation with
+whoever administers `tokessytournament.com`, and *who that is* is still an open
+question in `docs/ANSWERS.md`. Start that conversation before the entry window,
+not during it.
+
 **2. Something calling the drain.** Next.js has no background worker, so the
-sending happens when `POST /api/notifications/drain` is called. Set
+sending happens when `POST /api/notifications/drain` is called. One call drains
+both channels. Set
 `SENDER_TOKEN` to a long random string and add a Railway cron:
 
 ```
@@ -111,7 +133,8 @@ Command:   curl -fsS -X POST -H "Authorization: Bearer $SENDER_TOKEN" \
 
 Without `SENDER_TOKEN` the endpoint refuses everything — an open drain endpoint
 is a way for a stranger to run up a charity's phone bill. A director can always
-press **Send what is due now** in HQ → Texts; that calls the same code.
+press **Send what is due now** in HQ → Texts, or on the Email tab beside it;
+each calls the same code for its own channel.
 
 On a machine that stays up — a laptop at HQ, say — `npm run sender` does the
 same job in a loop and prints what it sends.

@@ -1186,6 +1186,64 @@ It carries no "you are here" marker. That needs the pathname, which in a server
 layout means either middleware on every request or a client bundle, and the
 page's own heading already says where you are.
 
+### 2.66 Email is a second channel through the same queue, not a second queue
+
+**Decision.** `notification` gains a `subject`, the drainer takes a small
+`Channel` adapter, and email goes through the same rows, the same claim, the
+same backoff and the same failure screen as SMS. Two adapters, one pipeline.
+
+**Why.** The alternative was a `drainMail` beside `drainQueue`, sixty lines of
+near-identical code. Everything that makes the SMS drain trustworthy — claiming
+a row with a conditional UPDATE so two drainers cannot both send it, checking
+consent at send time rather than queue time, keeping the provider's own error
+text — would then exist twice and would drift, which is exactly the failure
+§2.63 was written about. What genuinely differs between the two channels is
+who counts as opted out and how a message reaches a provider, and that is all
+the adapter is.
+
+The cron drains both on every tick rather than needing a second entry. A second
+cron somebody forgets to add is how ninety acceptance emails sit queued until
+March.
+
+### 2.67 Email opt-outs are a separate table from text opt-outs
+
+**Decision.** `email_opt_out`, not a second column on `sms_opt_out`.
+
+**Why.** They are different consents under different rules. A phone opt-out is
+a carrier and CASL obligation triggered by the word STOP; an email unsubscribe
+is a link or a reply. More to the point, they mean different things: a coach
+who stops the texts has **not** asked to stop being told whether their entry
+was accepted. Merging them would either over-send on one channel or silently
+swallow the message somebody was waiting for on the other, and the second is
+invisible until a coach rings in August asking why nobody told them.
+
+### 2.68 Plain text, no HTML, no images, no tracking
+
+**Decision.** Every template returns a subject and a plain body. No HTML part,
+no pixel, no images, and no link to anywhere but this site.
+
+**Why.** A tournament that has never sent email will land in spam folders on
+its first send whatever it does; a plain-text message from a real address with
+no images is the version most likely to arrive. It is also the version that
+reads correctly on a phone in a car park, which is where these get opened.
+Nothing here needs a layout — the longest of them is five paragraphs.
+
+The templates live in `domain/`, which means the exact words a coach reads are
+assertable. Forty-two tests do that: that a declined team is never asked for
+money, that a waitlisted coach is told teams drop out, that the balance chase
+invites somebody in difficulty to reply rather than disappear.
+
+### 2.69 What is owed, not what the fee is
+
+**Decision.** The acceptance email quotes the entry fee minus everything
+already paid, computed inside the same transaction that records the decision.
+
+**Why.** The first version quoted `default_entry_fee_cents`. A team that paid a
+deposit in January and is accepted in March would have been asked for the whole
+fee again — the single most expensive kind of wrong an email from a charity can
+be, because the coach either pays twice or loses trust in every figure the
+system produces.
+
 ---
 
 ## 3. Deliberately not built

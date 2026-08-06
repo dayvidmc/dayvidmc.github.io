@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { currentTournament } from '@/server/repo';
-import { drainQueue } from '@/server/sms/drain';
+import { drainQueue, mailChannel } from '@/server/sms/drain';
 
 /**
  * The thing that has to be called for texts to go out.
@@ -44,14 +44,18 @@ export async function POST(request: Request) {
   const url = new URL(request.url);
   const tickSeconds = Number(url.searchParams.get('tick') ?? 60);
 
-  const result = await drainQueue(tournament.id, {
-    tickSeconds: Number.isFinite(tickSeconds) ? Math.min(Math.max(tickSeconds, 1), 300) : 60,
-  });
+  const tick = Number.isFinite(tickSeconds) ? Math.min(Math.max(tickSeconds, 1), 300) : 60;
+
+  // Both channels on every tick. One cron entry rather than two, because a
+  // second one that somebody forgets to add is how ninety acceptance emails
+  // sit queued until March.
+  const sms = await drainQueue(tournament.id, { tickSeconds: tick });
+  const email = await drainQueue(tournament.id, { tickSeconds: tick, channel: mailChannel() });
 
   // 200 even when blocked: the caller is a cron, and a non-2xx would be read as
   // "the endpoint is broken" when the truth is "no provider is configured".
   // The body says which.
-  return NextResponse.json(result);
+  return NextResponse.json({ sms, email });
 }
 
 function safeEqual(a: string, b: string): boolean {
