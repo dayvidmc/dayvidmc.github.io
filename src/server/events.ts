@@ -54,6 +54,8 @@ export type EventKind =
   | 'volunteer.assigned'
   | 'volunteer.no_show'
   | 'volunteer.shift_created'
+  | 'volunteer.shift_deleted'
+  | 'standings.coin_flip'
   | 'gold_glove.drawn'
   | 'site.content_changed'
   | 'donation.received'

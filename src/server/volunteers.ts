@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { query, queryOne, transaction } from '@/db/client';
-import { recordEvent } from './events';
+import { recordEvent, recordEventIn } from './events';
 import {
   clashes,
   coverage,
@@ -432,8 +432,53 @@ export async function diamondsPerSite(tournamentId: string): Promise<Map<string,
   return new Map(rows.map((row) => [row.site, Number(row.n)]));
 }
 
-export async function deleteShift(tournamentId: string, id: string): Promise<void> {
-  await query('DELETE FROM volunteer_shift WHERE id = $1 AND tournament_id = $2', [id, tournamentId]);
+/**
+ * Remove a shift nobody is on.
+ *
+ * The "nobody is on" half used to live only in the screen, which showed the
+ * button when the shift was empty and hid it when it was not. That is not a
+ * rule, it is a suggestion: a replayed form post deleted a staffed shift and
+ * the assignments went with it on the foreign key — silently, with no event,
+ * so somebody who had agreed to work Saturday afternoon simply stopped being
+ * on the rota and nothing anywhere said why.
+ *
+ * Refused rather than cascaded. Taking somebody off a shift is a thing
+ * somebody should do deliberately and be seen to have done; the unassign
+ * action already records it.
+ */
+export async function deleteShift(
+  tournamentId: string,
+  id: string,
+  actor: string,
+  actorRole: string,
+): Promise<{ ok: boolean; error?: 'not_found' | 'has_people'; assigned?: number }> {
+  return transaction(async (client) => {
+    const found = await client.query<{ id: string; role: string; starts_at: Date; assigned: string }>(
+      `SELECT s.id, s.role, s.starts_at,
+              (SELECT count(*) FROM volunteer_assignment a WHERE a.shift_id = s.id) AS assigned
+         FROM volunteer_shift s
+        WHERE s.id = $1 AND s.tournament_id = $2
+        FOR UPDATE`,
+      [id, tournamentId],
+    );
+    const shift = found.rows[0];
+    if (!shift) return { ok: false, error: 'not_found' as const };
+
+    const assigned = Number(shift.assigned);
+    if (assigned > 0) return { ok: false, error: 'has_people' as const, assigned };
+
+    await client.query('DELETE FROM volunteer_shift WHERE id = $1', [id]);
+    await recordEventIn(client, {
+      tournamentId,
+      actor,
+      actorRole,
+      kind: 'volunteer.shift_deleted',
+      subjectType: 'volunteer_shift',
+      subjectId: id,
+      payload: { role: shift.role, startsAt: shift.starts_at },
+    });
+    return { ok: true };
+  });
 }
 
 /**

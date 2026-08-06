@@ -16,6 +16,8 @@ const ERROR: Record<string, string> = {
   needs_diamond: 'A diamond shift has to say which diamond — the posting is the whole point of it.',
   needs_site:
     'A site supervisor shift has to say which site. Without one they cover no diamonds, so a score they text in is not recognised.',
+  has_people: 'That shift has somebody on it. Take them off it first — a shift that vanishes takes their commitment with it, and nobody tells them.',
+  not_found: 'That shift is not there any more.',
   backwards: 'A shift cannot end before it starts.',
 };
 

@@ -1,6 +1,13 @@
-import { query } from '@/db/client';
+import { query, transaction } from '@/db/client';
+import { recordEventIn } from './events';
 import { buildRecords, completedGameCounts } from '@/domain/records';
-import { computeStandings, poolBalance, type PoolBalance, type StandingsRow } from '@/domain/tiebreak';
+import {
+  coinFlipKey,
+  computeStandings,
+  poolBalance,
+  type PoolBalance,
+  type StandingsRow,
+} from '@/domain/tiebreak';
 import type { GameResult } from '@/domain/types';
 
 /**
@@ -115,4 +122,118 @@ export async function standingsForDivision(divisionId: string): Promise<PoolStan
   }
 
   return standings.sort((a, b) => a.poolName.localeCompare(b.poolName));
+}
+
+// --- Coin flips -------------------------------------------------------------
+
+export interface PendingFlip {
+  divisionId: string;
+  divisionName: string;
+  poolId: string | null;
+  poolName: string;
+  groupKey: string;
+  /** Alphabetical, which is the provisional order shown publicly. */
+  teams: { id: string; name: string }[];
+}
+
+/**
+ * Every tie in the tournament that the rules could not settle.
+ *
+ * The public standings page has always said "the order shown is provisional
+ * until a director flips a coin and records the result", and until now there
+ * was nowhere to record one. The engine reported the state, the `coin_flip`
+ * table was waiting for rows, and the loop simply did not close — so a
+ * sentence written for a parent reading a table on Sunday morning was a
+ * promise the software could not keep.
+ */
+export async function pendingCoinFlips(tournamentId: string): Promise<PendingFlip[]> {
+  const divisions = await query<{ id: string; name: string }>(
+    'SELECT id, name FROM division WHERE tournament_id = $1 ORDER BY name',
+    [tournamentId],
+  );
+
+  const pending: PendingFlip[] = [];
+  for (const division of divisions) {
+    const pools = await standingsForDivision(division.id);
+    for (const pool of pools) {
+      const groups = new Map<string, { id: string; name: string }[]>();
+      for (const row of pool.rows) {
+        if (!row.coinFlipGroup) continue;
+        const list = groups.get(row.coinFlipGroup) ?? [];
+        list.push({
+          id: row.record.teamId,
+          name: pool.teamNames[row.record.teamId] ?? row.record.teamId,
+        });
+        groups.set(row.coinFlipGroup, list);
+      }
+      for (const [groupKey, teams] of groups) {
+        pending.push({
+          divisionId: division.id,
+          divisionName: division.name,
+          poolId: pool.poolId,
+          poolName: pool.poolName,
+          groupKey,
+          teams,
+        });
+      }
+    }
+  }
+  return pending;
+}
+
+/**
+ * Write down what the coin actually did.
+ *
+ * The order is the whole record: first named is first placed. Stored against
+ * the group key the engine computes, so the next standings read picks it up
+ * with no further work.
+ *
+ * Re-recordable on purpose. A director who types the two names the wrong way
+ * round at 10pm on Saturday needs to be able to fix it, and the event log keeps
+ * both attempts.
+ */
+export async function recordCoinFlip(
+  tournamentId: string,
+  divisionId: string,
+  poolId: string | null,
+  groupKey: string,
+  orderedTeamIds: readonly string[],
+  actor: string,
+  actorRole: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (orderedTeamIds.length < 2) return { ok: false, error: 'too_few' };
+
+  // The order has to be exactly the tied teams — no more, no fewer. A flip
+  // recorded over the wrong group would silently reorder a different tie.
+  if (coinFlipKey(orderedTeamIds) !== groupKey) return { ok: false, error: 'wrong_teams' };
+
+  const owned = await query<{ id: string }>(
+    'SELECT id FROM team WHERE tournament_id = $1 AND division_id = $2 AND id = ANY($3::uuid[])',
+    [tournamentId, divisionId, [...orderedTeamIds]],
+  );
+  if (owned.length !== orderedTeamIds.length) return { ok: false, error: 'wrong_teams' };
+
+  await transaction(async (client) => {
+    await client.query(
+      `INSERT INTO coin_flip
+         (tournament_id, division_id, pool_id, group_key, ordered_team_ids, recorded_by)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT (division_id, group_key) DO UPDATE
+         SET ordered_team_ids = EXCLUDED.ordered_team_ids,
+             recorded_by = EXCLUDED.recorded_by,
+             recorded_at = now()`,
+      [tournamentId, divisionId, poolId, groupKey, [...orderedTeamIds], actor],
+    );
+    await recordEventIn(client, {
+      tournamentId,
+      actor,
+      actorRole,
+      kind: 'standings.coin_flip',
+      subjectType: 'division',
+      subjectId: divisionId,
+      payload: { groupKey, orderedTeamIds: [...orderedTeamIds] },
+    });
+  });
+
+  return { ok: true };
 }

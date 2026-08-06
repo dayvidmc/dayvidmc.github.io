@@ -29,6 +29,15 @@ export interface StandingsRow {
   tiebreak: TiebreakStep[];
   /** True when the rules ran out and a director still has to flip a coin. */
   awaitingCoinFlip: boolean;
+  /**
+   * The key of the unresolved tie this team is in, or null.
+   *
+   * Exposed because the flag alone says a flip is needed and not *between
+   * whom* — and a screen for recording one has to know exactly that. Deriving
+   * it from adjacent rows would be a guess: two separate ties can sit next to
+   * each other in the same pool.
+   */
+  coinFlipGroup: string | null;
 }
 
 /**
@@ -300,6 +309,7 @@ interface Resolved {
   teamId: string;
   steps: TiebreakStep[];
   awaitingCoinFlip: boolean;
+  coinFlipGroup?: string;
 }
 
 function describe(criterion: Criterion, buckets: Bucket[], ctx: TiebreakContext): TiebreakStep {
@@ -349,7 +359,12 @@ function resolveCoinFlip(group: readonly string[], ctx: TiebreakContext): Resolv
       `${nameList(byName, ctx)} are tied on every criterion. ` +
       `The rules call for a coin flip — this order is provisional until a director records the result.`,
   };
-  return byName.map((teamId) => ({ teamId, steps: [step], awaitingCoinFlip: true }));
+  return byName.map((teamId) => ({
+    teamId,
+    steps: [step],
+    awaitingCoinFlip: true,
+    coinFlipGroup: key,
+  }));
 }
 
 function resolveGroup(group: readonly string[], ctx: TiebreakContext): Resolved[] {
@@ -458,6 +473,7 @@ export function computeStandings(
         record,
         tiebreak: entry.steps,
         awaitingCoinFlip: entry.awaitingCoinFlip,
+        coinFlipGroup: entry.coinFlipGroup ?? null,
       });
       rank += 1;
     }

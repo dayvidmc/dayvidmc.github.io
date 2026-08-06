@@ -46,7 +46,8 @@ export default async function StandingsPage({
           {pool.awaitingCoinFlip && (
             <div className="notice warn">
               Some places are tied on every criterion in the rules. The order shown is provisional
-              until a director flips a coin and records the result.
+              until a director flips a coin and records the result — when they do, this page names
+              the order and who recorded it.
             </div>
           )}
 

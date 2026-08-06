@@ -11,6 +11,8 @@ export const dynamic = 'force-dynamic';
 
 const ERROR: Record<string, string> = {
   empty_pool: 'There is nobody on a roster yet, so there is nobody to draw.',
+  already_drawn:
+    'This has already been drawn. Drawing a second name is possible but needs a written reason — open "Draw again" below and say why.',
   director_only: 'Only the director can run the draw.',
 };
 
@@ -140,9 +142,9 @@ export default async function TrophiesPage({
           ) : (
             <div className="notice info">
               Not drawn yet. The draw records the size of the pool and the random value it used, so
-              it can be re-run afterwards and shown to have landed where it did. There is no undo:
-              a second draw would be recorded alongside the first rather than replacing it, so
-              there is no quiet way to try again for a different name.
+              it can be re-run afterwards and shown to have landed where it did. There is no undo,
+              and drawing a second time needs a written reason — so there is no quiet way to try
+              again for a different name, and no way to do it by accident either.
             </div>
           )}
 
@@ -188,6 +190,31 @@ export default async function TrophiesPage({
             themselves the draw was straight can be shown that, rather than asked to take it on
             trust.
           </p>
+
+          {/* Drawing again is possible, because there are real reasons to — a
+              winner who declines, a player found ineligible — and impossible to
+              do by accident, because it needs a sentence. Hiding the button was
+              never the control: a stale tab could still post the form. */}
+          {isDirector(staff) && pool.length > 0 && (
+            <details className="card">
+              <summary className="row-summary">Draw again</summary>
+              <div className="notice warn" style={{ marginTop: 10 }}>
+                Only for a real reason — the winner has declined, or was not eligible. The new name
+                is added to the list above rather than replacing the old one, and both stay there
+                permanently with your reason beside them.
+              </div>
+              <form action={drawGoldGloveAction}>
+                <label htmlFor="redrawReason">Why is this being drawn again?</label>
+                <input
+                  id="redrawReason" name="redrawReason" type="text" required minLength={4}
+                  maxLength={500} placeholder="e.g. the first winner has moved away"
+                />
+                <button type="submit" className="wide" style={{ marginTop: 10, minHeight: 48 }}>
+                  Draw a second name
+                </button>
+              </form>
+            </details>
+          )}
         </>
       )}
     </>

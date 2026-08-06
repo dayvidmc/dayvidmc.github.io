@@ -32,6 +32,7 @@ const GUARD: Record<string, StaffRole[]> = {
   '/hq/unmatched': ['director', 'hq'],
   '/hq/teams': ['director', 'hq'],
   '/hq/rules': ['director', 'hq'],
+  '/hq/standings': ['director', 'hq'],
   '/hq/brackets': ['director', 'hq'],
   '/hq/umpires': ['director', 'hq'],
   '/hq/import': ['director'],

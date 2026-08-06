@@ -13,12 +13,16 @@ import { runDraw } from '@/server/goldGlove';
  * comes up, and the honest defence is that every draw stays on the record
  * rather than a rule nobody can check.
  */
-export async function drawGoldGloveAction(): Promise<void> {
+export async function drawGoldGloveAction(formData: FormData): Promise<void> {
   const staff = await currentStaff();
   if (!canAccessHq(staff)) redirect('/signin');
   if (!isDirector(staff)) redirect('/hq/trophies?error=director_only');
 
-  const result = await runDraw(staff!.tournamentId, staff!.name, staff!.role);
+  // Empty for the first draw. Drawing again needs a stated reason, so that a
+  // second name in the record is a decision rather than an accident.
+  const reason = String(formData.get('redrawReason') ?? '');
+
+  const result = await runDraw(staff!.tournamentId, staff!.name, staff!.role, reason);
   if (!result.ok) redirect(`/hq/trophies?error=${result.error}`);
 
   revalidatePath('/hq/trophies');

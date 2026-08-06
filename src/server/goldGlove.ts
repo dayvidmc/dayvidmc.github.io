@@ -75,21 +75,47 @@ export async function draws(tournamentId: string): Promise<DrawRow[]> {
   }));
 }
 
+/**
+ * Draw the Gold Glove.
+ *
+ * **A second draw is refused unless somebody says why.** The record is
+ * append-only so a draw cannot be erased, and the screen hides the button once
+ * one exists — but neither of those stops a second draw happening. A double-tap
+ * on a bad connection, a stale tab, a replayed form post: any of them used to
+ * append a second winner, and then the tournament has two names for one trophy
+ * and nothing in the system says which is real.
+ *
+ * There are real reasons to draw again — a winner who declines, a player found
+ * to have been ineligible — so this is not forbidden, it is made deliberate.
+ * The reason is stored on the row, so the history reads as a decision somebody
+ * made rather than a button somebody pressed twice.
+ */
 export async function runDraw(
   tournamentId: string,
   actor: string,
   actorRole: string,
+  /** Required to draw again once a draw exists. */
+  redrawReason?: string,
 ): Promise<{ ok: boolean; error?: string; winner?: string }> {
   const pool = await candidates(tournamentId);
   if (pool.length === 0) return { ok: false, error: 'empty_pool' };
+
+  const reason = (redrawReason ?? '').trim();
+  const existing = await query<{ player_name: string }>(
+    'SELECT player_name FROM gold_glove_draw WHERE tournament_id = $1 LIMIT 1',
+    [tournamentId],
+  );
+  if (existing.length > 0 && reason.length < 4) {
+    return { ok: false, error: 'already_drawn' };
+  }
 
   const result = draw(pool, seedFrom(randomBytes(16)));
   if (!result.ok) return { ok: false, error: result.error };
 
   await query(
     `INSERT INTO gold_glove_draw
-       (tournament_id, player_id, player_name, team_name, pool_size, seed, drawn_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+       (tournament_id, player_id, player_name, team_name, pool_size, seed, drawn_by, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
     [
       tournamentId,
       result.draw.winner.playerId,
@@ -98,6 +124,7 @@ export async function runDraw(
       result.draw.poolSize,
       result.draw.seed,
       actor,
+      existing.length > 0 ? reason.slice(0, 500) : null,
     ],
   );
 

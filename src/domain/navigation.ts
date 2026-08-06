@@ -52,6 +52,7 @@ const GAME_OPS: NavSection = {
     { href: '/hq/unmatched', label: 'Unmatched texts', hint: 'messages nobody could place' },
     { href: '/hq/teams', label: 'Teams', hint: 'contacts and their own links' },
     { href: '/hq/rules', label: 'Division rules', hint: 'the time limit drives the board' },
+    { href: '/hq/standings', label: 'Coin flips', hint: 'ties the rules could not settle' },
     { href: '/hq/brackets', label: 'Brackets', hint: 'the Sunday map' },
     { href: '/hq/umpires', label: 'Umpires', hint: 'crews, conflicts and pay' },
     { href: '/hq/messages', label: 'Texts sent', hint: 'what went out, and what failed' },

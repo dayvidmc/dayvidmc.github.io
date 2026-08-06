@@ -70,10 +70,9 @@ expensive after the fact.
 
 Small builds that close a loop the system already promises.
 
-- **Recording a coin flip.** Standings say a placement is "provisional until a
-  director records the result" and there is no way to record it. The `coin_flip`
-  table and the engine's support for it are both done; this is a button and an
-  action.
+- ~~**Recording a coin flip.**~~ Built (§2.77). `/hq/standings` lists every tie
+  the rules could not settle; the director records the order and the public
+  page names it.
 - ~~Diamond shifts~~ — done, via the volunteers module. `/hq/volunteers/shifts`
   creates them and `/hq/volunteers` fills them; the `diamond_posting` view is
   what score intake reads.

@@ -1348,6 +1348,78 @@ at 17px a 1400px line is around 200 characters, which nobody can read
 comfortably. Filling a monitor is not a goal; the tool's screens widen because
 they are lists and tables, not because the pixels were there.
 
+### 2.76 A rule that lives only in the screen is not a rule
+
+**Decision.** Two rules that the UI enforced by hiding a button now live in the
+code that writes:
+
+* **A staffed volunteer shift cannot be deleted.** The screen showed the Remove
+  button only when nobody was on the shift; the action checked nothing. A
+  replayed form post deleted a shift somebody had agreed to work, and the
+  assignments went with it on the foreign key — silently, with no event, so a
+  volunteer simply stopped being on the rota and nothing said why. Now refused,
+  with a message, and the deletion of an empty shift is recorded.
+* **The Gold Glove cannot be drawn twice by accident.** The record is
+  append-only (§2.50) and the screen hid the button once a draw existed —
+  neither of which stops a second draw. A double-tap on a bad connection, a
+  stale tab, a replayed post: any of them appended a second winner, and then a
+  tournament with one trophy has two names in its own record and nothing says
+  which is real. A second draw now needs a written reason, which is kept beside
+  it. There are real reasons to draw again — a winner who declines — so it is
+  made deliberate rather than forbidden.
+
+**How they were found, and why that matters more than the two of them.** A
+Next.js server action is a POST to the page's own URL carrying a hidden
+`$ACTION_ID` field. The id is in the HTML of any page that renders the form,
+it is stable for a build, and none of it is secret. So the real question was
+never "is the button hidden" — it was "what happens when somebody who saw the
+button once sends the request again". `.verify-authz` harvests every action the
+director can reach and replays all sixty of them: as a stranger, and as each of
+the four lower-privileged roles.
+
+**The check that made it worth anything was the one that had to fail.** The
+first version of that harness posted `application/x-www-form-urlencoded` with
+no `Origin` header. Next rejected every request before it reached a guard, so
+every role "changed nothing" and the whole audit was green and worthless. The
+control — replay the same sixty as the *director* and require the database to
+move — is what caught it. This is the third time in this repository that a
+check written so it cannot fail has passed while hiding what it was for.
+
+### 2.77 A coin flip can be recorded, which the public page has always promised
+
+**Decision.** `/hq/standings` lists every tie the rules could not settle and
+lets the director write down what the coin did. `StandingsRow` gained
+`coinFlipGroup` so a screen knows *which* teams are tied rather than only that
+some are.
+
+**Why.** §1.5 is emphatic that the engine must never simulate a flip, and it
+never has — it reports `awaitingCoinFlip` and the public standings tell coaches
+"the order shown is provisional until a director flips a coin and records the
+result." The `coin_flip` table has existed since the first migration. There was
+nowhere to record one. A sentence written for a parent reading a table on
+Sunday morning was a promise the software could not keep, and the placement it
+concerns decides who plays that afternoon.
+
+Deriving the tied group from adjacent rows would have been a guess — two
+separate ties can sit next to each other in one pool — so the group key the
+engine already computes is exposed instead. One select per place, because the
+order *is* the record and a multi-select does not keep one.
+
+Director-only, for the same reason the draw is: it decides a placement.
+Re-recordable, because somebody typing two names the wrong way round at 10pm on
+a Saturday has to be able to fix it, and both attempts stay in the event log.
+
+### 2.78 Signed out and not allowed are different answers
+
+**Decision.** The concession actions check for a session before they check a
+permission, and send a stranger to `/signin` rather than to
+`/hq/concessions?error=not_allowed`.
+
+**Why.** Nothing leaked — the actions wrote nothing either way — but a stranger
+was being redirected to a screen they also cannot open, with an error implying
+they had signed in as the wrong person. It is a small thing that makes the
+system feel arbitrary at exactly the moment somebody is confused.
+
 ---
 
 ## 3. Deliberately not built

@@ -423,3 +423,63 @@ describe('a pool where rain took some games away', () => {
     expect(poolBalance(new Map()).uneven).toBe(false);
   });
 });
+
+
+describe('the coin flip group, for the screen that records one', () => {
+  const names: Record<string, string> = { a: 'Alpha', b: 'Bravo', c: 'Charlie' };
+  const nameOf = (id: string) => names[id] ?? id;
+
+  /** Two teams identical on every criterion: same record, same runs both ways. */
+  const deadHeat = () => {
+    const games: GameResult[] = [
+      {
+        gameId: 'g1', divisionId: 'd', poolId: null, gameType: 'round_robin',
+        homeTeamId: 'a', awayTeamId: 'b', homeRuns: 5, awayRuns: 5,
+        resultKind: 'played', forfeitedBy: null,
+      },
+    ];
+    return { records: buildRecords(['a', 'b'], games), games };
+  };
+
+  it('names the group when the rules run out', () => {
+    const { records, games } = deadHeat();
+    const rows = computeStandings(records, games, nameOf, {});
+    const waiting = rows.filter((row) => row.awaitingCoinFlip);
+
+    expect(waiting.length).toBeGreaterThan(0);
+    for (const row of waiting) expect(row.coinFlipGroup).toBeTruthy();
+    // One tie, one key — that is what lets a screen offer one form for it.
+    expect(new Set(waiting.map((row) => row.coinFlipGroup)).size).toBe(1);
+  });
+
+  it('uses the key the recorded flip is stored under', () => {
+    const { records, games } = deadHeat();
+    const rows = computeStandings(records, games, nameOf, {});
+    const key = rows.find((row) => row.awaitingCoinFlip)?.coinFlipGroup;
+
+    expect(key).toBe(coinFlipKey(['a', 'b']));
+  });
+
+  it('stops naming a group once the flip is recorded', () => {
+    const { records, games } = deadHeat();
+    const key = coinFlipKey(['a', 'b']);
+    const rows = computeStandings(records, games, nameOf, { [key]: ['b', 'a'] });
+
+    expect(rows.some((row) => row.awaitingCoinFlip)).toBe(false);
+    for (const row of rows) expect(row.coinFlipGroup).toBeNull();
+    // And the recorded order is the order.
+    expect(rows.map((row) => row.record.teamId)).toEqual(['b', 'a']);
+  });
+
+  it('leaves the group null on a team that was never tied', () => {
+    const games: GameResult[] = [
+      {
+        gameId: 'g1', divisionId: 'd', poolId: null, gameType: 'round_robin',
+        homeTeamId: 'a', awayTeamId: 'b', homeRuns: 9, awayRuns: 1,
+        resultKind: 'played', forfeitedBy: null,
+      },
+    ];
+    const rows = computeStandings(buildRecords(['a', 'b'], games), games, nameOf, {});
+    for (const row of rows) expect(row.coinFlipGroup).toBeNull();
+  });
+});

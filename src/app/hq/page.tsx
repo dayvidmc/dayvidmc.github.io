@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { canAccessHq, currentStaff } from '@/server/auth';
 import { boardForDate, currentTournament, openUnmatchedCount } from '@/server/repo';
+import { pendingCoinFlips } from '@/server/standings';
 import { STATUS_LABEL, STATUS_MARKER, type BoardEntry } from '@/domain/gameStatus';
 import { formatDate, formatDateFriendly, formatTimeFriendly, toWallClock } from '@/domain/time';
 
@@ -34,9 +35,10 @@ export default async function HqBoardPage({
   const now = toWallClock(new Date(), tournament.time_zone);
   const date = params.date ?? clampToTournament(formatDate(now), tournament.starts_on, tournament.ends_on);
 
-  const [entries, unmatchedCount] = await Promise.all([
+  const [entries, unmatchedCount, flips] = await Promise.all([
     boardForDate(tournament.id, date, now) as Promise<(BoardEntry & { externalGameId: string })[]>,
     openUnmatchedCount(tournament.id),
+    pendingCoinFlips(tournament.id),
   ]);
 
   const counts = entries.reduce<Record<string, number>>((acc, entry) => {
@@ -115,6 +117,18 @@ export default async function HqBoardPage({
           Unmatched ({unmatchedCount})
         </a>
       </div>
+
+      {/* A tie the rules could not settle is a placement nobody has decided,
+          and the public standings are already telling coaches it is
+          provisional. It belongs beside the unmatched texts: not tied to the
+          day being looked at, and waiting on a person. */}
+      {flips.length > 0 && (
+        <a className="notice warn" href="/hq/standings" style={{ display: 'block' }}>
+          {flips.length} tie{flips.length === 1 ? '' : 's'} the rules could not settle
+          {flips.length === 1 ? ' is' : ' are'} waiting on a coin flip. The standings say so
+          publicly until somebody records one. →
+        </a>
+      )}
 
       {/* Everything else moved into the staff menu above.
           Sixteen identical grey buttons used to sit here, between the counts

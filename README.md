@@ -8,6 +8,9 @@ annual, late July 2027, in support of CHEO Cardiology.
 > foundation and the game-operations core. See [DECISIONS.md](DECISIONS.md) for
 > every assumption made along the way and what still needs a human answer.
 
+[`docs/AUDIT.md`](docs/AUDIT.md) is the security and correctness pass: what was
+tested, what was wrong, and what is still open.
+
 Code comments and both documents cite the build spec by section (§5.5, §8A.3
 and so on). **The spec itself is not in this repository yet — commit it to
 `docs/SPEC.md`** so those references resolve for whoever picks this up later.
@@ -54,6 +57,7 @@ intake paths that feed it.
 | Cash that goes home overnight | §8A | Built, tested — who has it and since when, because that protects the volunteer as much as the money |
 | Trophies: the engraving list, and the Gold Glove draw | — | Built, tested — the draw records its pool size and seed so it can be shown to have been straight |
 | **The public website itself** | — | Built, tested — pages the committee edits, the honour roll, sponsors, directions, a volunteer sign-up. This is the site, not a tool beside it |
+| Coin flips | §5.5 | Built — the one placement a person decides, recorded and named on the public standings |
 | Append-only audit trail | §9 | Built, enforced by the database |
 
 ## The site it now is

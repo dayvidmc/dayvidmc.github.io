@@ -79,6 +79,10 @@ export async function closeTill(formData: FormData): Promise<void> {
 
 export async function refundSale(formData: FormData): Promise<void> {
   const staff = await currentStaff();
+  // Signed out and signed in as the wrong person are different answers. A
+  // stranger sent to /hq/concessions lands on a screen they cannot open
+  // either, and the loop tells them nothing.
+  if (!staff) redirect('/signin');
   // The permission that matters most in this module: a volunteer can sell all
   // day but cannot hand money back.
   if (!canRefund(staff)) redirect('/hq/concessions?error=not_allowed');
@@ -115,6 +119,7 @@ export async function saveMenuItem(
   value: string,
 ): Promise<SaveResult> {
   const staff = await currentStaff();
+  if (!staff) return { ok: false, error: 'Not signed in.' };
   if (!canEditMenu(staff)) {
     return { ok: false, error: 'Only a concession lead can change the menu.' };
   }
@@ -172,6 +177,7 @@ export async function saveMenuItem(
 
 export async function addMenuItem(formData: FormData): Promise<void> {
   const staff = await currentStaff();
+  if (!staff) redirect('/signin');
   if (!canEditMenu(staff)) redirect('/hq/concessions?error=not_allowed');
 
   const name = String(formData.get('name') ?? '').trim();
@@ -193,6 +199,7 @@ export async function addMenuItem(formData: FormData): Promise<void> {
 
 export async function setItemActive(formData: FormData): Promise<void> {
   const staff = await currentStaff();
+  if (!staff) redirect('/signin');
   if (!canEditMenu(staff)) redirect('/hq/concessions?error=not_allowed');
 
   const itemId = String(formData.get('itemId') ?? '');
@@ -212,6 +219,7 @@ export async function setItemActive(formData: FormData): Promise<void> {
 
 export async function addLocation(formData: FormData): Promise<void> {
   const staff = await currentStaff();
+  if (!staff) redirect('/signin');
   if (!canEditMenu(staff)) redirect('/hq/concessions?error=not_allowed');
 
   const name = String(formData.get('name') ?? '').trim();

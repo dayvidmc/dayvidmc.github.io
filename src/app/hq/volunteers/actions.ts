@@ -149,9 +149,18 @@ export async function deleteShiftAction(formData: FormData): Promise<void> {
   const id = text(formData, 'id');
   if (!id) return;
 
-  await deleteShift(staff.tournamentId, id);
+  const result = await deleteShift(staff.tournamentId, id, staff.name, staff.role);
+
   revalidatePath('/hq/volunteers/shifts');
   revalidatePath('/hq/volunteers');
+  if (!result.ok) {
+    // The screen hides this button when somebody is on the shift, which is not
+    // the same as the shift being safe: a replayed post used to delete it and
+    // take the assignments with it.
+    redirect(
+      `/hq/volunteers/shifts?error=${result.error}${result.assigned ? `&on=${result.assigned}` : ''}`,
+    );
+  }
   redirect('/hq/volunteers/shifts?saved=1');
 }
 
